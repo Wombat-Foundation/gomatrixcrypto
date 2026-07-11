@@ -1,0 +1,13 @@
+# macOS/backup files
+.~*
+._*
+~$*
+.DS_Store
+*.swp
+
+# Go build/test artifacts
+*.test
+*.out
+coverage.out
+cover.out
+/bin/
