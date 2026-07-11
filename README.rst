@@ -27,32 +27,11 @@ Requirements
 Project Layout
 --------------
 
-* ``lthash/``: incremental lattice hash and final checksum
+* ``lthash/``: incremental lattice hash and ``BLAKE`` checksum
 * ``fndsa512/``: key generation, signing, and verification helpers
-* ``keyid/``: key-ID digest and short-ID derivation
-* ``cuckoo/``: edge derivation, proof verification, and bounded proof search
+* ``keyid/``: key-ID digest and *quasi-unique* short-ID derivation
+* ``cuckoo/``: PoW edge derivation, proof verification, and bounded proof search
 * ``extlib/``: reference notes and external material used during implementation
-
-Development
------------
-
-Common development targets are exposed through ``make``:
-
-.. code-block:: bash
-
-   make help
-   make format
-   make test
-   make vet
-   make cov
-   make check
-
-If your Go build cache is not writable in the current environment, run commands
-with a writable cache, for example:
-
-.. code-block:: bash
-
-   GOCACHE=/tmp/go-build make test
 
 Package Overview
 ----------------
