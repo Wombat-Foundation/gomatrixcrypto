@@ -1,6 +1,7 @@
 package cuckoo
 
 import (
+	"crypto/sha256"
 	"encoding/binary"
 	"errors"
 	"math/bits"
@@ -11,6 +12,7 @@ const ProofSize = 42
 
 var (
 	ErrInvalidEdgeBits = errors.New("edge bits out of range")
+	ErrInvalidSeed     = errors.New("invalid graph seed")
 	ErrInvalidProof    = errors.New("invalid cuckoo cycle proof")
 	ErrNoSolution      = errors.New("no cycle found")
 )
@@ -64,13 +66,10 @@ func sipRound(v *[4]uint64) {
 	v[2] = bits.RotateLeft64(v[2], 32)
 }
 
-func siphash24(k0, k1, msg uint64) uint64 {
-	v := [4]uint64{
-		0x736f6d6570736575 ^ k0,
-		0x646f72616e646f6d ^ k1,
-		0x6c7967656e657261 ^ k0,
-		0x7465646279746573 ^ k1,
-	}
+func siphash24(seed [4]uint64, msg uint64) uint64 {
+	// The MSC defines graph_seed as four little-endian 64-bit words k0..k3.
+	// We treat those words as the seeded SipHash state directly.
+	v := seed
 	v[3] ^= msg
 	sipRound(&v)
 	sipRound(&v)
@@ -82,10 +81,28 @@ func siphash24(k0, k1, msg uint64) uint64 {
 	return v[0] ^ v[1] ^ v[2] ^ v[3]
 }
 
-func seedKeys(seed []byte) (uint64, uint64) {
-	h := make([]byte, 16)
-	copy(h, seed)
-	return binary.LittleEndian.Uint64(h[:8]), binary.LittleEndian.Uint64(h[8:])
+func seedWords(seed []byte) ([4]uint64, error) {
+	var words [4]uint64
+	if len(seed) != sha256.Size {
+		return words, ErrInvalidSeed
+	}
+	for i := range words {
+		words[i] = binary.LittleEndian.Uint64(seed[i*8:])
+	}
+	return words, nil
+}
+
+// GraphSeed derives the 32-byte graph seed for a challenge and nonce.
+//
+// The caller must provide the canonicalized challenge bytes if canonical JSON
+// semantics are required by a higher-level protocol.
+func GraphSeed(challenge []byte, nonce uint64) [sha256.Size]byte {
+	var nonceBytes [8]byte
+	binary.LittleEndian.PutUint64(nonceBytes[:], nonce)
+	buf := make([]byte, 0, len(challenge)+len(nonceBytes))
+	buf = append(buf, challenge...)
+	buf = append(buf, nonceBytes[:]...)
+	return sha256.Sum256(buf)
 }
 
 // EdgeForNonce deterministically maps a nonce to a cuckoo edge.
@@ -94,10 +111,13 @@ func EdgeForNonce(cfg Config, seed []byte, nonce uint32) (Edge, error) {
 	if err != nil {
 		return Edge{}, err
 	}
-	k0, k1 := seedKeys(seed)
+	words, err := seedWords(seed)
+	if err != nil {
+		return Edge{}, err
+	}
 	mask := cfg.nodeMask()
-	u := siphash24(k0, k1, uint64(nonce)<<1) & mask
-	v := siphash24(k0, k1, (uint64(nonce)<<1)|1) & mask
+	u := siphash24(words, uint64(nonce)<<1) & mask
+	v := siphash24(words, (uint64(nonce)<<1)|1) & mask
 	return Edge{U: u, V: v}, nil
 }
 

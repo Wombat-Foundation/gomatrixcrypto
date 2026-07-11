@@ -56,6 +56,9 @@ func Sign(rng io.Reader, privateKey, message []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	// TODO: upstream FN-DSA signing always returns the expected fixed-length
+	// signature for this profile, so this branch is effectively unreachable in
+	// normal use. Keep it as a defensive check for dependency regressions.
 	if err := checkSignature(sig); err != nil {
 		return nil, err
 	}
@@ -71,6 +74,9 @@ func SignPrehashed(rng io.Reader, privateKey []byte, context []byte, hash crypto
 	if err != nil {
 		return nil, err
 	}
+	// TODO: upstream FN-DSA signing always returns the expected fixed-length
+	// signature for this profile, so this branch is effectively unreachable in
+	// normal use. Keep it as a defensive check for dependency regressions.
 	if err := checkSignature(sig); err != nil {
 		return nil, err
 	}

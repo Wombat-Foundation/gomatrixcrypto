@@ -7,6 +7,7 @@ This repository currently provides:
 
 * ``lthash``: LtHash16-style homomorphic state hashing for Matrix state sets
 * ``fndsa512``: a thin Go wrapper for Falcon ``fn-dsa-512``
+* ``keyid``: canonical ``fn-dsa-512`` key-ID fingerprint and short-ID helper
 * ``cuckoo``: Cuckoo Cycle proof generation and verification helpers
 
 Status
@@ -28,6 +29,7 @@ Project Layout
 
 * ``lthash/``: incremental lattice hash and final checksum
 * ``fndsa512/``: key generation, signing, and verification helpers
+* ``keyid/``: key-ID digest and short-ID derivation
 * ``cuckoo/``: edge derivation, proof verification, and bounded proof search
 * ``extlib/``: reference notes and external material used during implementation
 

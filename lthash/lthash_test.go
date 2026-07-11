@@ -2,6 +2,7 @@ package lthash
 
 import (
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -57,5 +58,19 @@ func TestChecksumStable(t *testing.T) {
 	const want = "038b52c62ec404f966822f864bb4db91d2f81ef262aed88c6610550c5b904d54"
 	if got != want {
 		t.Fatalf("checksum mismatch: got %s want %s", got, want)
+	}
+}
+
+func TestTruncateToU16LimitPreservesUTF8Boundaries(t *testing.T) {
+	input := strings.Repeat("a", 65534) + "é"
+	got, n := truncateToU16Limit(input)
+	if n != 65534 {
+		t.Fatalf("unexpected truncated length: got %d", n)
+	}
+	if len(got) != 65534 {
+		t.Fatalf("unexpected byte length after truncate: got %d", len(got))
+	}
+	if !strings.HasSuffix(got, "a") {
+		t.Fatalf("truncate cut to the wrong boundary")
 	}
 }
