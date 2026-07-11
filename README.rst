@@ -31,7 +31,7 @@ Project Layout
 * ``fndsa512/``: key generation, signing, and verification helpers
 * ``keyid/``: key-ID digest and *quasi-unique* short-ID derivation
 * ``cuckoo/``: PoW edge derivation, proof verification, and bounded proof search
-* ``extlib/``: reference notes and external material used during implementation
+* ``res/``: reference notes and external material used during implementation
 
 Package Overview
 ----------------
