@@ -470,21 +470,190 @@ that FN-DSA key in its response. Notary responses are themselves signed objects;
 notaries that support this MSC MUST include FN-DSA signatures on their
 responses.
 
+##### Notary observations
+
+Notaries MAY include `notary_observations` records describing how they observed
+an FN-DSA key. These records are signed provenance metadata: they let operators
+and later auditors verify that a named notary claims to have fetched a specific
+server key over HTTPS at a specific time and under a specific TLS certificate
+context.
+
+Notary observations are strictly advisory. They are not a substitute for Matrix
+server-key validation and MUST NOT change acceptance semantics.
+
+```json
+{
+    "notary_observations": [
+        {
+            "notary_server_name": "notary.example",
+            "observed_server_name": "example.com",
+            "observed_at": 1798848000000,
+            "fetch_uri": "https://example.com/_matrix/key/v2/server",
+            "transport": "https",
+            "tls": {
+                "leaf_spki_sha256": "<unpadded-base64url-sha256>",
+                "leaf_cert_sha256": "<unpadded-base64url-sha256>",
+                "tls_13_provenance": {
+                    "transcript_hash_algorithm": "sha256",
+                    "handshake_transcript_hash": "<unpadded-base64url-hash>",
+                    "certificate_verify_signature_scheme": "ecdsa_secp256r1_sha256",
+                    "server_certificate_verify_signature": "<unpadded-base64url-signature>"
+                }
+            },
+            "key_id_sha256": "<unpadded-base64url-sha256>",
+            "valid_until_ts": 1798848000000,
+            "signatures": {
+                "notary.example": {
+                    "ed25519:auto": "<base64-ed25519-signature>",
+                    "fn-dsa-512:<short_id>": "<base64-fn-dsa-signature>"
+                }
+            }
+        }
+    ]
+}
+```
+
+The observation signature input is the following byte string:
+
+```text
+len16("matrix:notary-key-observation:v1") ||
+"matrix:notary-key-observation:v1" ||
+len16(notary_server_name) ||
+notary_server_name ||
+len16(observed_server_name) ||
+observed_server_name ||
+uint64_be(observed_at) ||
+len16(fetch_uri) ||
+fetch_uri ||
+len16(transport) ||
+transport ||
+len16(leaf_spki_sha256) ||
+leaf_spki_sha256 ||
+len16(leaf_cert_sha256) ||
+leaf_cert_sha256 ||
+uint8(tls_13_provenance_present) ||
+if tls_13_provenance_present:
+    len16(tls_13_provenance_sha256) ||
+    tls_13_provenance_sha256 ||
+len16(key_id_sha256) ||
+key_id_sha256 ||
+uint64_be(valid_until_ts)
+```
+
+Formatting definitions:
+
+- `len16(x)` is the two-byte big-endian length of the UTF-8 byte string `x`,
+  followed immediately by `x`.
+- `uint64_be(ts)` is an unsigned 64-bit big-endian millisecond timestamp.
+- `leaf_spki_sha256` is the unpadded base64url-encoded SHA-256 digest of the TLS
+  leaf certificate's SubjectPublicKeyInfo DER.
+- `leaf_cert_sha256` is the unpadded base64url-encoded SHA-256 digest of the
+  full TLS leaf certificate DER observed by the notary during its HTTPS fetch.
+
+Notary and verifier constraints:
+
+- A notary MUST NOT emit an observation unless it performed the described fetch
+  itself.
+- Verifiers MAY validate and store these records for diagnostics, audits, and
+  operator review.
+- When validating an observation, a verifier MUST verify the notary's signature
+  using the notary's Matrix server signing key.
+- When validating an observation, a verifier MUST check that
+  `observed_server_name` matches the queried `server_name`.
+- When validating an observation, a verifier MUST check that `key_id_sha256` and
+  `valid_until_ts` match the observed key response described by the record.
+
+##### TLS 1.3 compact provenance
+
+When `tls_13_provenance` is present, `tls_13_provenance_sha256` is the unpadded
+base64url-encoded SHA-256 digest of the following byte string:
+
+```text
+len16("matrix:tls13-provenance:v1") ||
+"matrix:tls13-provenance:v1" ||
+len16(transcript_hash_algorithm) ||
+transcript_hash_algorithm ||
+len16(handshake_transcript_hash) ||
+handshake_transcript_hash ||
+len16(certificate_verify_signature_scheme) ||
+certificate_verify_signature_scheme ||
+len32(server_certificate_verify_signature) ||
+server_certificate_verify_signature
+```
+
+Formatting definitions:
+
+- `len32(x)` is the four-byte big-endian length of the byte string `x`, followed
+  immediately by `x`.
+- `handshake_transcript_hash` is the literal cryptographic hash of the TLS 1.3
+  Handshake Context up to but excluding the server `CertificateVerify` message,
+  as defined by RFC 8446 Section 4.4.1.
+- The `handshake_transcript_hash` calculation uses raw TLS Handshake messages
+  and excludes TLS record-layer headers.
+- This compact construction intentionally does not carry the full handshake
+  transcript.
+
+Validation requirements:
+
+- A verifier or auditor validating compact `tls_13_provenance` MUST obtain a TLS
+  leaf certificate matching `leaf_cert_sha256` and `leaf_spki_sha256`, for
+  example from Certificate Transparency logs, out-of-band certificate evidence,
+  or a retained notary audit bundle.
+- The verifier MUST verify `server_certificate_verify_signature` according to
+  the TLS 1.3 `CertificateVerify` construction for the server context, using the
+  obtained leaf certificate's public key, the stated
+  `handshake_transcript_hash`, `transcript_hash_algorithm`, and
+  `certificate_verify_signature_scheme`.
+- Verifiers SHOULD validate that the obtained leaf certificate chains to the
+  WebPKI and was valid for `observed_server_name` at `observed_at`, including
+  Certificate Transparency evidence where available.
+
+Trust and enforcement boundaries:
+
+- Compact TLS 1.3 provenance proves only that the notary presents evidence that
+  the holder of the obtained TLS certificate private key produced a valid
+  `CertificateVerify` signature over the stated transcript hash.
+- Compact TLS 1.3 provenance does not prove that the HTTP response body was
+  faithfully reported by the notary; proving payload fidelity without trusting
+  the notary requires a separate TLS transcript-verification system such as
+  TLSNotary or DECO.
+- Because the compact form carries only the transcript hash, it does not by
+  itself let a later auditor inspect or recompute the handshake transcript,
+  confirm the SNI value, confirm a notary challenge, or confirm other handshake
+  contents.
+- A notary that wants independently auditable transcript contents MAY retain or
+  publish the full TLS Handshake messages, or equivalent transcript evidence, in
+  an out-of-band audit bundle. Such transcript evidence MUST use the same RFC
+  8446 Section 4.4.1 Handshake Context definition and MUST exclude TLS
+  record-layer headers.
+- `tls_13_provenance` remains advisory provenance metadata and MUST NOT affect
+  automated key acceptance, event acceptance, or state resolution.
+- Non-normatively, compact TLS 1.3 provenance is intended as low-cost forensic
+  evidence attached to a signed notary observation. The notary's own signature
+  binds the observation timestamp, observed server name, certificate
+  fingerprints, key fingerprint, and TLS provenance digest to that notary's
+  identity; the TLS evidence then helps distinguish an actual TLS-origin
+  observation from a purely invented certificate claim. It is not intended to
+  make homeservers parse TLS handshakes, enforce freshness automatically, or
+  treat the notary observation as machine-verifiable proof of HTTP payload
+  fidelity.
+
 FN-DSA keys follow identical validity semantics to Ed25519 keys: a signature
 made by `fn-dsa-512:<short_id>` is valid if the key was valid at the time of the
 signed operation. Retired FN-DSA keys appear in `old_verify_keys` with an
 `expired_ts`. The `valid_until_ts` field governs cache lifetime for the entire
 key response, identically to existing behavior.
 
-Historic third-party attestation metadata, including any
-`public_thirdparty_historic_attestations` collection, is advisory only. Servers
-MUST NOT reject events, keys, or state based solely on missing, false,
-suspicious, flimsy, or otherwise invalid attestation metadata. Such metadata
-MUST NOT affect automated verification, acceptance, or state resolution. If it
-is to influence behavior at all, that MUST occur only through explicit admin
-override or manual operator intervention. Automated state resolution MUST
-continue to operate normally, remain backwards compatible with legacy federation
-traffic, and converge according to the established network rules.
+Any third-party attestation metadata a server or notary chooses to additionally
+track (e.g. historic corroboration records, reputation signals) is advisory
+only. Servers MUST NOT reject events, keys, or state based solely on missing,
+false, suspicious, flimsy, or otherwise invalid attestation metadata. Such
+metadata MUST NOT affect automated verification, acceptance, or state
+resolution. If it is to influence behavior at all, that MUST occur only through
+explicit admin override or manual operator intervention. Automated state
+resolution MUST continue to operate normally, remain backwards compatible with
+legacy federation traffic, and converge according to the established network
+rules.
 
 Because a server's very first FN-DSA key observation is TOFU and authenticates
 only via the existing Ed25519 trust model (see
@@ -940,14 +1109,13 @@ before finalization MUST observe the following constraints:
 - **Pin a specific draft revision.** Implementations MUST document which FIPS
   206 draft revision they target. Interoperability between implementations
   targeting different draft revisions is not guaranteed.
-- **Use unstable algorithm prefixes, but stable hash-derived short IDs.** During
-  the draft period, `/_matrix/key/v2/server` key entries and `X-Matrix-PQC`
-  header `key` parameters MUST use the unstable algorithm identifier
+- **Use unstable algorithm prefixes with hash-derived short IDs.** During the
+  draft period, `/_matrix/key/v2/server` key entries and `X-Matrix-PQC` header
+  `key` parameters MUST use the unstable algorithm identifier
   (`tk.nutra.msc45xx.fn-dsa-512`) as the prefix, but the suffix MUST still be
   the hash-derived `short_id` derived from the FN-DSA public key body. This
-  ensures that draft-era signatures are distinguishable from signatures produced
-  under the finalized standard, while preserving the collision-resistant lookup
-  property.
+  keeps draft-era key references separate from finalized key references without
+  changing how the referenced key body is identified.
 - **Rotation on parameter change.** If a subsequent FIPS 206 draft or the final
   standard changes the public key encoding, signature encoding, or algorithm
   semantics, all previously published unstable FN-DSA keys MUST be retired to

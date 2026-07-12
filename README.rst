@@ -123,15 +123,16 @@ Example:
    }
 
 Demo command, including a low-difficulty Cuckoo proof bound to the generated
-key metadata:
+key ID, key metadata, and canonical signed server-key object:
 
 .. code-block:: bash
 
    go run ./cmd/serverkey-demo -server example.com -valid-days 7
 
-The demo uses ``-pow-edge-bits 8 -pow-proof-size 4`` by default so it finishes
-quickly. The production profile described in ``res/`` is intentionally much
-more expensive.
+The demo uses ``-pow-edge-bits 8 -pow-proof-size 4`` and searches ``1<<12``
+edge nonces by default, so it is intentionally easy: it looks for a 4-cycle in
+a tiny graph and often solves at graph nonce 0. The production profile described
+in ``res/`` is ``42-29`` and is intentionally much more expensive.
 
 Cuckoo Cycle
 ~~~~~~~~~~~~

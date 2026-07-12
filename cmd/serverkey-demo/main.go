@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"flag"
@@ -14,6 +15,11 @@ import (
 	"gomatrixlib/keyid"
 	"gomatrixlib/matrixjson"
 	"gomatrixlib/serverkey"
+)
+
+const (
+	productionPoWAlgorithm = "tk.nutra.msc45xx.pow.cuckoo-cycle-42-29-sha256"
+	demoPoWProfileNote     = "demo-only low-difficulty Cuckoo profile; not valid for production key publication"
 )
 
 func main() {
@@ -54,9 +60,13 @@ func main() {
 	if err != nil {
 		fatal(err)
 	}
+	serverKeyObjectDigest, err := canonicalSHA256(obj)
+	if err != nil {
+		fatal(err)
+	}
 
 	keyIDSHA256 := serverkey.KeyIDSHA256(pub)
-	challengeObject, proofObject, err := solvePublicationPoW(*serverName, keyIDSHA256, metadataDigest, metadata, validUntil, cuckoo.Config{
+	challengeObject, proofObject, err := solvePublicationPoW(*serverName, keyIDSHA256, metadataDigest, serverKeyObjectDigest, metadata, validUntil, cuckoo.Config{
 		EdgeBits:  *edgeBits,
 		ProofSize: *proofSize,
 	}, uint32(*maxNonce), *maxGraphNonce)
@@ -68,6 +78,7 @@ func main() {
 		"server_key_object": obj,
 		"pow_challenge":     challengeObject,
 		"pow_proof":         proofObject,
+		"pow_profile_note":  demoPoWProfileNote,
 	}
 
 	enc := json.NewEncoder(os.Stdout)
@@ -78,7 +89,9 @@ func main() {
 	fmt.Printf("short_id: %s\n", keyid.ShortID(pub))
 	fmt.Printf("key_id_sha256: %s\n", keyIDSHA256)
 	fmt.Printf("key_metadata_sha256: %s\n", metadataDigest)
+	fmt.Printf("server_key_object_sha256: %s\n", serverKeyObjectDigest)
 	fmt.Printf("pow_algorithm: %s\n", challengeObject["algorithm"])
+	fmt.Printf("pow_profile_note: %s\n", demoPoWProfileNote)
 	fmt.Printf("pow_graph_nonce: %v\n", proofObject["nonce"])
 	fmt.Printf("private_key_base64: %s\n", base64.RawStdEncoding.EncodeToString(priv))
 	fmt.Println("publication_bundle:")
@@ -87,7 +100,7 @@ func main() {
 	}
 }
 
-func solvePublicationPoW(serverName, keyIDSHA256, metadataDigest string, metadata serverkey.FNDSAMetadata, validUntil int64, cfg cuckoo.Config, maxNonce uint32, maxGraphNonce uint64) (map[string]any, map[string]any, error) {
+func solvePublicationPoW(serverName, keyIDSHA256, metadataDigest, serverKeyObjectDigest string, metadata serverkey.FNDSAMetadata, validUntil int64, cfg cuckoo.Config, maxNonce uint32, maxGraphNonce uint64) (map[string]any, map[string]any, error) {
 	challenge, err := randomChallenge()
 	if err != nil {
 		return nil, nil, err
@@ -99,14 +112,16 @@ func solvePublicationPoW(serverName, keyIDSHA256, metadataDigest string, metadat
 		"challenge":  challenge,
 		"expires_ts": validUntil,
 		"resource": map[string]any{
-			"action":               "fn-dsa-key-publication",
-			"server_name":          serverName,
-			"key_id_sha256":        keyIDSHA256,
-			"key_metadata_sha256":  metadataDigest,
-			"claims":               metadata.Claims,
-			"fips_206_revision":    metadata.FIPS206Revision,
-			"demo_pow_profile":     true,
-			"production_algorithm": "tk.nutra.msc45xx.pow.cuckoo-cycle-42-29-sha256",
+			"action":                   "fn-dsa-key-publication",
+			"server_name":              serverName,
+			"key_id_sha256":            keyIDSHA256,
+			"key_metadata_sha256":      metadataDigest,
+			"server_key_object_sha256": serverKeyObjectDigest,
+			"claims":                   metadata.Claims,
+			"fips_206_revision":        metadata.FIPS206Revision,
+			"demo_pow_profile":         true,
+			"profile_note":             demoPoWProfileNote,
+			"production_algorithm":     productionPoWAlgorithm,
 		},
 	}
 
@@ -141,6 +156,15 @@ func solvePublicationPoW(serverName, keyIDSHA256, metadataDigest string, metadat
 	}
 
 	return nil, nil, cuckoo.ErrNoSolution
+}
+
+func canonicalSHA256(v any) (string, error) {
+	canonical, err := matrixjson.Canonical(v)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(canonical)
+	return base64.RawURLEncoding.EncodeToString(sum[:]), nil
 }
 
 func randomChallenge() (string, error) {
