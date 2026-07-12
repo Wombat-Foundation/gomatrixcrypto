@@ -122,11 +122,16 @@ Example:
        panic("invalid self-signature")
    }
 
-Demo command:
+Demo command, including a low-difficulty Cuckoo proof bound to the generated
+key metadata:
 
 .. code-block:: bash
 
    go run ./cmd/serverkey-demo -server example.com -valid-days 7
+
+The demo uses ``-pow-edge-bits 8 -pow-proof-size 4`` by default so it finishes
+quickly. The production profile described in ``res/`` is intentionally much
+more expensive.
 
 Cuckoo Cycle
 ~~~~~~~~~~~~
