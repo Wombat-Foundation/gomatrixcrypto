@@ -5,7 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"math/bits"
-	"sort"
+	"slices"
 )
 
 const ProofSize = 42
@@ -129,7 +129,7 @@ func Verify(cfg Config, seed []byte, nonces []uint32) error {
 	if len(nonces) != cfg.ProofSize {
 		return ErrInvalidProof
 	}
-	if !sort.SliceIsSorted(nonces, func(i, j int) bool { return nonces[i] < nonces[j] }) {
+	if !slices.IsSorted(nonces) {
 		return ErrInvalidProof
 	}
 
@@ -227,7 +227,7 @@ func FindProof(cfg Config, seed []byte, maxNonce uint32) ([]uint32, error) {
 	}
 
 	path := make([]uint32, 0, cfg.ProofSize)
-	usedEdges := map[uint32]bool{}
+	usedEdges := make([]bool, maxNonce)
 	seenNodes := map[uint64]bool{}
 	var dfs func(startNode, currentNode uint64, depth int) ([]uint32, bool)
 
@@ -235,7 +235,7 @@ func FindProof(cfg Config, seed []byte, maxNonce uint32) ([]uint32, error) {
 		if depth == cfg.ProofSize {
 			if currentNode == startNode {
 				proof := append([]uint32(nil), path...)
-				sort.Slice(proof, func(i, j int) bool { return proof[i] < proof[j] })
+				slices.Sort(proof)
 				if Verify(cfg, seed, proof) == nil {
 					return proof, true
 				}
@@ -262,7 +262,7 @@ func FindProof(cfg Config, seed []byte, maxNonce uint32) ([]uint32, error) {
 			}
 			path = path[:len(path)-1]
 			delete(seenNodes, nextNode)
-			delete(usedEdges, next.nonce)
+			usedEdges[next.nonce] = false
 		}
 		return nil, false
 	}
@@ -275,7 +275,7 @@ func FindProof(cfg Config, seed []byte, maxNonce uint32) ([]uint32, error) {
 		if proof, ok := dfs(start.u, start.v, 1); ok {
 			return proof, nil
 		}
-		delete(usedEdges, start.nonce)
+		usedEdges[start.nonce] = false
 		delete(seenNodes, start.u)
 		delete(seenNodes, start.v)
 	}
