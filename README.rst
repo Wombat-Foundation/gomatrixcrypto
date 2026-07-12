@@ -8,6 +8,8 @@ This repository currently provides:
 * ``lthash``: LtHash16-style homomorphic state hashing for Matrix state sets
 * ``fndsa512``: a thin Go wrapper for Falcon ``fn-dsa-512``
 * ``keyid``: canonical ``fn-dsa-512`` key-ID fingerprint and short-ID helper
+* ``matrixjson``: Matrix Canonical JSON encoding for signed objects
+* ``serverkey``: FN-DSA server-key object construction and self-signing
 * ``cuckoo``: Cuckoo Cycle proof generation and verification helpers
 
 Status
@@ -30,6 +32,8 @@ Project Layout
 * ``lthash/``: incremental lattice hash and ``BLAKE`` checksum
 * ``fndsa512/``: key generation, signing, and verification helpers
 * ``keyid/``: key-ID digest and *quasi-unique* short-ID derivation
+* ``matrixjson/``: Matrix Canonical JSON encoder
+* ``serverkey/``: signed FN-DSA ``/_matrix/key/v2/server`` object helpers
 * ``cuckoo/``: PoW edge derivation, proof verification, and bounded proof search
 * ``res/``: reference notes and external material used during implementation
 
@@ -78,6 +82,51 @@ Example:
    }
 
    ok := fndsa512.Verify(pub, msg, sig)
+
+Server Keys
+~~~~~~~~~~~
+
+The ``serverkey`` package builds and self-signs an FN-DSA Matrix server-key
+object. The signature covers the Matrix Canonical JSON form of the object after
+removing ``signatures`` and ``unsigned``.
+
+Example:
+
+.. code-block:: go
+
+   priv, pub, err := fndsa512.GenerateKey(nil)
+   if err != nil {
+       panic(err)
+   }
+
+   obj, keyName, err := serverkey.NewSignedFNDSA(
+       nil,
+       "example.com",
+       priv,
+       pub,
+       1798848000000,
+       serverkey.FNDSAMetadata{
+           FIPS206Revision: serverkey.DefaultFIPSRevision,
+           Claims: []string{
+               "constant-time-keygen",
+               "constant-time-signing",
+           },
+       },
+   )
+   if err != nil {
+       panic(err)
+   }
+
+   verifiedKeyName, err := serverkey.VerifyFNDSASelfSignature(obj, "example.com")
+   if err != nil || verifiedKeyName != keyName {
+       panic("invalid self-signature")
+   }
+
+Demo command:
+
+.. code-block:: bash
+
+   go run ./cmd/serverkey-demo -server example.com -valid-days 7
 
 Cuckoo Cycle
 ~~~~~~~~~~~~

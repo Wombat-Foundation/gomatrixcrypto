@@ -195,10 +195,17 @@ func Verify(cfg Config, seed []byte, nonces []uint32) error {
 	return nil
 }
 
-// FindProof performs a bounded search for a valid cycle. It is intended for
-// tests and low-difficulty work factors, not production mining.
+// FindProof performs a bounded search for a valid cycle.
+//
+// It uses the usual Cuckoo Cycle first step: trim edges attached to leaf nodes
+// before doing any path search. This is still a compact CPU helper, not a
+// competitive production miner.
 func FindProof(cfg Config, seed []byte, maxNonce uint32) ([]uint32, error) {
 	cfg, err := cfg.normalize()
+	if err != nil {
+		return nil, err
+	}
+	words, err := seedWords(seed)
 	if err != nil {
 		return nil, err
 	}
@@ -209,25 +216,61 @@ func FindProof(cfg Config, seed []byte, maxNonce uint32) ([]uint32, error) {
 		v     uint64
 	}
 
-	adj := map[uint64][]labeledEdge{}
 	edges := make([]labeledEdge, 0, maxNonce)
+	degrees := map[uint64]int{}
+	incident := map[uint64][]int{}
+	mask := cfg.nodeMask()
 	for nonce := uint32(0); nonce < maxNonce; nonce++ {
-		edge, err := EdgeForNonce(cfg, seed, nonce)
-		if err != nil {
-			return nil, err
-		}
 		e := labeledEdge{
 			nonce: nonce,
-			u:     edge.U << 1,
-			v:     (edge.V << 1) | 1,
+			u:     (siphash24(words, uint64(nonce)<<1) & mask) << 1,
+			v:     ((siphash24(words, (uint64(nonce)<<1)|1) & mask) << 1) | 1,
 		}
+		idx := len(edges)
 		edges = append(edges, e)
-		adj[e.u] = append(adj[e.u], e)
-		adj[e.v] = append(adj[e.v], e)
+		degrees[e.u]++
+		degrees[e.v]++
+		incident[e.u] = append(incident[e.u], idx)
+		incident[e.v] = append(incident[e.v], idx)
+	}
+
+	removed := make([]bool, len(edges))
+	queue := make([]uint64, 0, len(degrees))
+	for node, degree := range degrees {
+		if degree == 1 {
+			queue = append(queue, node)
+		}
+	}
+
+	for head := 0; head < len(queue); head++ {
+		node := queue[head]
+		if degrees[node] != 1 {
+			continue
+		}
+
+		edgeIdx := -1
+		for _, idx := range incident[node] {
+			if !removed[idx] {
+				edgeIdx = idx
+				break
+			}
+		}
+		if edgeIdx == -1 {
+			continue
+		}
+
+		removed[edgeIdx] = true
+		edge := edges[edgeIdx]
+		for _, endpoint := range [...]uint64{edge.u, edge.v} {
+			degrees[endpoint]--
+			if degrees[endpoint] == 1 {
+				queue = append(queue, endpoint)
+			}
+		}
 	}
 
 	path := make([]uint32, 0, cfg.ProofSize)
-	usedEdges := make([]bool, maxNonce)
+	usedEdges := make([]bool, len(edges))
 	seenNodes := map[uint64]bool{}
 	var dfs func(startNode, currentNode uint64, depth int) ([]uint32, bool)
 
@@ -243,10 +286,11 @@ func FindProof(cfg Config, seed []byte, maxNonce uint32) ([]uint32, error) {
 			return nil, false
 		}
 
-		for _, next := range adj[currentNode] {
-			if usedEdges[next.nonce] {
+		for _, nextIdx := range incident[currentNode] {
+			if removed[nextIdx] || usedEdges[nextIdx] {
 				continue
 			}
+			next := edges[nextIdx]
 			nextNode := next.u
 			if nextNode == currentNode {
 				nextNode = next.v
@@ -254,7 +298,7 @@ func FindProof(cfg Config, seed []byte, maxNonce uint32) ([]uint32, error) {
 			if nextNode != startNode && seenNodes[nextNode] {
 				continue
 			}
-			usedEdges[next.nonce] = true
+			usedEdges[nextIdx] = true
 			seenNodes[nextNode] = true
 			path = append(path, next.nonce)
 			if proof, ok := dfs(startNode, nextNode, depth+1); ok {
@@ -262,20 +306,23 @@ func FindProof(cfg Config, seed []byte, maxNonce uint32) ([]uint32, error) {
 			}
 			path = path[:len(path)-1]
 			delete(seenNodes, nextNode)
-			usedEdges[next.nonce] = false
+			usedEdges[nextIdx] = false
 		}
 		return nil, false
 	}
 
-	for _, start := range edges {
-		usedEdges[start.nonce] = true
+	for startIdx, start := range edges {
+		if removed[startIdx] {
+			continue
+		}
+		usedEdges[startIdx] = true
 		seenNodes[start.u] = true
 		seenNodes[start.v] = true
 		path = append(path[:0], start.nonce)
 		if proof, ok := dfs(start.u, start.v, 1); ok {
 			return proof, nil
 		}
-		usedEdges[start.nonce] = false
+		usedEdges[startIdx] = false
 		delete(seenNodes, start.u)
 		delete(seenNodes, start.v)
 	}
