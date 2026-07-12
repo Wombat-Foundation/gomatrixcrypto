@@ -20,7 +20,7 @@ signing operation that every subsequent post-quantum MSC builds on by reference,
 and it sets the implementation-quality bar below which production FN-DSA keys
 must not be published. The associated normative requirements are specified in
 [Implementation conformance](#implementation-conformance). Where relevant, this
-MSC incorporates cleanup from MSC4499, including FN-DSA key IDs being
+MSC incorporates cleanup from MSC4499, including FN-DSA short IDs being
 hash-derived and notaries indexing keys by their canonical fingerprints.
 
 PQC PDU signing and the co-requisite room version upgrade will be addressed in a
@@ -105,76 +105,82 @@ implementations SHOULD coalesce around a common, agreed standard.
 ### Key ID format
 
 Matrix currently identifies keys using the format `algorithm:key_id` (e.g.,
-`ed25519:abc123`). This MSC extends the set of recognized algorithm identifiers
-and makes PQC key IDs hash-derived:
+`ed25519:abc123`). This MSC extends the set of recognized algorithm identifiers.
+For `fn-dsa-512`, the `key_id` component is a hash-derived short ID:
 
-| Key Algorithm | Description                  | Key ID format (stable) |
-| ------------- | ---------------------------- | ---------------------- |
-| `ed25519`     | Existing Ed25519 (unchanged) | `ed25519:<key_id>`     |
-| `fn-dsa-512`  | FN-DSA at NIST Level I       | `fn-dsa-512:<hash>`    |
+| Key Algorithm | Description                  | Key Reference Format (stable) |
+| ------------- | ---------------------------- | ----------------------------- |
+| `ed25519`     | Existing Ed25519 (unchanged) | `ed25519:<key_id>`            |
+| `fn-dsa-512`  | FN-DSA at NIST Level I       | `fn-dsa-512:<short_id>`       |
 
-For `fn-dsa-512`, the `hash` component MUST be the first 16 base64url characters
-of the SHA-256 digest of the tagged public key bytes, without padding. The
-tagged public key bytes are:
+For `fn-dsa-512`, the `short_id` component MUST be the first 16 base64url
+characters of the canonical full key ID digest `key_id_sha256`, without padding.
+The canonical full key ID digest is:
 
 ```text
-"tk.nutra.msc45xx.keyid.v1" || raw_fn_dsa_512_public_key_bytes
+key_id_sha256 = SHA-256(
+    len16("matrix:fn-dsa-512:key-id:v1") ||
+    "matrix:fn-dsa-512:key-id:v1" ||
+    raw_fn_dsa_512_public_key_bytes
+)
 ```
 
-where `"tk.nutra.msc45xx.keyid.v1"` is the literal ASCII context string (no
-length prefix or separator is needed, since the public key is fixed-length), and
-the public key bytes are the raw FN-DSA-512 public key byte string as defined by
-FIPS 206. The context tag exists for hash-domain separation only — so this
-digest cannot collide semantically with an unrelated protocol's SHA-256 over the
-same raw key bytes — and MUST be included exactly as given.
+where `len16(x)` is the two-byte big-endian length of the UTF-8 byte string `x`,
+followed immediately by `x`, and the public key bytes are the raw FN-DSA-512
+public key byte string as defined by FIPS 206. The context string is the exact
+ASCII byte sequence shown above. It exists for hash-domain separation only, so
+this digest cannot collide semantically with an unrelated protocol's SHA-256
+over the same raw key bytes.
 
-The key ID is therefore a pure function of the public key body: it does not
+The `short_id` is therefore a pure function of the public key body: it does not
 depend on `server_name`. Name-binding for FN-DSA keys comes from the
-self-signature, not the key ID: the signed `/_matrix/key/v2/server` object
+self-signature, not the `short_id`: the signed `/_matrix/key/v2/server` object
 includes `server_name`, so a self-signature is bound to one claimed Matrix
 server name rather than being reusable across names (see
 [Server signing keys](#server-signing-keys) for the exact-match requirement on
-`server_name`). This binds the key to the claimed name within the signed
-object; it does not, by itself, prove control of that name's DNS, origin, or
-TLS endpoint.
+`server_name`). This binds the key to the claimed name within the signed object;
+it does not, by itself, prove control of that name's DNS, origin, or TLS
+endpoint.
 
-The `hash` component MUST contain exactly 16 characters from the base64url
+The `short_id` component MUST contain exactly 16 characters from the base64url
 alphabet of RFC 4648 §5 (`A-Z`, `a-z`, `0-9`, `-`, and `_`), encoding the first
-96 bits of the digest. When processing an FN-DSA public key from `verify_keys`
-or `old_verify_keys`, implementations MUST recompute the expected hash-derived
-key ID from the advertised public key bytes. If the advertised key ID does not
-exactly match the recomputed value, the key response MUST be rejected as
-malformed. Signature entries, `X-Matrix-PQC` headers, and PDU signatures that
-reference a malformed FN-DSA key ID MUST fail verification.
+96 bits of `key_id_sha256`. When processing an FN-DSA public key from
+`verify_keys` or `old_verify_keys`, implementations MUST recompute
+`key_id_sha256` and the expected hash-derived `short_id` from the advertised
+public key bytes. If the advertised `short_id` does not exactly match the
+recomputed value, the key response MUST be rejected as malformed. Signature
+entries, `X-Matrix-PQC` headers, and PDU signatures that reference a malformed
+FN-DSA `short_id` MUST fail verification.
 
 In the exceedingly unlikely event that a server advertises multiple distinct
 FN-DSA public key bodies whose tagged digests share the same first 16 base64url
-characters, each advertised key body is well-formed for the same derived key ID.
-This is a hash-prefix collision, not a malformed key ID. A receiving server MUST
-retain each colliding key body under its full SHA-256 fingerprint and, when
-verifying a signature that references the shared key ID, MUST attempt
-verification against each non-expired candidate key body for that server and key
-ID. The signature is valid if exactly one candidate verifies. If no candidate
-verifies, or if more than one candidate verifies, verification MUST fail — two
-distinct advertised key bodies validating the same signature is
-cryptographically anomalous and indicates malformed or adversarial key material,
-so the rule fails closed. Receiving servers SHOULD bound the number of colliding
-key bodies retained per key ID (a limit of 4 is RECOMMENDED); key bodies
-advertised beyond that bound MUST NOT be added to the candidate set, so that a
-server cannot inflate its peers' verification work by advertising manufactured
-collisions. Note that only the key's owner (or an attacker holding its signing
-keys) can introduce such collisions, since key responses are self-signed; see
+characters, each advertised key body is well-formed for the same derived
+`short_id`. This is a hash-prefix collision, not a malformed identifier. A
+receiving server MUST retain each colliding key body under its full SHA-256
+fingerprint and, when verifying a signature that references the shared
+`short_id`, MUST attempt verification against each non-expired candidate key
+body for that server and `short_id`. The signature is valid if exactly one
+candidate verifies. If no candidate verifies, or if more than one candidate
+verifies, verification MUST fail — two distinct advertised key bodies validating
+the same signature is cryptographically anomalous and indicates malformed or
+adversarial key material, so the rule fails closed. Receiving servers SHOULD
+bound the number of colliding key bodies retained per `short_id` (a limit of 4
+is RECOMMENDED); key bodies advertised beyond that bound MUST NOT be added to
+the candidate set, so that a server cannot inflate its peers' verification work
+by advertising manufactured collisions. Note that only the key's owner (or an
+attacker holding its signing keys) can introduce such collisions, since key
+responses are self-signed; see
 [Security considerations](#security-considerations) for the collision cost
 analysis.
 
-Except for verified FN-DSA hash-prefix collisions as described above, key IDs
-MUST be unique within each algorithm namespace on a given server.
+Except for verified FN-DSA hash-prefix collisions as described above, `short_id`
+values MUST be unique within each algorithm namespace on a given server.
 
-For FN-DSA specifically, notaries and caches SHOULD retain the full SHA-256
-digest of the tagged public key bytes as the canonical fingerprint of the key
-body. The derived `key_id` is used for lookup and wire-format references; the
-full digest is used for collision forensics, deduplication, and canonical body
-comparison.
+For FN-DSA specifically, notaries and caches SHOULD retain `key_id_sha256` (the
+full SHA-256 digest above) as the canonical full ID and fingerprint of the key
+body. The derived `short_id` is used in on-wire key references and lookup;
+`key_id_sha256` is used for collision forensics, deduplication, and canonical
+body comparison.
 
 Notaries and caches SHOULD also retain the SHA-256 digest of the raw FN-DSA-512
 public key bytes (untagged) as a transfer-detection fingerprint, distinct from
@@ -189,10 +195,10 @@ Intentional domain migration MUST publish a distinct FN-DSA key for the new
 `server_name`; any relationship to the old server name belongs in an explicit
 cross-signing or delegation mechanism, not in key reuse.
 
-This key ID derivation intentionally uses unpadded base64url because key IDs
-appear in protocol identifiers and may be embedded in URLs or routing paths.
-FN-DSA public keys and signatures themselves continue to use unpadded standard
-base64 as specified below.
+This `short_id` derivation intentionally uses unpadded base64url because FN-DSA
+key references appear in protocol identifiers and may be embedded in URLs or
+routing paths. FN-DSA public keys and signatures themselves continue to use
+unpadded standard base64 as specified below.
 
 ### FN-DSA encoding and signing
 
@@ -297,26 +303,26 @@ unless the operator explicitly opts in.
 
 Once a server publishes an FN-DSA signing key, the `/_matrix/key/v2/server`
 response MUST include an FN-DSA self-signature in the `signatures` field
-alongside the existing Ed25519 signature. The `key_id` used for that signature
-MUST be derived from the FN-DSA public key body as specified in
-[Key ID format](#key-id-format). Receiving servers MUST verify this
-self-signature before trusting the FN-DSA key.
+alongside the existing Ed25519 signature. The `key_id` component of that
+signature entry MUST be an FN-DSA `short_id` derived from the FN-DSA public key
+body as specified in [Key ID format](#key-id-format). Receiving servers MUST
+verify this self-signature before trusting the FN-DSA key.
 
 Initial FN-DSA key discovery is trust-on-first-use (TOFU): it is authenticated
 by the existing Matrix server-key trust model (Ed25519 signatures and/or notary
 attestation). The FN-DSA self-signature proves possession of the FN-DSA private
-key for the published public key and binds that key to the claimed
-`server_name` inside the signed object; it does not independently prove domain,
-origin, or TLS control. Those properties remain exactly those supplied by the
-existing Matrix server-key trust model at fetch time. First-use discovery is
-not post-quantum secure against an attacker who has already compromised or
-quantum-derived the server's Ed25519 signing key before the FN-DSA key was
-observed. Post-quantum protection for server identity applies to traffic
-authenticated under a cached FN-DSA key for as long as that key stays in use
-and uncompromised; it does not extend across a key _replacement_, since
-replacement publication in this MSC is authenticated solely by the existing
-Ed25519 trust model — see [Security considerations](#security-considerations)
-for the resulting limitation.
+key for the published public key and binds that key to the claimed `server_name`
+inside the signed object; it does not independently prove domain, origin, or TLS
+control. Those properties remain exactly those supplied by the existing Matrix
+server-key trust model at fetch time. First-use discovery is not post-quantum
+secure against an attacker who has already compromised or quantum-derived the
+server's Ed25519 signing key before the FN-DSA key was observed. Post-quantum
+protection for server identity applies to traffic authenticated under a cached
+FN-DSA key for as long as that key stays in use and uncompromised; it does not
+extend across a key _replacement_, since replacement publication in this MSC is
+authenticated solely by the existing Ed25519 trust model — see
+[Security considerations](#security-considerations) for the resulting
+limitation.
 
 FN-DSA key publication does not require a post-quantum-secure HTTP transport
 layer. This is intentional: requiring PQC transport before FN-DSA keys are
@@ -328,7 +334,7 @@ this MSC therefore comes from Matrix-layer self-signatures and post-first-use
 FN-DSA caching, not from assuming that the first HTTP fetch was PQ-secure.
 Servers SHOULD use PQC-capable TLS and `X-Matrix-PQC` authentication for key
 refreshes when available, but transport protection is not a substitute for
-verifying FN-DSA self-signatures and enforcing the hash-derived key-ID rules
+verifying FN-DSA self-signatures and enforcing the hash-derived `short_id` rules
 below.
 
 Replacement key publication follows the normal Matrix server-key model: a key
@@ -336,11 +342,11 @@ response MUST include an FN-DSA self-signature in `signatures`, the receiving
 server MUST verify that self-signature, a valid proof-of-work MUST accompany the
 publication as specified in
 [Key publication Proof-of-Work](#key-publication-proof-of-work), and the
-advertised key ID MUST match the hash-derived ID computed from the public key
-body. If the response is well-formed and authenticates under the existing Matrix
-server-key trust model (Ed25519 signatures and/or notary attestation), the
-receiving server caches the new key body. This MSC does not add any requirement
-that a replacement key be signed by a prior FN-DSA key.
+advertised `short_id` MUST match the hash-derived `short_id` computed from the
+public key body. If the response is well-formed and authenticates under the
+existing Matrix server-key trust model (Ed25519 signatures and/or notary
+attestation), the receiving server caches the new key body. This MSC does not
+add any requirement that a replacement key be signed by a prior FN-DSA key.
 
 #### Key publication Proof-of-Work
 
@@ -362,8 +368,7 @@ Ed25519/notary authentication is otherwise valid.
     "resource": {
         "action": "fn-dsa-key-publication",
         "server_name": "example.com",
-        "key_id": "fn-dsa-512:5FQ2xg4sWqj3Kp9N",
-        "key_identity_sha256": "<unpadded-base64url-sha256>",
+        "key_id_sha256": "<unpadded-base64url-sha256>",
         "key_metadata_sha256": "<unpadded-base64url-sha256>",
         "claims": ["constant-time-keygen", "constant-time-signing"],
         "fips_206_revision": "ipd-2025-08"
@@ -372,9 +377,10 @@ Ed25519/notary authentication is otherwise valid.
 ```
 
 The `challenge` value MUST contain at least 128 bits of entropy from a
-cryptographically secure source. The `resource.key_id` and
-`resource.key_identity_sha256` fields MUST correspond to the same advertised
-FN-DSA public key body, and `resource.server_name` MUST correspond to the
+cryptographically secure source. The `resource.key_id_sha256` field MUST
+correspond to the advertised FN-DSA public key body, and the enclosing key's
+advertised `short_id` MUST equal the first 16 base64url characters of
+`resource.key_id_sha256`. `resource.server_name` MUST correspond to the
 `server_name` of the enclosing key response. If any value does not match, the
 proof MUST be rejected without evaluating the puzzle.
 
@@ -456,19 +462,29 @@ value was not issued by the verifier.
 Key notaries (`/_matrix/key/v2/query`) MUST include FN-DSA keys and their
 corresponding signatures in responses when present on the queried server.
 Notaries MUST validate the remote server's FN-DSA self-signature for the queried
-`server_name` — and MUST recompute and validate the hash-derived key ID against
-the advertised key body, and MUST verify a valid proof-of-work as specified in
-[Key publication Proof-of-Work](#key-publication-proof-of-work) — before
-attesting to the key; if any check fails, the notary MUST NOT include that
-FN-DSA key in its response. Notary responses are themselves signed objects;
+`server_name` — and MUST recompute and validate the hash-derived `short_id`
+against the advertised key body, and MUST verify a valid proof-of-work as
+specified in [Key publication Proof-of-Work](#key-publication-proof-of-work) —
+before attesting to the key; if any check fails, the notary MUST NOT include
+that FN-DSA key in its response. Notary responses are themselves signed objects;
 notaries that support this MSC MUST include FN-DSA signatures on their
 responses.
 
 FN-DSA keys follow identical validity semantics to Ed25519 keys: a signature
-made by `fn-dsa-512:<key_id>` is valid if the key was valid at the time of the
+made by `fn-dsa-512:<short_id>` is valid if the key was valid at the time of the
 signed operation. Retired FN-DSA keys appear in `old_verify_keys` with an
 `expired_ts`. The `valid_until_ts` field governs cache lifetime for the entire
 key response, identically to existing behavior.
+
+Historic third-party attestation metadata, including any
+`public_thirdparty_historic_attestations` collection, is advisory only. Servers
+MUST NOT reject events, keys, or state based solely on missing, false,
+suspicious, flimsy, or otherwise invalid attestation metadata. Such metadata
+MUST NOT affect automated verification, acceptance, or state resolution. If it
+is to influence behavior at all, that MUST occur only through explicit admin
+override or manual operator intervention. Automated state resolution MUST
+continue to operate normally, remain backwards compatible with legacy federation
+traffic, and converge according to the established network rules.
 
 Because a server's very first FN-DSA key observation is TOFU and authenticates
 only via the existing Ed25519 trust model (see
@@ -477,11 +493,11 @@ attacker positioned on that specific fetch path — a targeted, localized
 man-in-the-middle rather than a global compromise. Implementations MUST NOT
 treat contradictory notary observations, by themselves, as sufficient to reject
 or invalidate an otherwise valid first observation: doing so would let any
-false, compromised, or stale notary create a denial-of-service condition
-against legitimate bootstrap. This MSC therefore leaves first-observation
-acceptance semantics aligned with the existing Matrix server-key trust model;
-it does not define any cross-source consensus or conflict-resolution mechanism
-for FN-DSA bootstrap.
+false, compromised, or stale notary create a denial-of-service condition against
+legitimate bootstrap. This MSC therefore leaves first-observation acceptance
+semantics aligned with the existing Matrix server-key trust model; it does not
+define any cross-source consensus or conflict-resolution mechanism for FN-DSA
+bootstrap.
 
 ### Federation HTTP authentication
 
@@ -824,8 +840,8 @@ increasingly, in mainstream TLS libraries following FIPS 203 finalization.
   proof-of-work binds work to the advertised key material and selected metadata.
   Neither mechanism, by itself, proves current control of the domain's DNS,
   origin, or TLS endpoint at any particular time. Those properties remain those
-  of the underlying Matrix server-key trust model used to fetch or attest to
-  the key.
+  of the underlying Matrix server-key trust model used to fetch or attest to the
+  key.
 
 - **Downgrade attacks.** During the advisory period, an attacker who can strip
   HTTP headers (i.e. who controls TLS termination or a private key) could
@@ -840,18 +856,17 @@ increasingly, in mainstream TLS libraries following FIPS 203 finalization.
   implementations MUST use audited, constant-time libraries (see
   [Implementation guidance](#implementation-guidance)).
 
-- **Hash-derived key ID collisions.** The key ID commits to 96 bits of the key
-  body's SHA-256 digest (see [Key ID format](#key-id-format)). A second preimage
-  against a _specific_ existing key ID costs ~2^96 hash evaluations
+- **Hash-derived short ID collisions.** The `short_id` commits to 96 bits of the
+  key body's SHA-256 digest (see [Key ID format](#key-id-format)). A second
+  preimage against a _specific_ existing `short_id` costs ~2^96 hash evaluations
   (infeasible), but a birthday collision between two freshly generated keys
   costs only ~2^48 — feasible for a motivated party with commodity GPUs.
   Crucially, key responses are self-signed and served by the origin server, so
   only the key's owner (or an attacker already holding its signing keys) can
   place colliding key bodies into circulation: the attack is self-targeting. Its
   worst-case impact is bounded ambiguity handled by the exactly-one-verifies
-  rule and the RECOMMENDED candidate cap in
-  [Key Identifier Format](#key-id-format); it cannot make a signature verify
-  under a key the signer does not hold.
+  rule and the RECOMMENDED candidate cap in [Key ID Format](#key-id-format); it
+  cannot make a signature verify under a key the signer does not hold.
 
 - **Proof-of-work is a throttle, not trust.** A valid Cuckoo Cycle[^9] proof
   only spends the prover's resources; it says nothing about the prover's
@@ -894,10 +909,10 @@ While this MSC is in development, the following unstable prefixes are used:
 | `X-Matrix-PQC-Session` (HTTP header)             | `X-Matrix-PQC-Session` (no prefix needed, custom header)     |
 | `/_matrix/federation/v1/key_exchange` (endpoint) | `/_matrix/federation/unstable/tk.nutra.msc45xx/key_exchange` |
 
-The unstable algorithm prefix is used in `verify_keys` key IDs, `signatures`
-entries, and `X-Matrix-PQC` header `key` parameters. For example, the
-`/_matrix/key/v2/server` response would use the unstable algorithm identifier in
-key IDs:
+The unstable algorithm prefix is used in `verify_keys` key references,
+`signatures` entries, and `X-Matrix-PQC` header `key` parameters. For example,
+the `/_matrix/key/v2/server` response would use the unstable algorithm
+identifier in FN-DSA key references:
 
 ```json
 {
@@ -925,13 +940,13 @@ before finalization MUST observe the following constraints:
 - **Pin a specific draft revision.** Implementations MUST document which FIPS
   206 draft revision they target. Interoperability between implementations
   targeting different draft revisions is not guaranteed.
-- **Use unstable algorithm prefixes, but stable hash-derived key IDs.** During
+- **Use unstable algorithm prefixes, but stable hash-derived short IDs.** During
   the draft period, `/_matrix/key/v2/server` key entries and `X-Matrix-PQC`
   header `key` parameters MUST use the unstable algorithm identifier
   (`tk.nutra.msc45xx.fn-dsa-512`) as the prefix, but the suffix MUST still be
-  the hash-derived key ID derived from the FN-DSA public key body. This ensures
-  that draft-era signatures are distinguishable from signatures produced under
-  the finalized standard, while preserving the collision-resistant lookup
+  the hash-derived `short_id` derived from the FN-DSA public key body. This
+  ensures that draft-era signatures are distinguishable from signatures produced
+  under the finalized standard, while preserving the collision-resistant lookup
   property.
 - **Rotation on parameter change.** If a subsequent FIPS 206 draft or the final
   standard changes the public key encoding, signature encoding, or algorithm
@@ -965,6 +980,106 @@ that preserves verifier safety:
   changes MUST use a new algorithm or profile identifier, publish separate keys
   during migration, and rely on a follow-up MSC or room version before becoming
   mandatory.
+
+## Test vectors
+
+The following vectors are normative for interoperability. They are intended to
+eliminate ambiguity in `key_id_sha256` derivation, FN-DSA encoding/signing, and
+the Cuckoo Cycle helper functions used by this MSC.
+
+They are generated by `tools/msc45xx-vectors/` in this repository, which emits
+the same values from the sibling `gomatrixlib` implementation.
+
+### `key_id_sha256` / `short_id` vector
+
+This vector uses the exact ASCII context string `matrix:fn-dsa-512:key-id:v1`,
+prefixed with `len16(context) = 0x001b`, and the public key from the FN-DSA
+vector below.
+
+```text
+context_ascii = "matrix:fn-dsa-512:key-id:v1"
+context_len16_be = 001b
+key_id_sha256_hex = 20fd21bc319285ffbbd0fc54ba6c8581d952ac62e671e90f4184a8b425d2db38
+key_id_sha256_base64url = IP0hvDGShf-70PxUumyFgdlSrGLmcekPQYSotCXS2zg
+short_id = IP0hvDGShf-70PxU
+```
+
+### Deterministic FN-DSA-512 sign/verify vector
+
+This vector uses a deterministic entropy stream for reproducibility only. It is
+generated by feeding the ASCII seeds below into `SHAKE256` and using the output
+as the byte stream for key generation and signing:
+
+```text
+keygen_rng_seed_ascii = "msc45xx-fndsa-keygen-seed-v1"
+sign_rng_seed_ascii = "msc45xx-fndsa-sign-seed-v1"
+message_ascii = "matrix federation post-quantum test vector"
+```
+
+Verification of the signature below against the public key and message above
+MUST succeed. Verification against the message `tampered` MUST fail.
+
+```json
+{
+    "private_key_base64": "Wf+vvfAe//AQfuwggPuw/AQQjQdPwBOwe/QQRuwA/vAQPww+/xBQBPQ+x/wfiQBRQg//uQgw+xPR/hgggfQRPfQve+/Qx/hPPAv+gfhAgffRgvBQufAhSPv/x/ABPPhPPugQgRvhfvvRxP/OffQPvAPevQggwPePAAPgvAQwQAPBQA+/vAgBghA/vBfvgBfu/wBPRf/Qxv/RvgRPxvfOgQfgyffyfARgAuwQxQBw/wRvxQhvxPQQPxQgOwfxPNQQAhdwgf//+/xOSBwAgBQPewuhf/fBBgQQg/AxA/hBNgRQgQP/vgPhPwAAPfeAwwgCPvPxA/hw/Phgu/vwBexQOBfBAdwQfAfggfOfv/QvthA/wfw/whgBPBfAiRg/ufRPhiugvffuvuuwvPevfxSPggQQSBCt/QgARwvxRQ//QPAQg/ifAgRBPfPvuwwfvCARAuvdfAewSNgvxg/QvBQvwuuPegvfgQf++BuxvQuQBQi+vyufQ//vf/QAwegQAQgwxPxOgQNvAAAQgBRuQx+ggf/hPPv///AuvvPuwP/vuvfQP/gQP+wyPfQfPwfPg/vvuQwPxvBfffQOhvgvAgfwAQA+vex+wehfyid+xg+xPBvPQOgQQhvAfROhQvfQBPggARfvBfANgxQQOxAPvwQvihPwwAvwPvQQ/QgePxAPvQAO/SAfR/hO/w/QOwgQPROgQvfehevQ/+xxPgP/hBiOgfPNxvfhgOfdgAQOv/PvvgRwPAQf/RN+/fvAQQvQgAxhw+wPhdQ//www/wcuA+QvPQ//+wPwxxBOQvAggSNvAufvxPffO/gAQ/Peu+v//AQ/Pv/h/QPv+gQP/fPPBgAtwQQCvwvQQeu/exARAAQ/eSPwABBfgwQBQwPPP/ee//wv+whwevvvhffhxBPBwP+whf+/BgQfAfQgBgAgP/QP/wfAPgwuvgQQgufQfQw/vQwOvwB/ANvCBQAA+//9/uAfg/fhhQ+QAxghAiAwPgO/xPRAuAv/vwBBQPfO//xwvgOwhf8QGxClDCsZ8BsF7BH8BtwD9PcBLOQXG/rkHSIF2RP8HuhD+hgFD98bxO/w7/r3AtMOBQMn7db68h0K8/70FCvd8eYH+vT9KwDo+wEhCAT68gfl+98D4eYM9e/9FwetDfT0Bu3px/0l7AsMB/oiJfLnFyQEOlEj+vbtBhQu8QI3FwjzCfLqEgva/tglGxQ9Be3v7eHSO9jRG9oYDg4p8Cza/fDxIxTuHAIWzuf++QMI59DY5vz/Ch/p2Q/Pvurs5SMw994AAA/WDA3V8wcP/QAQ/S0DHdf4/OQSQdAB+9wOD/sa7A4C/PD7+/cG87n6+OMH7C7d+QQKz/MRJ+katRL08/gALQT8DgH8EfsBBucf+RMCJDvXKBQB5PAIEfwvFwkR5AkC+x3ezvDa9xUX+/YB2eHlIyEQIh0jCgkgGhX7PgQY9PQNEvn+Ixgd89f1Frr29+X548UOtiPq8AfcAwLK1/ohHP8GDCH8JC0PCfoPAAM9QP8GByQON/sDFP799ggn/QH/Byz98tsFCBgEJMEV8h/n/gES7ikO+CXlGQgCBfnwGQgcDQsM88z86xr14wss9MjjItki0uXw2NADGwvs3eMEyPf99OIX1Sjn6jv1ABQuOR8DHwcC2yMF5PT7Oe3b+uLu8zj3+fEy/inuIf8kGg3uEAsh+xkw/AMIDi0N",
+    "public_key_base64": "CUMlDwB0VzdvaT1nEeaTr21DtluYBSy6dktakGJh1K6o/yrYfthHeoRcG1gCURulT9CUkULCZYQvt2SM20hlAVUB7ehqZjN5fpAFoCtera1xaV8PdqnkbRJwXdtUQf770KVQWPjL9Z4ZwVVyVRpC1P41SehABNsDII0eBcJK65yGHKvnVL+RGBS15oG2oNjQazrWx1S6PZkAVMtq1RIoYJcsAeq6tMOvAW8ML3DXpw2mkYQZKYyxIHBOeDULD1dyO/FAQIRYpdsQumjBHCqiypHdSDu1GLOajB9hxNmAaepGnzWyK24RYgn4p+vd4WI6uhnHlJRJQqq6iOwoD38mIZtHqUIsbAn1xJrkAlRQEHUObZ4O5RNuhRIvuSBa5290pigmdeXhwY+VBjCrJ/mrBS5SOE+njyKqc7fVAYntsGoCrA2AVsOqMwCQpoi7tbLP3lBOzbhFLsWnWJTUkpT5MOqPAWvaSp5+5YEIJiRHteTjm8iVsIF4UWDJ7pNk5HaTCXaoslCgq0cZS4JLGXWS60I2RPL5nzaY/obiT543b5H+CdXXKjUgn0rrwRd+ndzpDpABfu4QMvda/jTV9/TJDZmy/ojyBdUPX1J9sruaTl2pkTkwL11asfrGoRSZt77Cl8FqcgOoXcJEGAeE8SUSmOkdICTVEWesNm9CVJUTJxVOttDjLM4Mvd6SyA/sO1KufVlLIwlH4Z7gH6KPPtJnwsEbSaB0OuWbTntY6K4xTghWvr62Md2TkqQ0CzsTS5y/LqHDcayOc85dcA6ENKMiLLb25cEXegc3uSSegmgKISdfzjeEt1ffK/JGLO16a1luUth6Al5Kv0pRuHXf7uKMWFF3jQQ+ojVyU0dhnD6kvlE8IL5zuYoIFqBAT8ruIw1scmmo+YjK4dJhtWXjOgd8JoHYiJ9GFYkJu3n266KjzQioHQTAPCZzNEFq62hkVSvDWnYJsD5QWRJIKzjLadUYmF0pOUUoq46rQMJi6EiyI6KoNuHj461IbUp726whYgOlZ61xmsgGsFpWDZby/iHN0CVhTQTQROz7fA415ozfIUEi8EU2GkwJcY40mG7ORfF7ixnUzIeC56RSmKtvAnK1n9fDB6CEAAkP7GDlMlRm7UVUnXpHr5jKqOlxMkbcvLytN8sdE/8+WGKwBYhkq13XdNhayVl9W1Ko3m9BxoF5pQZq",
+    "signature_base64": "OR1ILU+zEfglTjfS36YPtmYURnEMjBDlviLlO0yq214jygBVxOcAfTuezSWGIw8sjyKw0bij/Wsi86tqFERfCDQErvbK16xY+izE6Y2BI93lmrJ3s84z1adTn5uhN1L91AbGY4R1JN7szM/KV3jYNNua1xLmrrL3TGRAXlcHRPfkYY3Wk1TzS1kL7SLhCbEq01qqbcY/+RkyMbfXNYzAlylx5wp0z0bO9CxQ1cttgwMwa8jgjaNvaya96FTmuKskCuuLtHAqfAXrJIH4GRdNUmUrve3YiinS9ufe4sd6WkVDA6VITfYVONrk88nNWu+QSA/LYRwxCc8hL2aYZTK0fOkx/6rHdylSyiR9LnYZdT6YsMfVI5tommGdhPJcvKgnRwIyrISylC98SmMfq6OyeexBScItzMLt6to+2MO41dUaqOpXBS15NXpB/Fsx8oYzt4NdZ5VGs33PscfUARf9RDoKBWmIfnN47yX/HcbEcbrpCszaFagOc1PBRxujMxUWrlGW+EkQHc0yetPJqDsUR5lGWaXqRZPUjTCvCgk403LgjURzR0rFm8cRy5XbtyRSLnFTjGkQ2FTq5AR+ulI3pZvT74YNYqxREbNWWKTi4zr2U5BnlwUveCKK41fmiBPOT8WPQOmYs11IpKxHiaQ8D4N9Esmz+/6b1VJgXU0E/UxvY7HNZgrR1qjBr3VfXsnLN5mFotf5Rwp1thUGjT3e1jMnJUKuKzednTIxgpTjLOO6im3XnMRnErNjWXSiEGFYolDcylQmXfLVeBvB+DWjY5UwnIWeF2euSXMxy04rGVyH6+Rn443VwrEQRTWavqHdSdprJpRJEz2DNJOu1whd35Zz3JgyeeOaywnaXYMqpDsegAAAAAAAAAAA"
+}
+```
+
+### Cuckoo `graph_seed` vector
+
+This vector fixes the helper used by the PoW profile before any graph search is
+performed.
+
+```text
+challenge_bytes_ascii = "challenge"
+nonce = 3
+graph_seed_hex = 60ab7795bdc7d1e1952d08eb04ce99aeedf0969b4b6ae11faabf6e9c254679c7
+```
+
+### Reduced-work Cuckoo proof vector
+
+This vector is for interoperability testing of edge derivation and proof
+verification only. It is **not** the production `42-29` profile. Production
+deployments MUST still implement and enforce
+`tk.nutra.msc45xx.pow.cuckoo-cycle-42-29-sha256`.
+
+```text
+config.edge_bits = 8
+config.proof_size = 4
+challenge_bytes_ascii = "tiny-cuckoo-test"
+nonce = 0
+graph_seed_hex = cc53bbfaea7f82519d68c626b808a991decdad0af34fff068d5b506fa45b6bc9
+proof = [0, 48, 289, 3503]
+edge(0) = (49, 116)
+edge(48) = (8, 116)
+edge(289) = (8, 3)
+edge(3503) = (49, 3)
+```
+
+### PoW challenge-object `graph_seed` vector
+
+This vector fixes the canonical JSON bytes and the resulting `graph_seed` for a
+sample production-profile challenge object.
+
+```json
+{
+    "challenge_object": {
+        "algorithm": "tk.nutra.msc45xx.pow.cuckoo-cycle-42-29-sha256",
+        "challenge": "AAAAAAAAAAAAAAAAAAAAAA",
+        "expires_ts": 1798848000000,
+        "resource": {
+            "action": "fn-dsa-key-publication",
+            "server_name": "example.com",
+            "key_id_sha256": "IP0hvDGShf-70PxUumyFgdlSrGLmcekPQYSotCXS2zg"
+        }
+    },
+    "canonical_json_utf8": "{\"algorithm\":\"tk.nutra.msc45xx.pow.cuckoo-cycle-42-29-sha256\",\"challenge\":\"AAAAAAAAAAAAAAAAAAAAAA\",\"expires_ts\":1798848000000,\"resource\":{\"action\":\"fn-dsa-key-publication\",\"server_name\":\"example.com\",\"key_id_sha256\":\"IP0hvDGShf-70PxUumyFgdlSrGLmcekPQYSotCXS2zg\"}}",
+    "nonce": 8137226,
+    "graph_seed_hex": "284e0a6686aef81a82f8b44a4c8026966058f3973dc958fbecb28361082a7107"
+}
+```
 
 ## Dependencies
 
