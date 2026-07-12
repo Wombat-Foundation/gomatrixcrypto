@@ -22,14 +22,28 @@ const (
 	demoPoWProfileNote     = "demo-only low-difficulty Cuckoo profile; not valid for production key publication"
 )
 
+type powProfile struct {
+	Algorithm string
+	Config    cuckoo.Config
+	Demo      bool
+	Note      string
+}
+
 func main() {
 	serverName := flag.String("server", "example.com", "Matrix server_name to bind into the self-signed key object")
 	validDays := flag.Int("valid-days", 7, "validity window in days")
-	edgeBits := flag.Uint("pow-edge-bits", 8, "demo Cuckoo edge bits; production profile uses 29")
-	proofSize := flag.Int("pow-proof-size", 4, "demo Cuckoo proof size; production profile uses 42")
+	profileName := flag.String("pow-profile", "demo", "PoW profile: demo, production, or custom")
+	edgeBits := flag.Uint("pow-edge-bits", 8, "Cuckoo edge bits; ignored by -pow-profile production")
+	proofSize := flag.Int("pow-proof-size", 4, "Cuckoo proof size; ignored by -pow-profile production")
+	powAlgorithm := flag.String("pow-algorithm", "", "challenge algorithm for -pow-profile custom")
+	demoProfile := flag.Bool("pow-demo-profile", true, "mark -pow-profile custom output as demo-only")
 	maxNonce := flag.Uint("pow-max-nonce", 1<<12, "maximum edge nonce to search per graph")
 	maxGraphNonce := flag.Uint64("pow-max-graph-nonce", 256, "maximum graph nonce attempts")
 	flag.Parse()
+	profile, err := configurePoWProfile(*profileName, *edgeBits, *proofSize, *powAlgorithm, *demoProfile)
+	if err != nil {
+		fatal(err)
+	}
 
 	priv, pub, err := fndsa512.GenerateKey(nil)
 	if err != nil {
@@ -66,10 +80,7 @@ func main() {
 	}
 
 	keyIDSHA256 := serverkey.KeyIDSHA256(pub)
-	challengeObject, proofObject, err := solvePublicationPoW(*serverName, keyIDSHA256, metadataDigest, serverKeyObjectDigest, metadata, validUntil, cuckoo.Config{
-		EdgeBits:  *edgeBits,
-		ProofSize: *proofSize,
-	}, uint32(*maxNonce), *maxGraphNonce)
+	challengeObject, proofObject, err := solvePublicationPoW(*serverName, keyIDSHA256, metadataDigest, serverKeyObjectDigest, metadata, validUntil, profile, uint32(*maxNonce), *maxGraphNonce)
 	if err != nil {
 		fatal(err)
 	}
@@ -78,7 +89,9 @@ func main() {
 		"server_key_object": obj,
 		"pow_challenge":     challengeObject,
 		"pow_proof":         proofObject,
-		"pow_profile_note":  demoPoWProfileNote,
+	}
+	if profile.Note != "" {
+		bundle["pow_profile_note"] = profile.Note
 	}
 
 	enc := json.NewEncoder(os.Stdout)
@@ -91,7 +104,9 @@ func main() {
 	fmt.Printf("key_metadata_sha256: %s\n", metadataDigest)
 	fmt.Printf("server_key_object_sha256: %s\n", serverKeyObjectDigest)
 	fmt.Printf("pow_algorithm: %s\n", challengeObject["algorithm"])
-	fmt.Printf("pow_profile_note: %s\n", demoPoWProfileNote)
+	if profile.Note != "" {
+		fmt.Printf("pow_profile_note: %s\n", profile.Note)
+	}
 	fmt.Printf("pow_graph_nonce: %v\n", proofObject["nonce"])
 	fmt.Printf("private_key_base64: %s\n", base64.RawStdEncoding.EncodeToString(priv))
 	fmt.Println("publication_bundle:")
@@ -100,15 +115,48 @@ func main() {
 	}
 }
 
-func solvePublicationPoW(serverName, keyIDSHA256, metadataDigest, serverKeyObjectDigest string, metadata serverkey.FNDSAMetadata, validUntil int64, cfg cuckoo.Config, maxNonce uint32, maxGraphNonce uint64) (map[string]any, map[string]any, error) {
+func configurePoWProfile(name string, edgeBits uint, proofSize int, algorithm string, demo bool) (powProfile, error) {
+	switch name {
+	case "demo":
+		cfg := cuckoo.Config{EdgeBits: edgeBits, ProofSize: proofSize}
+		return powProfile{
+			Algorithm: fmt.Sprintf("demo.cuckoo-cycle-%d-%d-sha256", cfg.ProofSize, cfg.EdgeBits),
+			Config:    cfg,
+			Demo:      true,
+			Note:      demoPoWProfileNote,
+		}, nil
+	case "production":
+		return powProfile{
+			Algorithm: productionPoWAlgorithm,
+			Config:    cuckoo.Config{EdgeBits: 29, ProofSize: 42},
+			Demo:      false,
+		}, nil
+	case "custom":
+		if algorithm == "" {
+			return powProfile{}, fmt.Errorf("-pow-algorithm is required with -pow-profile custom")
+		}
+		profile := powProfile{
+			Algorithm: algorithm,
+			Config:    cuckoo.Config{EdgeBits: edgeBits, ProofSize: proofSize},
+			Demo:      demo,
+		}
+		if demo {
+			profile.Note = demoPoWProfileNote
+		}
+		return profile, nil
+	default:
+		return powProfile{}, fmt.Errorf("unknown -pow-profile %q", name)
+	}
+}
+
+func solvePublicationPoW(serverName, keyIDSHA256, metadataDigest, serverKeyObjectDigest string, metadata serverkey.FNDSAMetadata, validUntil int64, profile powProfile, maxNonce uint32, maxGraphNonce uint64) (map[string]any, map[string]any, error) {
 	challenge, err := randomChallenge()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	algorithm := fmt.Sprintf("demo.cuckoo-cycle-%d-%d-sha256", cfg.ProofSize, cfg.EdgeBits)
 	challengeObject := map[string]any{
-		"algorithm":  algorithm,
+		"algorithm":  profile.Algorithm,
 		"challenge":  challenge,
 		"expires_ts": validUntil,
 		"resource": map[string]any{
@@ -119,10 +167,13 @@ func solvePublicationPoW(serverName, keyIDSHA256, metadataDigest, serverKeyObjec
 			"server_key_object_sha256": serverKeyObjectDigest,
 			"claims":                   metadata.Claims,
 			"fips_206_revision":        metadata.FIPS206Revision,
-			"demo_pow_profile":         true,
-			"profile_note":             demoPoWProfileNote,
 			"production_algorithm":     productionPoWAlgorithm,
 		},
+	}
+	if profile.Demo {
+		resource := challengeObject["resource"].(map[string]any)
+		resource["demo_pow_profile"] = true
+		resource["profile_note"] = profile.Note
 	}
 
 	canonicalChallenge, err := matrixjson.Canonical(challengeObject)
@@ -132,14 +183,14 @@ func solvePublicationPoW(serverName, keyIDSHA256, metadataDigest, serverKeyObjec
 
 	for graphNonce := uint64(0); graphNonce < maxGraphNonce; graphNonce++ {
 		seed := cuckoo.GraphSeed(canonicalChallenge, graphNonce)
-		proof, err := cuckoo.FindProof(cfg, seed[:], maxNonce)
+		proof, err := cuckoo.FindProof(profile.Config, seed[:], maxNonce)
 		if err == cuckoo.ErrNoSolution {
 			continue
 		}
 		if err != nil {
 			return nil, nil, err
 		}
-		if err := cuckoo.Verify(cfg, seed[:], proof); err != nil {
+		if err := cuckoo.Verify(profile.Config, seed[:], proof); err != nil {
 			return nil, nil, err
 		}
 

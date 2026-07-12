@@ -134,6 +134,19 @@ edge nonces by default, so it is intentionally easy: it looks for a 4-cycle in
 a tiny graph and often solves at graph nonce 0. The production profile described
 in ``res/`` is ``42-29`` and is intentionally much more expensive.
 
+PoW profile examples:
+
+.. code-block:: bash
+
+   # Default fast demo profile.
+   go run ./cmd/serverkey-demo -server example.com
+
+   # Custom profile and algorithm label.
+   go run ./cmd/serverkey-demo -pow-profile custom -pow-algorithm local.cuckoo-cycle-6-12-sha256 -pow-edge-bits 12 -pow-proof-size 6 -pow-max-nonce 65536
+
+   # Production parameter labels. This is expected to be expensive with the Go helper.
+   go run ./cmd/serverkey-demo -pow-profile production -pow-max-nonce 536870912 -pow-max-graph-nonce 1024
+
 Cuckoo Cycle
 ~~~~~~~~~~~~
 
