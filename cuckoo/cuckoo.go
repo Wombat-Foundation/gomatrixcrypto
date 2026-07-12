@@ -195,11 +195,40 @@ func Verify(cfg Config, seed []byte, nonces []uint32) error {
 	return nil
 }
 
+// bitset is a compact, fixed-size set of bits used in place of map[X]bool
+// for the O(2^EdgeBits) and O(maxNonce) tracking arrays in FindProof. At
+// production-scale parameters (EdgeBits=29) those sets have hundreds of
+// millions of members; a Go map's per-entry bucket overhead would put total
+// memory use in the tens of gigabytes where a bitset needs tens of
+// megabytes.
+type bitset []uint64
+
+func newBitset(n uint64) bitset {
+	return make(bitset, (n+63)/64)
+}
+
+func (b bitset) get(i uint64) bool {
+	return b[i>>6]&(1<<(i&63)) != 0
+}
+
+func (b bitset) set(i uint64) {
+	b[i>>6] |= 1 << (i & 63)
+}
+
+func (b bitset) clear(i uint64) {
+	b[i>>6] &^= 1 << (i & 63)
+}
+
 // FindProof performs a bounded search for a valid cycle.
 //
 // It uses the usual Cuckoo Cycle first step: trim edges attached to leaf nodes
 // before doing any path search. This is still a compact CPU helper, not a
 // competitive production miner.
+//
+// Graph state is kept in flat, node-indexed arrays (a CSR adjacency list)
+// rather than maps, since maps over O(2^EdgeBits) keys are what made larger
+// EdgeBits configurations (e.g. the production profile's EdgeBits=29)
+// allocate tens of gigabytes of map bucket overhead.
 func FindProof(cfg Config, seed []byte, maxNonce uint32) ([]uint32, error) {
 	cfg, err := cfg.normalize()
 	if err != nil {
@@ -210,35 +239,52 @@ func FindProof(cfg Config, seed []byte, maxNonce uint32) ([]uint32, error) {
 		return nil, err
 	}
 
-	type labeledEdge struct {
-		nonce uint32
-		u     uint64
-		v     uint64
+	type graphEdge struct {
+		u, v uint32
 	}
 
-	edges := make([]labeledEdge, 0, maxNonce)
-	degrees := map[uint64]int{}
-	incident := map[uint64][]int{}
+	numEdges := uint64(maxNonce)
+	nodeCount := uint64(1) << cfg.EdgeBits
 	mask := cfg.nodeMask()
+
+	// An edge's nonce equals its index in edges: both are assigned in the
+	// same 0..maxNonce-1 sequence below, so it never needs its own field.
+	edges := make([]graphEdge, maxNonce)
+	degrees := make([]uint32, nodeCount)
 	for nonce := uint32(0); nonce < maxNonce; nonce++ {
-		e := labeledEdge{
-			nonce: nonce,
-			u:     (siphash24(words, uint64(nonce)<<1) & mask) << 1,
-			v:     ((siphash24(words, (uint64(nonce)<<1)|1) & mask) << 1) | 1,
-		}
-		idx := len(edges)
-		edges = append(edges, e)
-		degrees[e.u]++
-		degrees[e.v]++
-		incident[e.u] = append(incident[e.u], idx)
-		incident[e.v] = append(incident[e.v], idx)
+		u := uint32((siphash24(words, uint64(nonce)<<1) & mask) << 1)
+		v := uint32(((siphash24(words, (uint64(nonce)<<1)|1) & mask) << 1) | 1)
+		edges[nonce] = graphEdge{u: u, v: v}
+		degrees[u]++
+		degrees[v]++
 	}
 
-	removed := make([]bool, len(edges))
-	queue := make([]uint64, 0, len(degrees))
-	for node, degree := range degrees {
-		if degree == 1 {
-			queue = append(queue, node)
+	// incidentOffset[n]:incidentOffset[n+1] slices incidentEdges into the
+	// edge indices touching node n (a standard CSR adjacency list).
+	incidentOffset := make([]uint32, nodeCount+1)
+	for n := uint64(0); n < nodeCount; n++ {
+		incidentOffset[n+1] = incidentOffset[n] + degrees[n]
+	}
+	incidentEdges := make([]uint32, incidentOffset[nodeCount])
+	// incidentOffset[0:nodeCount] is reused as a write cursor while filling,
+	// then unshifted back into start offsets — this avoids a second
+	// nodeCount-sized array just to track fill positions.
+	for idx, e := range edges {
+		incidentEdges[incidentOffset[e.u]] = uint32(idx)
+		incidentOffset[e.u]++
+		incidentEdges[incidentOffset[e.v]] = uint32(idx)
+		incidentOffset[e.v]++
+	}
+	for n := nodeCount; n > 0; n-- {
+		incidentOffset[n] = incidentOffset[n-1]
+	}
+	incidentOffset[0] = 0
+
+	removed := newBitset(numEdges)
+	queue := make([]uint32, 0, 64)
+	for n := uint64(0); n < nodeCount; n++ {
+		if degrees[n] == 1 {
+			queue = append(queue, uint32(n))
 		}
 	}
 
@@ -248,20 +294,20 @@ func FindProof(cfg Config, seed []byte, maxNonce uint32) ([]uint32, error) {
 			continue
 		}
 
-		edgeIdx := -1
-		for _, idx := range incident[node] {
-			if !removed[idx] {
+		edgeIdx := ^uint32(0)
+		for _, idx := range incidentEdges[incidentOffset[node]:incidentOffset[node+1]] {
+			if !removed.get(uint64(idx)) {
 				edgeIdx = idx
 				break
 			}
 		}
-		if edgeIdx == -1 {
+		if edgeIdx == ^uint32(0) {
 			continue
 		}
 
-		removed[edgeIdx] = true
+		removed.set(uint64(edgeIdx))
 		edge := edges[edgeIdx]
-		for _, endpoint := range [...]uint64{edge.u, edge.v} {
+		for _, endpoint := range [...]uint32{edge.u, edge.v} {
 			degrees[endpoint]--
 			if degrees[endpoint] == 1 {
 				queue = append(queue, endpoint)
@@ -270,11 +316,11 @@ func FindProof(cfg Config, seed []byte, maxNonce uint32) ([]uint32, error) {
 	}
 
 	path := make([]uint32, 0, cfg.ProofSize)
-	usedEdges := make([]bool, len(edges))
-	seenNodes := map[uint64]bool{}
-	var dfs func(startNode, currentNode uint64, depth int) ([]uint32, bool)
+	usedEdges := newBitset(numEdges)
+	seenNodes := newBitset(nodeCount)
+	var dfs func(startNode, currentNode uint32, depth int) ([]uint32, bool)
 
-	dfs = func(startNode, currentNode uint64, depth int) ([]uint32, bool) {
+	dfs = func(startNode, currentNode uint32, depth int) ([]uint32, bool) {
 		if depth == cfg.ProofSize {
 			if currentNode == startNode {
 				proof := append([]uint32(nil), path...)
@@ -286,8 +332,8 @@ func FindProof(cfg Config, seed []byte, maxNonce uint32) ([]uint32, error) {
 			return nil, false
 		}
 
-		for _, nextIdx := range incident[currentNode] {
-			if removed[nextIdx] || usedEdges[nextIdx] {
+		for _, nextIdx := range incidentEdges[incidentOffset[currentNode]:incidentOffset[currentNode+1]] {
+			if removed.get(uint64(nextIdx)) || usedEdges.get(uint64(nextIdx)) {
 				continue
 			}
 			next := edges[nextIdx]
@@ -295,36 +341,37 @@ func FindProof(cfg Config, seed []byte, maxNonce uint32) ([]uint32, error) {
 			if nextNode == currentNode {
 				nextNode = next.v
 			}
-			if nextNode != startNode && seenNodes[nextNode] {
+			if nextNode != startNode && seenNodes.get(uint64(nextNode)) {
 				continue
 			}
-			usedEdges[nextIdx] = true
-			seenNodes[nextNode] = true
-			path = append(path, next.nonce)
+			usedEdges.set(uint64(nextIdx))
+			seenNodes.set(uint64(nextNode))
+			path = append(path, nextIdx)
 			if proof, ok := dfs(startNode, nextNode, depth+1); ok {
 				return proof, true
 			}
 			path = path[:len(path)-1]
-			delete(seenNodes, nextNode)
-			usedEdges[nextIdx] = false
+			seenNodes.clear(uint64(nextNode))
+			usedEdges.clear(uint64(nextIdx))
 		}
 		return nil, false
 	}
 
-	for startIdx, start := range edges {
-		if removed[startIdx] {
+	for startIdx := range edges {
+		if removed.get(uint64(startIdx)) {
 			continue
 		}
-		usedEdges[startIdx] = true
-		seenNodes[start.u] = true
-		seenNodes[start.v] = true
-		path = append(path[:0], start.nonce)
+		start := edges[startIdx]
+		usedEdges.set(uint64(startIdx))
+		seenNodes.set(uint64(start.u))
+		seenNodes.set(uint64(start.v))
+		path = append(path[:0], uint32(startIdx))
 		if proof, ok := dfs(start.u, start.v, 1); ok {
 			return proof, nil
 		}
-		usedEdges[startIdx] = false
-		delete(seenNodes, start.u)
-		delete(seenNodes, start.v)
+		usedEdges.clear(uint64(startIdx))
+		seenNodes.clear(uint64(start.u))
+		seenNodes.clear(uint64(start.v))
 	}
 
 	return nil, ErrNoSolution
