@@ -4,8 +4,10 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"math/bits"
 	"slices"
+	"time"
 )
 
 const ProofSize = 42
@@ -253,7 +255,17 @@ func isLeafCounter(lo, hi bitset, node uint64) bool {
 // require tens of gigabytes. Once trimming has shrunk the live edge set to
 // a small survivor set, an exact incremental peel plus DFS run over just
 // those survivors, which is cheap to do with ordinary maps.
-func FindProof(cfg Config, seed []byte, maxNonce uint32) ([]uint32, error) {
+//
+// The bulk rounds stop as soon as returns diminish rather than chasing full
+// convergence, since the incremental peel that follows finishes the exact
+// cleanup cheaply on whatever remains — pushing bulk rounds all the way to
+// a fixed point can add a long tail of low-yield, still O(maxNonce)-cost
+// rounds for no benefit.
+//
+// An optional onProgress callback, if provided, is called with a line of
+// human-readable status for each trimming round and DFS milestone — useful
+// for confirming a large production-scale search is still making progress.
+func FindProof(cfg Config, seed []byte, maxNonce uint32, onProgress ...func(string)) ([]uint32, error) {
 	cfg, err := cfg.normalize()
 	if err != nil {
 		return nil, err
@@ -263,6 +275,17 @@ func FindProof(cfg Config, seed []byte, maxNonce uint32) ([]uint32, error) {
 		return nil, err
 	}
 
+	var progress func(string)
+	if len(onProgress) > 0 {
+		progress = onProgress[0]
+	}
+	logf := func(format string, args ...any) {
+		if progress != nil {
+			progress(fmt.Sprintf(format, args...))
+		}
+	}
+
+	startTime := time.Now()
 	numEdges := uint64(maxNonce)
 	nodeCount := uint64(1) << cfg.EdgeBits
 	mask := cfg.nodeMask()
@@ -273,6 +296,8 @@ func FindProof(cfg Config, seed []byte, maxNonce uint32) ([]uint32, error) {
 		return
 	}
 
+	logf("cuckoo: trimming graph EdgeBits=%d edges=%d nodes=%d", cfg.EdgeBits, numEdges, nodeCount)
+
 	alive := newBitset(numEdges)
 	for i := range alive {
 		alive[i] = ^uint64(0)
@@ -280,8 +305,13 @@ func FindProof(cfg Config, seed []byte, maxNonce uint32) ([]uint32, error) {
 
 	lo := newBitset(nodeCount)
 	hi := newBitset(nodeCount)
-	const maxTrimRounds = 100
-	for round := 0; round < maxTrimRounds; round++ {
+	aliveCount := numEdges
+	// Once the live set is this small, the map-based incremental peel below
+	// finishes cheaply, so further bulk rounds aren't worth their O(maxNonce)
+	// scan cost.
+	survivorTarget := uint64(1) << 22
+	const maxTrimRounds = 64
+	for round := 0; round < maxTrimRounds && aliveCount > survivorTarget; round++ {
 		for i := range lo {
 			lo[i] = 0
 			hi[i] = 0
@@ -306,7 +336,12 @@ func FindProof(cfg Config, seed []byte, maxNonce uint32) ([]uint32, error) {
 				removedThisRound++
 			}
 		}
-		if removedThisRound == 0 {
+		aliveCount -= removedThisRound
+		logf("cuckoo: trim round %d: -%d edges, %d alive (elapsed %s)", round+1, removedThisRound, aliveCount, time.Since(startTime).Round(time.Millisecond))
+		// Diminishing returns: once a round clears under 0.1% of what's
+		// left, further rounds aren't worth their fixed O(maxNonce) scan
+		// cost — hand the remainder to the incremental peel instead.
+		if removedThisRound == 0 || removedThisRound*1000 < aliveCount {
 			break
 		}
 	}
@@ -317,7 +352,7 @@ func FindProof(cfg Config, seed []byte, maxNonce uint32) ([]uint32, error) {
 		u, v  uint64
 	}
 
-	survivors := make([]labeledEdge, 0)
+	survivors := make([]labeledEdge, 0, aliveCount)
 	for nonce := uint32(0); nonce < maxNonce; nonce++ {
 		if !alive.get(uint64(nonce)) {
 			continue
@@ -326,6 +361,7 @@ func FindProof(cfg Config, seed []byte, maxNonce uint32) ([]uint32, error) {
 		survivors = append(survivors, labeledEdge{nonce: nonce, u: u, v: v})
 	}
 	alive = nil
+	logf("cuckoo: bulk trimming done: %d survivor edges (elapsed %s)", len(survivors), time.Since(startTime).Round(time.Millisecond))
 
 	// The bulk rounds above only approximate the 2-core: each round removes
 	// leaves visible in that round's snapshot, so a chain of leaves can take
@@ -376,6 +412,14 @@ func FindProof(cfg Config, seed []byte, maxNonce uint32) ([]uint32, error) {
 		}
 	}
 
+	survivingEdges := 0
+	for _, r := range removed {
+		if !r {
+			survivingEdges++
+		}
+	}
+	logf("cuckoo: exact peel done: %d edges in 2-core (elapsed %s)", survivingEdges, time.Since(startTime).Round(time.Millisecond))
+
 	path := make([]uint32, 0, cfg.ProofSize)
 	usedEdges := make([]bool, len(survivors))
 	seenNodes := map[uint64]bool{}
@@ -418,15 +462,20 @@ func FindProof(cfg Config, seed []byte, maxNonce uint32) ([]uint32, error) {
 		return nil, false
 	}
 
+	const dfsLogInterval = 200000
 	for startIdx, start := range survivors {
 		if removed[startIdx] {
 			continue
+		}
+		if startIdx > 0 && startIdx%dfsLogInterval == 0 {
+			logf("cuckoo: dfs: tried %d/%d starting edges (elapsed %s)", startIdx, len(survivors), time.Since(startTime).Round(time.Millisecond))
 		}
 		usedEdges[startIdx] = true
 		seenNodes[start.u] = true
 		seenNodes[start.v] = true
 		path = append(path[:0], start.nonce)
 		if proof, ok := dfs(start.u, start.v, 1); ok {
+			logf("cuckoo: found proof after %d starting edges tried (elapsed %s)", startIdx+1, time.Since(startTime).Round(time.Millisecond))
 			return proof, nil
 		}
 		usedEdges[startIdx] = false
@@ -434,5 +483,6 @@ func FindProof(cfg Config, seed []byte, maxNonce uint32) ([]uint32, error) {
 		delete(seenNodes, start.v)
 	}
 
+	logf("cuckoo: no cycle found among %d survivor edges (elapsed %s)", len(survivors), time.Since(startTime).Round(time.Millisecond))
 	return nil, ErrNoSolution
 }

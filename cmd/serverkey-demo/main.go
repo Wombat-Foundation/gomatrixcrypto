@@ -183,7 +183,9 @@ func solvePublicationPoW(serverName, keyIDSHA256, metadataDigest, serverKeyObjec
 
 	for graphNonce := uint64(0); graphNonce < maxGraphNonce; graphNonce++ {
 		seed := cuckoo.GraphSeed(canonicalChallenge, graphNonce)
-		proof, err := cuckoo.FindProof(profile.Config, seed[:], maxNonce)
+		proof, err := cuckoo.FindProof(profile.Config, seed[:], maxNonce, func(msg string) {
+			fmt.Fprintf(os.Stderr, "[graph %d] %s\n", graphNonce, msg)
+		})
 		if err == cuckoo.ErrNoSolution {
 			continue
 		}
