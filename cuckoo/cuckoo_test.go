@@ -83,10 +83,10 @@ func TestReducedWorkVector(t *testing.T) {
 	seed := GraphSeed([]byte("tiny-cuckoo-test"), 0)
 
 	edges := map[uint32]Edge{
-		0:    {U: 49, V: 116},
-		48:   {U: 8, V: 116},
-		289:  {U: 8, V: 3},
-		3503: {U: 49, V: 3},
+		0:    {U: 177, V: 244},
+		48:   {U: 136, V: 244},
+		2951: {U: 136, V: 75},
+		3093: {U: 177, V: 75},
 	}
 	for nonce, want := range edges {
 		got, err := EdgeForNonce(cfg, seed[:], nonce)
@@ -98,7 +98,7 @@ func TestReducedWorkVector(t *testing.T) {
 		}
 	}
 
-	proof := []uint32{0, 48, 289, 3503}
+	proof := []uint32{0, 48, 2951, 3093}
 	if err := Verify(cfg, seed[:], proof); err != nil {
 		t.Fatalf("vector proof failed: %v", err)
 	}

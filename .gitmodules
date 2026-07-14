@@ -1,0 +1,3 @@
+[submodule "external/cuckoo"]
+	path = external/cuckoo
+	url = https://github.com/tromp/cuckoo.git

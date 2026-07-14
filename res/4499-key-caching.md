@@ -343,20 +343,32 @@ malformed for that specific key entry, but MUST NOT poison the rest of the
 response payload. This should be uncommon, but servers must not use the key in
 this case.
 
-**`expired_ts` is bound at time of reliance, not at time of last observation.**
-Once a receiver has relied on a given `expired_ts` (or its absence) to accept a
-PDU, that acceptance MUST NOT be retroactively revoked because a later
-`old_verify_keys` observation for the same key ID asserts a different, including
-earlier, `expired_ts`. Such a conflicting observation MUST be logged as
-suspicious, but MUST NOT trigger re-verification or invalidation of any
-already-accepted PDU or state built on it. Otherwise, a backdated `expired_ts` —
-whether from a genuine mistake or a compromised origin — could retroactively
-fail events every peer already accepted, forcing a state reset over pure key
-metadata with no actual dispute about the event or the key's ownership. Because
-this binding is per-receiver and local, a peer that first observes the changed
-`expired_ts` (e.g., one joining or refreshing after the change) may still reach
-a different verdict than one that locked in the original value earlier — the
-same cross-peer divergence already accepted for key-body First Seen Wins (see
+**`expired_ts` is first-assignment-wins, like the key body it retires.** A key
+observed active with no `expired_ts` yet, later republished in `old_verify_keys`
+with its first `expired_ts`, is ordinary retirement — this is the expected
+lifecycle (see [Cache refresh lifetime](#key-caching-requirements)) and MUST be
+applied prospectively without comment. The rule applies only once an
+`expired_ts` has actually been observed: that first-observed value is then the
+binding's retirement timestamp, permanently, the same way the key body itself is
+permanent. A later observation asserting a _different_ `expired_ts` for the same
+key ID — earlier **or** later — MUST be logged as suspicious and MUST NOT
+replace the first-observed value, for eviction ordering or for any future
+verification. Earlier values would retroactively fail already-accepted PDUs,
+forcing a state reset over pure metadata with no dispute about the event or the
+key's ownership; later values would widen the window a holder of that
+compromised retired key can backdate forgeries into (see
+[Stolen retired keys and backdated forgeries](#security-considerations)), so
+neither direction is benign. This is distinct from the provisional-binding
+override above, where a direct fetch replacing a _conflicting key body_ MAY
+prompt re-verification of recent events — that path corrects which key was ever
+legitimate; this rule instead governs metadata churn on a key body that was
+never in question, and requires no per-PDU reliance bookkeeping beyond simply
+never re-verifying an already-accepted PDU against a later-observed
+`expired_ts`. Because this binding is per-receiver and local, a peer that first
+observes the changed `expired_ts` (e.g., one joining or refreshing after the
+change) may still reach a different verdict than one that locked in the original
+value earlier — the same cross-peer divergence already accepted for key-body
+First Seen Wins (see
 [Localized DAG divergence is unavoidable](#potential-issues)), just triggered by
 validity-window metadata instead of key-body identity.
 
@@ -506,12 +518,17 @@ believe they were following the room version.
 Mandating indefinite storage of key-body bindings introduces a theoretical
 storage exhaustion vector if an attacker forces a server to fetch and
 permanently store millions of unique key IDs. Homeserver implementations MUST
-enforce a maximum limit of 3,000 cached key IDs per remote server name. If a
-remote server reaches this quota, receiving servers MUST NOT ignore new Key IDs
-permanently. Instead, they MUST evict the oldest or least-recently-used expired
-keys (keys in `old_verify_keys` with the oldest `expired_ts`). Keys currently
-published in the `verify_keys` section of a direct fetch MUST always be
-prioritized and exempt from eviction.
+enforce a maximum limit of 3,000 retired key IDs (`old_verify_keys` entries) per
+remote server name, matching the per-response ceiling above; a server's current
+`verify_keys` (bounded separately at 50) are exempt from and not counted against
+this ceiling, so the two 3,000-entry limits always refer to the same retired-key
+capacity. If a remote server reaches this quota, receiving servers MUST NOT
+ignore new key IDs permanently. Instead, they MUST evict retired keys according
+to the deterministic ordering defined below — not by recency or
+least-recently-used heuristics, which would make eviction
+implementation-dependent rather than the deterministic behavior this MSC
+requires. Keys currently published in the `verify_keys` section of a direct
+fetch MUST always be prioritized and exempt from eviction.
 
 **Corroboration tier.** This tier answers a narrower question than the
 provisional/permanent split above. It does not decide which key body is correct
@@ -533,6 +550,11 @@ bindings into two tiers:
   the origin's genuinely-active state at that earlier time — before this
   retirement claim arrived. A local operator may also mark a binding
   corroborated based on independently verified historical evidence.
+  Corroboration attaches to the specific key-ID-plus-body binding, not to the
+  key ID alone: in the one case where a key ID's body can legitimately change
+  (the provisional-to-direct override above), the replacement body does not
+  inherit corroboration earned by the body it displaced, unless the replacement
+  was itself independently observed active.
 - **Uncorroborated:** everything else — a retired-key entry that arrives
   already-retired, with no independent record anywhere that the key was ever
   genuinely active.
@@ -581,22 +603,27 @@ received a formal retirement. Ties in the effective retirement timestamp are
 broken by bytewise lexicographic comparison of the full `algorithm:key_id`
 string as UTF-8, ascending; the lexicographically smaller identifier is retained
 first. Any keys ordered below the retention floor by this rule may be evicted.
-Because both the corroboration tier (which may rely on local observation
-history) and the effective retirement timestamp for vanished keys are local
-determinations rather than origin-asserted values, this part of the ordering is
-local to each implementation; this is consistent with, and does not strengthen,
-the cross-server convergence limits described below. When new valid historical
-key material is learned, notaries and receiving servers MAY re-evaluate the
-retained retired-key set — including re-evaluating corroboration as new
-observations arrive — but such re-evaluation MUST apply the same deterministic
-pruning rule over the full locally known candidate set. This improves eventual
-convergence after observation gaps or network partitions, but does not guarantee
-identical real-time results across notaries. Implementations MUST rely on
-existing federation rate-limiting to discard junk traffic before allocating
-database records. In practice, legitimate servers publish single-digit numbers
-of active keys at any given time; a server claiming tens of thousands of key IDs
-is unambiguously hostile. A future Proof-of-Work gated proposal may mitigate the
-spurious bulk generation of keys behind Equihash or Cuckoo Cycle.
+Eviction of a _corroborated_ binding SHOULD be logged at warning level: reaching
+the ceiling deeply enough to displace corroborated history is itself the anomaly
+signal for the flood scenario in [Other considerations](#other-considerations),
+and costs nothing beyond the logging this MSC already requires elsewhere for
+collisions. Because both the corroboration tier (which may rely on local
+observation history) and the effective retirement timestamp for vanished keys
+are local determinations rather than origin-asserted values, this part of the
+ordering is local to each implementation; this is consistent with, and does not
+strengthen, the cross-server convergence limits described below. When new valid
+historical key material is learned, notaries and receiving servers MAY
+re-evaluate the retained retired-key set — including re-evaluating corroboration
+as new observations arrive — but such re-evaluation MUST apply the same
+deterministic pruning rule over the full locally known candidate set. This
+improves eventual convergence after observation gaps or network partitions, but
+does not guarantee identical real-time results across notaries. Implementations
+MUST rely on existing federation rate-limiting to discard junk traffic before
+allocating database records. In practice, legitimate servers publish
+single-digit numbers of active keys at any given time; a server claiming tens of
+thousands of key IDs is unambiguously hostile. A future Proof-of-Work gated
+proposal may mitigate the spurious bulk generation of keys behind Equihash or
+Cuckoo Cycle.
 
 ### Other considerations
 
@@ -680,9 +707,14 @@ requirements that can be readily adopted. No API endpoints substantially change.
 
 ## Backwards compatibility
 
-This proposal is fully backwards-compatible:
+This proposal introduces no wire-format changes, but does add stricter
+receiver-side validation:
 
 - **No protocol wire changes.** No new fields, endpoints, or response formats.
+  The active-key ceiling, retired-key ceiling, and raw-byte duplicate-key
+  rejection do mean a payload a pre-MSC receiver would have silently tolerated
+  (or handled ambiguously) is now a MUST-reject; no conformant, well-behaved
+  origin produces such a payload today.
 - **No room version changes.** No changes in auth or state resolution rules.
 - **Existing well-configured servers are unaffected.** Servers that already use
   unique key IDs on rotation (the newly-defined behavior) experience no change.
