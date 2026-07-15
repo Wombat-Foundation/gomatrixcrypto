@@ -65,7 +65,10 @@ present, falling back to `ed25519` only if the FN-DSA signature is absent.
 ### Cross-Signing Keys
 
 Cross-signing master, self-signing, and user-signing keys SHOULD also support
-FN-DSA:
+FN-DSA. Existing cross-signing key objects keep their current one-signing-key
+shape. FN-DSA cross-signing keys are carried as parallel PQC cross-signing key
+objects, not as a second entry inside the legacy Ed25519 object's `keys`
+dictionary.
 
 ```json
 {
@@ -73,12 +76,24 @@ FN-DSA:
         "user_id": "@alice:example.com",
         "usage": ["master"],
         "keys": {
-            "ed25519:base64+master+key": "<base64-ed25519-master-key>",
+            "ed25519:base64+master+key": "<base64-ed25519-master-key>"
+        }
+    },
+    "master_key_pqc": {
+        "user_id": "@alice:example.com",
+        "usage": ["master"],
+        "keys": {
             "fn-dsa-512:<base64url-sha256-of-pubkey>": "<base64-fn-dsa-512-master-key>"
         }
     }
 }
 ```
+
+The same parallel-object rule applies to self-signing and user-signing keys
+(`self_signing_key_pqc` and `user_signing_key_pqc`). A PQC cross-signing object
+MUST contain exactly one `keys` entry, and that entry MUST use `fn-dsa-512`.
+Legacy cross-signing objects MUST NOT be made hybrid by adding an FN-DSA entry
+to their `keys` dictionaries.
 
 **Key ID Format.** Existing `ed25519` cross-signing keys use the unpadded base64
 of the public key as their `<key_id>` (e.g., `ed25519:<base64-key>`). Because
@@ -105,6 +120,11 @@ authoritative trust anchor. If an FN-DSA cross-signature is present but fails
 verification, clients MUST treat that relationship as untrusted and MUST NOT
 fall back to Ed25519 for the same relationship. Ed25519-only evaluation is
 permitted only when no FN-DSA cross-signature exists.
+
+When an FN-DSA self-signing or user-signing key signs another object, the
+signature entry uses the PQC cross-signing object's own key ID. The Ed25519 and
+FN-DSA trust chains are therefore parallel chains over the same user and device
+relationships, not two public keys inside one cross-signing identity object.
 
 **E2EE Downgrade Risk:** A compromised homeserver could strip FN-DSA keys from
 `/keys/query` responses to force Ed25519 fallback. The Ed25519 fallback above
@@ -277,8 +297,9 @@ identifier, accepting either.
 This proposal is fully backwards-compatible:
 
 - **Cross-signing continues with Ed25519.** FN-DSA cross-signatures are
-  additive. Clients that do not support this MSC will see (and ignore) the
-  additional `fn-dsa-512` key and signature entries in `/keys/query` responses.
+  additive. Clients that do not support this MSC will see and ignore the
+  additional PQC cross-signing objects and `fn-dsa-512` signature entries in
+  `/keys/query` responses.
 - **No new endpoints.** Existing key upload and query endpoints are extended
   with new key types.
 - **No breaking changes to Olm/Megolm.** Key agreement is unchanged.

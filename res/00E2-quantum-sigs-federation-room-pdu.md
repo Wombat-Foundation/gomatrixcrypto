@@ -1,4 +1,4 @@
-# MSC 45YY: Post-Quantum PDU Signatures for Federation (PQC Room Versions)
+# MSC 00E2: Post-Quantum PDU Signatures for Federation (PQC Room Versions)
 
 Matrix PDU signing currently uses `ed25519`. Quantum computers can theoretically
 reverse engineer private keys using Shor's algorithm, breaking elliptic-curve
@@ -149,8 +149,10 @@ Event ID and content hash remain the authoritative acceptance criteria. The
 **Redactions.** Because the `canonical_sha256` is computed over the unredacted
 event JSON, it is mathematically impossible to verify this hash after an event
 has been redacted (as the original `content` fields have been permanently
-stripped). Receiving servers MUST NOT attempt to verify `canonical_sha256` on
-redacted events, and MUST NOT emit warnings for verification failures on them.
+stripped). PQC room versions therefore preserve `hashes.canonical_sha256`
+through redaction as historical audit metadata only. Receiving servers MUST NOT
+attempt to verify `canonical_sha256` on redacted events, and MUST NOT emit
+warnings for verification failures on them.
 
 **Interaction with co-signing.** The `canonical_sha256` is computed by the
 **origin server only**, before any co-signatures are appended. When a resident
@@ -278,7 +280,9 @@ version — existing room versions are unaffected.
   still be verified if required by the event type, such as resident server
   co-signatures on room joins)._
 - **Redaction algorithm:** The `signatures` field behavior is unchanged —
-  redacted events retain all signatures, including FN-DSA signatures.
+  redacted events retain all signatures, including FN-DSA signatures. The
+  redaction algorithm additionally preserves `hashes.canonical_sha256` when
+  present, but only as non-gating audit metadata.
 - **Event format:** The `hashes` object is extended with a `canonical_sha256`
   field (see [Canonical Event Hash](#canonical-event-hash-canonical_sha256)).
   FN-DSA signatures are entries in the existing `signatures` object. The
@@ -289,15 +293,17 @@ The new room version does **not** change:
 - State resolution algorithm (remains v2)
 - Event ID computation (reference hash is signature-independent)
 - Auth rules (beyond the signature verification step)
-- Redaction rules (beyond signature and `canonical_sha256` preservation)
+- Redaction rules (beyond preserving `hashes.canonical_sha256` as audit-only
+  metadata)
 
 ## Potential Issues
 
-- **Signature size increase.** FN-DSA-512 signatures are ~666 bytes vs Ed25519's
-  64 bytes (10×). Even 10 co-signatures only consume ~8.8 KB Base64, well within
+- **Signature size increase.** FN-DSA-512 signatures are 666 raw bytes, encoded
+  as 888 unpadded base64 characters, vs Ed25519's 64 raw bytes. Even 10
+  co-signatures consume about 8.8 KB of base64 signature material, well within
   the 65 KB PDU limit.
 
-- **Signature permanence.** The ~888 bytes Base64 per FN-DSA signature is
+- **Signature permanence.** The 888 base64 characters per FN-DSA signature are
   permanent — signatures cannot be pruned because Event IDs (Room Version 3+)
   are computed _without_ them, so the DAG commits to content but not authorship.
   Every event must retain its signature for independent verification. See

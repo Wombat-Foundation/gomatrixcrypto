@@ -5,21 +5,21 @@ post-quantum federation authentication profile. It builds on the per-request
 `X-Matrix-PQC` authentication model and server-key material defined by
 [MSC 00E4](./00E4-quantum-sigs-notary-provenance.md).
 
-### Upgraded connections: PQ session negotiation
+## Upgraded connections: PQ session negotiation
 
-The per-request `X-Matrix-PQC` header adds ~888 bytes (base64) of bandwidth
-overhead to every federation request. This section defines an OPTIONAL mechanism
-for a pair of servers to negotiate a symmetric session key via a post-quantum
-KEM (ML-KEM-768, [NIST FIPS 203](https://csrc.nist.gov/pubs/fips/203/final)) and
-amortize that cost by replacing per-request asymmetric signatures with
-session-based HMAC authentication — an "upgraded" HTTP connection between two
-PQC-capable servers.
+The per-request `X-Matrix-PQC` header adds about 888 base64 characters of
+signature material, plus header parameters, to every federation request. This
+section defines an OPTIONAL mechanism for a pair of servers to negotiate a
+symmetric session key via a post-quantum KEM (ML-KEM-768,
+[NIST FIPS 203](https://csrc.nist.gov/pubs/fips/203/final)) and amortize that
+cost by replacing per-request asymmetric signatures with session-based HMAC
+authentication — an "upgraded" HTTP connection between two PQC-capable servers.
 
 Per-request `X-Matrix-PQC` remains the baseline; servers MUST NOT assume peer
 support for session negotiation, and MUST fall back to per-request headers when
 negotiation is unavailable or a session is rejected.
 
-#### Endpoint
+### Endpoint
 
 ```http
 POST /_matrix/federation/unstable/tk.nutra.msc45xx/key_exchange
@@ -47,8 +47,8 @@ applicable (server-to-server API).
 The `encapsulation_key` is an ephemeral ML-KEM-768 encapsulation key generated
 by the initiating server for this session only. Ephemeral keys MUST NOT be
 reused across sessions. The responder MUST perform the encapsulation-key input
-validation required by FIPS 203[^8] (length and modulus checks) before
-encapsulating, rejecting invalid keys with `400 M_INVALID_PARAM`.
+validation required by NIST FIPS 203, including length and modulus checks,
+before encapsulating, rejecting invalid keys with `400 M_INVALID_PARAM`.
 
 **Response body (`200 OK`):**
 
@@ -68,7 +68,7 @@ renegotiate before expiry to avoid falling back mid-traffic.
 
 The responder encapsulates against the initiator's ephemeral key, producing the
 ciphertext and the 32-byte shared secret `ss` defined by ML-KEM. Both sides
-derive the session key using HKDF[^10]:
+derive the session key using HKDF-SHA-256 as defined by RFC 5869:
 
 ```text
 session_info =
@@ -103,7 +103,7 @@ simply never verifies.
 - `401 M_FORBIDDEN` — transport authentication failed.
 - `429 M_LIMIT_EXCEEDED` — rate limited.
 
-#### Session-authenticated requests
+### Session-authenticated requests
 
 While a session is live, the initiating server MAY replace the `X-Matrix-PQC`
 header on requests to the responder with:
@@ -113,8 +113,9 @@ X-Matrix-PQC-Session: origin="example.com",destination="matrix.org",session="<se
 ```
 
 where `mac` is `HMAC-SHA-256(session_key, canonical_json(signing_object))` over
-the same JSON signing object used for `X-Matrix-PQC`, including the
-signature-covered `origin_ts_at` value. The Ed25519 `Authorization` header
+the same JSON signing object used for `X-Matrix-PQC`. That object includes the
+request `method`, `uri`, `origin`, `destination`, `content` when present, and
+the signature-covered `origin_ts_at` value. The Ed25519 `Authorization` header
 remains required as usual. Verifiers MUST compare MAC values in constant time.
 The `origin_ts_at` parameter uses the same integer parsing rule as
 `X-Matrix-PQC` and is inserted into the MACed JSON signing object as a JSON
