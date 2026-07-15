@@ -103,7 +103,7 @@ func main() {
 	}
 	fmt.Printf("pow_nonce: %v\n", proof.Nonce)
 	fmt.Printf("private_key_base64: %s\n", base64.RawStdEncoding.EncodeToString(priv))
-	fmt.Println("publication_bundle:")
+	fmt.Println("server_key_response:")
 	if err := enc.Encode(bundle); err != nil {
 		fatal(err)
 	}

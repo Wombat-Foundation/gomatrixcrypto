@@ -100,9 +100,20 @@ func FNDSAKeyObject(publicKey []byte, metadata FNDSAMetadata, proof FNDSAMinting
 
 func CogenStamp(publicKey []byte, serverName string) map[string]any {
 	return map[string]any{
-		"action":      "fn-dsa-key-minting",
+		"action":      "fn-dsa-key-graph",
 		"public_key":  base64.RawStdEncoding.EncodeToString(publicKey),
 		"server_name": serverName,
+	}
+}
+
+func MintingObject(publicKey []byte, serverName string, proof FNDSAMintingProof) map[string]any {
+	return map[string]any{
+		"action":      "fn-dsa-minting-object",
+		"algorithm":   proof.Algorithm,
+		"nonce":       proof.Nonce,
+		"public_key":  base64.RawStdEncoding.EncodeToString(publicKey),
+		"server_name": serverName,
+		"solution":    uint32sToAny(proof.Solution),
 	}
 }
 
@@ -124,18 +135,13 @@ func GraphSeed(publicKey []byte, serverName string, nonce uint64) ([32]byte, err
 
 func KeyID(publicKey []byte, serverName string, proof FNDSAMintingProof) ([32]byte, error) {
 	var out [32]byte
-	seed, err := GraphSeed(publicKey, serverName, proof.Nonce)
+	canonical, err := matrixjson.Canonical(MintingObject(publicKey, serverName, proof))
 	if err != nil {
 		return out, err
 	}
 
 	h := sha3.NewLegacyKeccak256()
-	_, _ = h.Write(seed[:])
-	for _, nonce := range proof.Solution {
-		var nonceBytes [4]byte
-		binary.LittleEndian.PutUint32(nonceBytes[:], nonce)
-		_, _ = h.Write(nonceBytes[:])
-	}
+	_, _ = h.Write(canonical)
 	copy(out[:], h.Sum(nil))
 	return out, nil
 }

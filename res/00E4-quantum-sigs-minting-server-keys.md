@@ -95,8 +95,8 @@ initial minting of a server's first FN-DSA key and every subsequent key-body
 rotation — before accepting or attesting to that key. This requirement is
 unconditional: there is no exemption for TOFU, notary-sourced, or
 otherwise-trusted key objects, and no implementation-level opt-out. A receiving
-server or notary MUST reject an FN-DSA key object that lacks a valid proof for
-the `fn-dsa-key-minting` resource below, regardless of whether the accompanying
+server or notary MUST reject an FN-DSA key object that lacks a valid embedded
+`pow` proof as defined below, regardless of whether the accompanying
 Ed25519/notary authentication is otherwise valid.
 
 The proof is a non-interactive, cacheable stamp produced by the origin. It is
