@@ -3,7 +3,7 @@
 This draft defines the optional ML-KEM session-negotiation extension for the
 post-quantum federation authentication profile. It builds on the per-request
 `X-Matrix-PQC` authentication model and server-key material defined by
-[MSC 00E4](./00E4-quantum-sigs-notary-provenance.md).
+[MSC00E4](./00E4-quantum-sigs-minting-server-keys.md).
 
 ## Upgraded connections: PQ session negotiation
 

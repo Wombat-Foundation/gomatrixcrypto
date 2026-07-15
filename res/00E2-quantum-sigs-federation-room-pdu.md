@@ -9,7 +9,7 @@ post-quantum signature scheme `fn-dsa-512`, and upgrades federation transport
 verification from advisory to mandatory for traffic scoped to such rooms.
 
 It builds directly on
-[MSC 00E4: Notary provenance for post-quantum server keys](./00E4-quantum-sigs-notary-provenance.md),
+[MSC00E4: Post-quantum server keys and minting](./00E4-quantum-sigs-minting-server-keys.md),
 which defines FN-DSA server-key minting, key identifiers, self-signature
 requirements, notary observations, and advisory TLS provenance. Optional
 session-based transport authentication is defined separately in
@@ -25,10 +25,10 @@ post-quantum server-key MSCs. Public key encodings, signature encodings, and the
 signing operation (Canonical JSON of the event with `signatures` and `unsigned`
 removed; pure mode; empty context) are inherited from that server-key profile
 and are not redefined here. Server signing keys are minted, published,
-discovered, pinned, and rotated per MSC 00E4 and MSC4499.
+discovered, pinned, and rotated per MSC00E4 and MSC4499.
 
 > **Note:** For readability, this proposal uses the intended stable identifiers
-> `fn-dsa-512` (key algorithm, defined by MSC 00E4) and a stable room version
+> `fn-dsa-512` (key algorithm, defined by MSC00E4) and a stable room version
 > throughout the main text and examples. Until the relevant MSCs are accepted
 > and merged into the Matrix specification, implementations MUST use the
 > unstable identifiers `tk.nutra.msc45xx.fn-dsa-512` (algorithm — the canonical
@@ -62,7 +62,7 @@ In room versions that require PQC signatures (see
 - Receiving servers MUST reject the event if the required `fn-dsa-512` signature
   references a malformed key ID, or if the referenced key was advertised under a
   `short_key_id` that does not match the first 20 base64url characters of the
-  key's full `key_id`, as defined by MSC 00E4.
+  key's full `key_id`, as defined by MSC00E4.
 - Receiving servers MUST NOT trial-verify multiple FN-DSA key bodies for the
   same `(server_name, algorithm, short_key_id)` tuple. Collisions are handled by
   the server-key cache's First Seen Wins rule; if the bound key body does not
@@ -224,7 +224,7 @@ sequenceDiagram
     participant S2 as Server B (PQC-capable)
     participant S3 as Server C (Legacy)
 
-    Note over S1: Publishes both keys via /_matrix/key/v2/server (MSC 00E4)
+    Note over S1: Publishes both keys via /_matrix/key/v2/server (MSC00E4)
 
     S1->>S2: PUT /_matrix/federation/v1/send/...<br/>Authorization: ed25519 (legacy auth)<br/>X-Matrix-PQC: fn-dsa-512 (transport auth)<br/>Event (legacy room): {ed25519 only}
     activate S2
@@ -247,7 +247,7 @@ sequenceDiagram
 
 ### Migration Timeline
 
-**Phase 1 — Transport & Key Distribution (MSC 00E4, prerequisite)** Servers
+**Phase 1 — Transport & Key Distribution (MSC00E4, prerequisite)** Servers
 publish FN-DSA keys via `/_matrix/key/v2/server` and transmit the `X-Matrix-PQC`
 header. PDUs continue to be signed exclusively with Ed25519. Wide deployment of
 Phase 1 pre-distributes and pins keys across the federation before anything
@@ -309,7 +309,7 @@ The new room version does **not** change:
   Every event must retain its signature for independent verification. See
   [Performance & Lightweighting Opportunities](#performance--lightweighting-opportunities).
 
-- **FIPS 206 not yet finalized.** See MSC 00E4 for full pre-finalization
+- **FIPS 206 not yet finalized.** See MSC00E4 for full pre-finalization
   deployment guidance. The room-version consequence specific to this MSC is
   covered under [Unstable Prefix](#unstable-prefix): draft-scoped PQC rooms may
   require an upgrade if the final standard is incompatible.
@@ -320,7 +320,7 @@ The new room version does **not** change:
   post-quantum authorship guarantees apply from the upgrade point forward.
 
 - **Ecosystem readiness gate.** A PQC-required room is unusable by servers that
-  have not implemented MSC 00E4 + this MSC. This is intentional (it is the
+  have not implemented MSC00E4 + this MSC. This is intentional (it is the
   security property), but community rooms should weigh reachability before
   upgrading.
 
@@ -382,7 +382,7 @@ The new room version does **not** change:
   migration provides immediate protection against server impersonation; key
   agreement (the HNDL concern) is addressed separately (see MSC 00EA).
 
-- **Alternative signature schemes (ML-DSA, SLH-DSA).** Discussed in MSC 00E4,
+- **Alternative signature schemes (ML-DSA, SLH-DSA).** Discussed in MSC00E4,
   where the algorithm is selected. The per-event permanence argument weighs even
   more heavily here: ML-DSA-44's 2.4 KB signatures would be stored forever on
   every event, and SLH-DSA's 17 KB signatures would approach the PDU size limit
@@ -433,7 +433,7 @@ negotiation are addressed in MSC 00E5; they are not room-version concerns.
   [MSC 00EA](./00EA-quantum-sigs-e2ee.md).
 
 - **Key compromise recovery.** Identical to Ed25519: rotate the key, publish the
-  old key in `old_verify_keys` with `expired_ts` (subject to the MSC 00E4 FN-DSA
+  old key in `old_verify_keys` with `expired_ts` (subject to the MSC00E4 FN-DSA
   rotation-authentication rule). Events signed with the compromised key cannot
   be retroactively invalidated.
 
@@ -441,13 +441,13 @@ negotiation are addressed in MSC 00E5; they are not room-version concerns.
 
 While this MSC is in development, the following unstable identifiers are used:
 
-| Stable Identifier            | Unstable Identifier                                 |
-| ---------------------------- | --------------------------------------------------- |
-| PQC room version             | `tk.nutra.msc45yy.pqc.v1`                           |
-| `fn-dsa-512` (key algorithm) | `tk.nutra.msc45xx.fn-dsa-512` (defined by MSC 00E4) |
-| `canonical_sha256` (hashes)  | `tk.nutra.msc45yy.canonical_sha256`                 |
+| Stable Identifier            | Unstable Identifier                                |
+| ---------------------------- | -------------------------------------------------- |
+| PQC room version             | `tk.nutra.msc45yy.pqc.v1`                          |
+| `fn-dsa-512` (key algorithm) | `tk.nutra.msc45xx.fn-dsa-512` (defined by MSC00E4) |
+| `canonical_sha256` (hashes)  | `tk.nutra.msc45yy.canonical_sha256`                |
 
-The algorithm identifier is namespaced under MSC 00E4, where the algorithm is
+The algorithm identifier is namespaced under MSC00E4, where the algorithm is
 specified; this MSC does not define a second algorithm prefix. During the
 unstable period, PDU `signatures` entries use the unstable algorithm identifier:
 
@@ -472,7 +472,7 @@ identifiers, accepting either.
 
 ### Pre-Finalization Deployment Guidance
 
-The constraints in MSC 00E4 (draft-revision pinning, provisional keys, rotation
+The constraints in MSC00E4 (draft-revision pinning, provisional keys, rotation
 on parameter change, no production trust assumptions) apply in full. One
 constraint is specific to this MSC:
 
@@ -484,13 +484,13 @@ constraint is specific to this MSC:
 
 ## Dependencies
 
-- **[MSC 00E4](./00E4-quantum-sigs-notary-provenance.md):** Defines FN-DSA
+- **[MSC00E4](./00E4-quantum-sigs-minting-server-keys.md):** Defines FN-DSA
   server-key minting, key identifiers, server key distribution and trust model,
-  and notary provenance. This MSC cannot be accepted before MSC 00E4.
+  and notary provenance. This MSC cannot be accepted before MSC00E4.
 - **[MSC 00E5](./00E5-quantum-sigs-federation-session-negotiation.md):** Defines
   optional session authentication that can replace per-request `X-Matrix-PQC`
   signatures where this MSC permits `X-Matrix-PQC-Session`.
-- **NIST FIPS 206 (FN-DSA):** Inherited via MSC 00E4.
+- **NIST FIPS 206 (FN-DSA):** Inherited via MSC00E4.
 
 ## Backwards Compatibility
 
