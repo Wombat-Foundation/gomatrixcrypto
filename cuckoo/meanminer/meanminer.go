@@ -78,25 +78,27 @@ func Solve(seed []byte, nthreads int) (proof []uint32, ok bool, err error) {
 		return nil, false, fmt.Errorf("meanminer: running %s: %w", bin, err)
 	}
 
-	lines := strings.SplitN(strings.TrimSpace(string(out)), "\n", 2)
-	switch strings.TrimSpace(lines[0]) {
-	case "NOSOL":
-		return nil, false, nil
-	case "SOLVED":
-		if len(lines) < 2 {
-			return nil, false, fmt.Errorf("meanminer: missing proof line in output %q", out)
-		}
-		fields := strings.Fields(lines[1])
-		proof = make([]uint32, len(fields))
-		for i, f := range fields {
-			v, perr := strconv.ParseUint(f, 10, 32)
-			if perr != nil {
-				return nil, false, fmt.Errorf("meanminer: bad nonce %q: %w", f, perr)
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	for i, line := range lines {
+		switch strings.TrimSpace(line) {
+		case "NOSOL":
+			return nil, false, nil
+		case "SOLVED":
+			if i+1 >= len(lines) {
+				return nil, false, fmt.Errorf("meanminer: missing proof line in output %q", out)
 			}
-			proof[i] = uint32(v)
+			fields := strings.Fields(lines[i+1])
+			proof = make([]uint32, len(fields))
+			for j, f := range fields {
+				v, perr := strconv.ParseUint(f, 10, 32)
+				if perr != nil {
+					return nil, false, fmt.Errorf("meanminer: bad nonce %q: %w", f, perr)
+				}
+				proof[j] = uint32(v)
+			}
+			return proof, true, nil
 		}
-		return proof, true, nil
-	default:
-		return nil, false, fmt.Errorf("meanminer: unexpected output %q", out)
 	}
+
+	return nil, false, fmt.Errorf("meanminer: unexpected output %q", out)
 }

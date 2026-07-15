@@ -1,4 +1,4 @@
-# MSC 0F00: Post-Quantum Digital Signatures for E2EE
+# MSC 00EA: Post-Quantum Digital Signatures for E2EE
 
 Matrix device and cross-signing keys currently use `ed25519`. Quantum computers
 can theoretically reverse engineer private keys using Shor's algorithm, breaking
@@ -7,18 +7,19 @@ elliptic-curve and RSA schemes.
 This MSC extends the post-quantum migration to E2EE device signing keys and
 cross-signing keys. The cryptographic primitives (`fn-dsa-512`), encoding rules,
 and server-side federation changes are defined in
-[MSC 45XX: Post-Quantum Server Key Exchange and Federation Transport Authentication](https://github.com/matrix-org/matrix-spec-proposals/pull/45XX).
+[MSC 00E4: Notary provenance for post-quantum server keys](./00E4-quantum-sigs-notary-provenance.md)
+and companion federation PQC drafts.
 
 ## Proposal
 
-This MSC uses **FN-DSA-512** (`fn-dsa-512`) as defined by MSC 45XX. All encoding
+This MSC uses **FN-DSA-512** (`fn-dsa-512`) as defined by MSC 00E4. All encoding
 rules (public key encoding, signature encoding, signing operation) are identical
-to those specified in MSC 45XX. Refer to MSC 45XX for algorithm parameters, NIST
-security level rationale, and FIPS 206 dependency details.
+to those specified by the server-key profile. Refer to MSC 00E4 for algorithm
+parameters, NIST security level rationale, and FIPS 206 dependency details.
 
 > **Note:** For readability, this proposal uses the intended stable identifier
 > `fn-dsa-512` throughout the main text and examples. Until both this MSC and
-> MSC 45XX are accepted and merged into the Matrix specification,
+> MSC 00E4 are accepted and merged into the Matrix specification,
 > implementations MUST use the unstable identifier `tk.nutra.msc45xx.fn-dsa-512`
 > — the canonical prefix defined by the Federation MSC where the algorithm is
 > specified — in all protocol fields, including E2EE device key IDs,
@@ -91,6 +92,12 @@ guarantees a unique, URL-safe, 43-character identifier. Device keys are
 unaffected — they continue to use the device ID as their `<key_id>` (e.g.,
 `fn-dsa-512:JLAFKJWSCS`).
 
+This E2EE cross-signing `<key_id>` construction is intentionally separate from
+the server-key `key_id` defined by MSC 00E4. Server keys use the minting-bound
+Keccak-derived identifier from MSC 00E4 because their identifier participates in
+server-key publication, notary observation, and First Seen Wins collision
+handling. E2EE cross-signing keys do not use that server-key minting flow.
+
 When cross-signing a device key, the signing client SHOULD produce both an
 Ed25519 and an FN-DSA signature. Verifying clients that support this MSC MUST
 verify the FN-DSA cross-signature if present, and SHOULD treat it as the
@@ -114,11 +121,9 @@ locally for:
 - Device signing keys (`fn-dsa-512`) — uploaded via `/keys/upload`
 - Cross-signing keys (`fn-dsa-512`) — uploaded via `/keys/device_signing/upload`
 
-Client implementations MUST use a side-channel-resistant FN-DSA library (see MSC
-45XX
-[Implementation Guidance](https://github.com/matrix-org/matrix-spec-proposals/pull/45XX)
-and
-[Falcon's implementation complexity](https://github.com/matrix-org/matrix-spec-proposals/pull/45XX)).
+Client implementations MUST use a side-channel-resistant FN-DSA library. See MSC
+00E4 for the server-side implementation guidance and Falcon implementation
+complexity notes.
 
 **Device ID Constraints.** Because FN-DSA-512 public keys are extremely large
 (897 bytes), client implementations MUST NOT use the raw base64-encoded FN-DSA
@@ -139,7 +144,8 @@ signatures** (i.e., after stripping the `signatures` and `unsigned` fields).
 - Cross-signing signatures (master -> self-signing -> device key chain)
 
 Clients do **not** verify PDU signatures or federation HTTP authentication —
-these are exclusively homeserver responsibilities and are specified in MSC 45XX.
+these are exclusively homeserver responsibilities and are specified in the
+federation PQC drafts.
 
 **Hash-to-Key Validation.** When verifying `fn-dsa-512` cross-signing keys,
 clients MUST NOT blindly trust the `<key_id>`. The client MUST decode the raw
@@ -157,8 +163,8 @@ fallback.
 **What clients do NOT need to do:**
 
 - Verify or inspect the `signatures` object on timeline events (homeserver-only,
-  see MSC 45XX)
-- Process `X-Matrix-PQC` headers (server-to-server transport, see MSC 45XX)
+  see MSC 00E2)
+- Process `X-Matrix-PQC` headers (server-to-server transport, see MSC 00E4)
 - Implement FN-DSA for Olm/Megolm key agreement (deferred to a separate MSC)
 
 ### Key Agreement (Informational)
@@ -184,16 +190,16 @@ bandwidth) overhead, making PQC key agreement scalable; see
   require side-channel-resistant discrete Gaussian sampling — non-constant-time
   implementations can leak private keys through timing, cache, or power side
   channels. Client implementations MUST use an audited FN-DSA library.
-  Browser-targeted WASM builds require particular scrutiny. See MSC 45XX
-  Implementation Guidance for library recommendations.
+  Browser-targeted WASM builds require particular scrutiny. See MSC 00E4 for
+  server-side implementation guidance.
 
-- **FIPS 206 not yet finalized.** See MSC 45XX for full pre-finalization
+- **FIPS 206 not yet finalized.** See MSC 00E4 for full pre-finalization
   deployment guidance. E2EE keys published under unstable identifiers MUST be
   treated as provisional.
 
 ## Alternatives
 
-- **Waiting for MSC 45XX to be accepted first.** This MSC could be deferred
+- **Waiting for MSC 00E4 to be accepted first.** This MSC could be deferred
   until the federation MSC is merged. However, E2EE key distribution is
   independent of federation PDU signing and can proceed in parallel. Early
   adoption provides defence-in-depth for device verification even before PQC
@@ -216,8 +222,8 @@ bandwidth) overhead, making PQC key agreement scalable; see
 
 - **Timing side-channels.** FN-DSA's discrete Gaussian sampler leaks private
   keys via timing analysis if implemented incorrectly. All client
-  implementations MUST use audited, constant-time libraries. See MSC 45XX
-  Implementation Guidance.
+  implementations MUST use audited, constant-time libraries. See MSC 00E4
+  implementation guidance.
 
 - **Key compromise recovery.** If a client's FN-DSA device signing key is
   compromised, the device key should be replaced (new device or re-upload).
@@ -226,14 +232,14 @@ bandwidth) overhead, making PQC key agreement scalable; see
 ## Unstable Prefix
 
 The `fn-dsa-512` algorithm is canonically defined in
-[MSC 45XX](https://github.com/matrix-org/matrix-spec-proposals/pull/45XX). This
-MSC reuses the same unstable identifier to ensure that servers and clients use a
-single, consistent algorithm name across federation PDU signatures, device keys,
-and cross-signing keys.
+[MSC 00E4](./00E4-quantum-sigs-notary-provenance.md). This MSC reuses the same
+unstable identifier to ensure that servers and clients use a single, consistent
+algorithm name across federation PDU signatures, device keys, and cross-signing
+keys.
 
 | Stable Identifier            | Unstable Identifier           | Defined In |
 | ---------------------------- | ----------------------------- | ---------- |
-| `fn-dsa-512` (key algorithm) | `tk.nutra.msc45xx.fn-dsa-512` | MSC 45XX   |
+| `fn-dsa-512` (key algorithm) | `tk.nutra.msc45xx.fn-dsa-512` | MSC 00E4   |
 
 The unstable prefix is used in device key IDs, cross-signing key IDs, and
 signature entries within `/keys/upload` and `/keys/device_signing/upload`
@@ -260,10 +266,10 @@ identifier, accepting either.
 
 ## Dependencies
 
-- **[MSC 45XX: Post-Quantum Server Key Exchange and Federation Transport Authentication](https://github.com/matrix-org/matrix-spec-proposals/pull/45XX):**
-  This MSC depends on MSC 45XX for the definition of `fn-dsa-512` algorithm
-  parameters, encoding rules, and signing operation semantics.
-- **NIST FIPS 206 (FN-DSA):** Transitively via MSC 45XX. See MSC 45XX for
+- **[MSC 00E4](./00E4-quantum-sigs-notary-provenance.md):** This MSC depends on
+  MSC 00E4 for the definition of `fn-dsa-512` algorithm parameters, encoding
+  rules, and signing operation semantics.
+- **NIST FIPS 206 (FN-DSA):** Transitively via MSC 00E4. See MSC 00E4 for
   pre-finalization deployment guidance.
 
 ## Backwards Compatibility

@@ -1,25 +1,24 @@
 # MSC 00E4: Notary provenance for post-quantum server keys
 
-This draft contains the notary-scoped publication challenge, notary observation,
-and TLS 1.3 compact provenance material split from MSC45XX, plus the
-[Key publication Proof-of-Work](#key-publication-proof-of-work) mechanism. The
-version of that mechanism here supersedes the plain SHA-256,
-`key_id_sha256`-only construction still on record in the now-frozen MSC45XX
-(00E1) draft: this file is normative for FN-DSA key publication going forward.
-The body below is intentionally copied nearly verbatim in places and still needs
-normal MSC integration text.
+This draft contains notary observations, detached notary provenance bundles, and
+TLS 1.3 compact provenance material split from the archived 00E1 draft, plus the
+[Key minting Proof-of-Work](#key-minting-proof-of-work) mechanism. The version
+of that mechanism here supersedes the plain SHA-256 key identifier construction
+still on record in the now-frozen 00E1 draft: this file is normative for FN-DSA
+key minting and observation going forward. The body below is intentionally
+copied nearly verbatim in places and still needs normal MSC integration text.
 
-#### Key publication Proof-of-Work
+#### Key minting Proof-of-Work
 
 Homeservers and notaries that support this MSC MUST require a valid
 co-generation proof-of-work for every newly generated FN-DSA key body — the
-initial publication of a server's first FN-DSA key and every subsequent key-body
+initial minting of a server's first FN-DSA key and every subsequent key-body
 rotation — before accepting or attesting to that key. This requirement is
 unconditional: there is no exemption for TOFU, notary-sourced, or
-otherwise-trusted publications, and no implementation-level opt-out. A receiving
-server or notary MUST reject an FN-DSA key publication that lacks a valid proof
-for the `fn-dsa-key-publication` resource below, regardless of whether the
-accompanying Ed25519/notary authentication is otherwise valid.
+otherwise-trusted key objects, and no implementation-level opt-out. A receiving
+server or notary MUST reject an FN-DSA key object that lacks a valid proof for
+the `fn-dsa-key-minting` resource below, regardless of whether the accompanying
+Ed25519/notary authentication is otherwise valid.
 
 The proof is a non-interactive, cacheable stamp produced by the origin. It is
 not issued separately by each receiver. The proof MUST be carried inside the
@@ -32,11 +31,11 @@ redistribution without special handling.
 and every input to it — the public key body, `server_name`, and the nonce — are
 public values; anyone who has observed a public key (their own, or one copied
 from another server's response) can mint a valid co-generation proof for it. The
-proof's only job is to rate-limit and anti-spam-gate key publication and
-rotation; it is not an identity credential. Possession of the FN-DSA private key
-is established exclusively by the FN-DSA self-signature: once a server publishes
-an FN-DSA key, its `/_matrix/key/v2/server` response MUST include an FN-DSA
-self-signature in the `signatures` field, keyed by that key's `short_id`,
+proof's only job is to rate-limit and anti-spam-gate key minting and rotation;
+it is not an identity credential. Possession of the FN-DSA private key is
+established exclusively by the FN-DSA self-signature: once a server publishes an
+FN-DSA key, its `/_matrix/key/v2/server` response MUST include an FN-DSA
+self-signature in the `signatures` field, keyed by that key's `short_key_id`,
 alongside the existing Ed25519 signature. Receiving servers and notaries MUST
 verify this self-signature before trusting the FN-DSA key, independently of and
 in addition to verifying `pow`. Both checks are mandatory and neither
@@ -58,7 +57,7 @@ therefore no valid graph, exists until a specific candidate key is fixed.
 
 ```text
 cogen_stamp = {
-    "action": "fn-dsa-key-publication",
+    "action": "fn-dsa-key-minting",
     "public_key": "<unpadded-base64-fn-dsa-512-pubkey>",
     "server_name": "example.com"
 }
@@ -70,17 +69,16 @@ S(nonce) = Keccak-256(
 
 where `canonical_json` is Matrix Canonical JSON serialization,
 `uint64_le(nonce)` is the prover-chosen nonce (`0 ≤ nonce < 2^64`) as 8
-little-endian bytes, and `||` is byte-string concatenation. `key_id_sha256` —
-the identity digest used throughout this MSC family to name a specific key body
-— is defined as `S(nonce)` at the nonce for which the origin publishes a proof,
-not as a plain hash of the public key alone. `short_id` remains the first 20
-base64url characters of `key_id_sha256`, unpadded. (The field is still named
-`key_id_sha256` for continuity with the rest of this MSC family; its value is a
-Keccak-256 output under this proof class, not a SHA-256 output.)
+little-endian bytes, and `||` is byte-string concatenation. `key_id` — the
+identity digest used throughout this MSC family to name a specific key body — is
+defined as `S(nonce)` at the nonce for which the origin mints a proof, not as a
+plain hash of the public key alone. `short_key_id` remains the first 20
+base64url characters of `key_id`, unpadded. `key_id` is a Keccak-256 output
+under this proof class, not a SHA-256 output.
 
 ```json
 {
-    "fn-dsa-512:<short_id>": {
+    "fn-dsa-512:<short_key_id>": {
         "key": "<unpadded-base64-fn-dsa-512-pubkey>",
         "pow": {
             "algorithm": "tk.nutra.msc45xx.pow.cuckoo-cycle-42-29-keccak256-cogen",
@@ -94,9 +92,9 @@ Keccak-256 output under this proof class, not a SHA-256 output.)
 The verifier reconstructs `cogen_stamp` from the enclosing key response's
 advertised public key and `server_name` rather than receiving it on the wire,
 computes `S(nonce)` using the supplied `nonce`, and MUST check that the
-enclosing key's advertised `short_id` equals the first 20 base64url characters
-of `S(nonce)` before evaluating the puzzle. If it does not match, the proof MUST
-be rejected without evaluating the graph.
+enclosing key's advertised `short_key_id` equals the first 20 base64url
+characters of `S(nonce)` before evaluating the puzzle. If it does not match, the
+proof MUST be rejected without evaluating the graph.
 
 **Graph derivation.** A given graph contains a 42-cycle only with some
 probability, so the prover iterates the nonce until both the identity digest is
@@ -122,10 +120,10 @@ individual attempts: because a randomly seeded graph contains a 42-cycle only
 with some probability, realized solve time is stochastic — the prover retries
 with new nonces until a solvable graph is found, so any single attempt may
 finish well under or well over the target. Verifiers MUST NOT reject a proof for
-arriving unusually quickly or slowly; the publication stamp has no timing
-acceptance bound. Implementations calibrating a different deployment's expected
-solve time MUST NOT do so by changing `edge_bits` without minting a new,
-explicitly identified algorithm profile (see
+arriving unusually quickly or slowly; the minting stamp has no timing acceptance
+bound. Implementations calibrating a different deployment's expected solve time
+MUST NOT do so by changing `edge_bits` without minting a new, explicitly
+identified algorithm profile (see
 [Compatibility and upgrade classes](#compatibility-and-upgrade-classes)) —
 `tk.nutra.msc45xx.pow.cuckoo-cycle-42-29-keccak256-cogen` names one fixed
 parameterization so that all conforming implementations impose the same cost.
@@ -146,20 +144,19 @@ order (the canonical form of the edge set). Each edge index MUST be less than
 `2^29`, and `nonce` MUST be an integer in `[0, 2^64)`. Verification MUST reject
 duplicate, unsorted, out-of-range, or non-integer entries before evaluating the
 Cuckoo Cycle proof; it then recomputes `S(nonce)`, derives the 84 endpoints of
-the 42 supplied edges, and checks that they form a single 42-cycle. The
-publication stamp has no receiver-issued challenge and no expiry time; it
-remains valid for the committed `(server_name, key_id_sha256)` tuple. If either
-committed value changes, the origin MUST produce a new proof (a new key body or
-new `server_name` changes `cogen_stamp`, which changes `S(nonce)` for every
-nonce, so a stale proof cannot be reused). Receivers SHOULD cache successful
-stamp verification by `key_id_sha256`.
+the 42 supplied edges, and checks that they form a single 42-cycle. The minting
+stamp has no receiver-issued challenge and no expiry time; it remains valid for
+the committed `(server_name, key_id)` tuple. If either committed value changes,
+the origin MUST produce a new proof (a new key body or new `server_name` changes
+`cogen_stamp`, which changes `S(nonce)` for every nonce, so a stale proof cannot
+be reused). Receivers SHOULD cache successful stamp verification by `key_id`.
 
 ##### Key object validation procedure
 
 The checks above are scattered across the preceding prose as individual MUSTs.
 This section states them as one ordered procedure. Receiving servers and
-notaries MUST validate an advertised `fn-dsa-512:<short_id>` key object in this
-order, rejecting the entire key at the first failing step and performing no
+notaries MUST validate an advertised `fn-dsa-512:<short_key_id>` key object in
+this order, rejecting the entire key at the first failing step and performing no
 later step once a step has failed:
 
 1. **Field presence and shape.** The key object MUST contain `key` (a
@@ -179,10 +176,10 @@ later step once a step has failed:
    `S(nonce) = Keccak-256(canonical_json(cogen_stamp) || uint64_le(nonce))`
    using the supplied `nonce`. This step cannot itself fail; it produces the
    value the next two steps check against.
-5. **`short_id` match.** Compare the enclosing dictionary key's `short_id` (the
-   string following `fn-dsa-512:`) against the first 20 base64url characters of
-   `S(nonce)`. A mismatch fails validation here — the graph MUST NOT be
-   evaluated.
+5. **`short_key_id` match.** Compare the enclosing dictionary key's
+   `short_key_id` (the string following `fn-dsa-512:`) against the first 20
+   base64url characters of `S(nonce)`. A mismatch fails validation here — the
+   graph MUST NOT be evaluated.
 6. **Cycle verification.** Only if steps 1-5 all passed: derive `k0..k3` from
    `S(nonce)`, compute the 84 SipHash-2-4 endpoints for the 42 supplied edge
    indices, and confirm they form a single cycle of length 42, alternating
@@ -191,7 +188,7 @@ later step once a step has failed:
    earlier step exists specifically to let a receiver reject cheaply before
    reaching it.
 7. **Self-signature.** Independently of steps 1-6: verify the FN-DSA
-   self-signature over the enclosing response, keyed by the same `short_id`,
+   self-signature over the enclosing response, keyed by the same `short_key_id`,
    using the advertised `key` (see the self-signature requirement above). This
    check does not depend on `pow` and MAY be performed before, after, or
    concurrently with steps 1-6, but the key is not valid unless both this step
@@ -204,169 +201,113 @@ provisional binding, or rejected as a collision against a prior observation —
 that determination is First Seen Wins as defined in MSC4499, applied only after
 this procedure succeeds, and is out of scope for this section.
 
-##### Notary-scoped publication challenges
+##### Federation HTTP authentication
 
-Notaries MAY offer a challenge endpoint that lets an origin bind additional
-publication work to a named notary before the notary attests to the key:
-
-```http
-POST /_matrix/key/unstable/tk.nutra.msc45xx/publication_challenge
-```
-
-Request body:
-
-```json
-{
-    "server_name": "example.com",
-    "key_id_sha256": "<unpadded-base64url-sha256>",
-    "key_metadata_sha256": "<unpadded-base64url-sha256>",
-    "server_key_package_sha256": "<unpadded-base64url-sha256>"
-}
-```
-
-Response body:
-
-```json
-{
-    "algorithm": "tk.nutra.msc45xx.pow.cuckoo-cycle-42-29-sha256",
-    "challenge": "<unpadded-base64url-random>",
-    "challenge_id": "<opaque-string>",
-    "expires_ts": 1798848000000,
-    "issuer": "notary.example",
-    "resource": {
-        "action": "fn-dsa-key-publication-notary-challenge",
-        "server_name": "example.com",
-        "key_id_sha256": "<unpadded-base64url-sha256>",
-        "key_metadata_sha256": "<unpadded-base64url-sha256>",
-        "server_key_package_sha256": "<unpadded-base64url-sha256>",
-        "issuer": "notary.example"
-    },
-    "signatures": {
-        "notary.example": {
-            "ed25519:auto": "<base64-ed25519-signature>",
-            "fn-dsa-512:<short_id>": "<base64-fn-dsa-signature>"
-        }
-    }
-}
-```
-
-Unlike the identity-binding proof above, this puzzle's graph is seeded from the
-notary's own challenge object, not from the key body, so it uses a distinct,
-generic seed function:
-
-```text
-graph_seed(nonce) = SHA-256(
-    canonical_json(resource) || uint64_le(nonce)
-)
-```
-
-using the same `canonical_json`, `uint64_le`, SipHash-2-4 graph construction
-(`u(i)`, `v(i)`), and 42-cycle solution rules defined under
-[Key publication Proof-of-Work](#key-publication-proof-of-work), with
-`graph_seed(nonce)` in place of `S(nonce)` as the SipHash key. `resource` is the
-exact object of that name inside the notary-signed challenge, byte-identical to
-what the origin received.
-
-The challenge request MUST carry a valid `Authorization: X-Matrix` header. The
-notary MUST reject the request with `403 M_FORBIDDEN` if the authenticated
-origin does not exactly match `server_name` in the request body. If the origin
-already has a published FN-DSA key, the request SHOULD also carry a valid
-`X-Matrix-PQC` header, but this header cannot be required for first publication.
-Notaries MUST rate-limit challenge issuance and return `429 M_LIMIT_EXCEEDED`
-when rate limits are exceeded. Unsupported notaries return `404 M_UNRECOGNIZED`;
-malformed digest fields, unsupported algorithms, or malformed request bodies
-return `400 M_INVALID_PARAM`.
-
-The `challenge` and `challenge_id` values MUST each contain at least 128 bits of
-entropy from a cryptographically secure source and MUST use the base64url
-alphabet. `challenge_id` MUST be 1-128 characters. `expires_ts` SHOULD be no
-more than 15 minutes after challenge issuance. The origin MUST continue serving
-the exact `/_matrix/key/v2/server` response whose signing-object hash is
-committed by `server_key_package_sha256` until challenge completion or expiry.
-If a notary fetches a response whose signing-object hash differs, the challenge
-is void and the origin must request a new challenge.
-
-If the challenge request gives the notary enough information to identify the
-candidate `(server_name, algorithm, short_id, key_id_sha256)` tuple, the notary
-MAY perform an early internal collision lookup before issuing the challenge. If
-it already knows the same `(server_name, algorithm, short_id)` with a different
-`key_id_sha256`, it MUST reject the request with `409 M_CONFLICT`. This is only
-a notary-local preflight check: it MUST NOT be represented as a global guarantee
-that no collision exists.
-
-`server_key_package_sha256` is the unpadded base64url-encoded SHA-256 digest of
-the Matrix Canonical JSON representation of the origin's
-`/_matrix/key/v2/server` response after removing only `signatures` and
-`unsigned`. A notary-scoped challenge MUST NOT be inserted into that server-key
-object. The origin solves the proof against the signed challenge object and
-submits the solution to the notary out-of-band from the server-key object using:
+Sending servers that support this MSC MUST include the `X-Matrix-PQC` header on
+outgoing federation requests when they have a valid FN-DSA server key. Unknown
+HTTP headers are ignored by legacy receivers, so no capability discovery is
+needed for deployment.
 
 ```http
-POST /_matrix/key/unstable/tk.nutra.msc45xx/publication_challenge/complete
+Authorization: X-Matrix origin="example.com",destination="matrix.org",key="ed25519:auto",sig="<base64-ed25519-signature>"
+X-Matrix-PQC: origin="example.com",destination="matrix.org",key="fn-dsa-512:<short_key_id>",origin_ts_at="1798847900000",sig="<base64-fn-dsa-signature>"
 ```
 
-Completion request body:
+The FN-DSA signature MUST be computed over the same JSON signing object used for
+existing Matrix federation request authentication (containing `method`, `uri`,
+`origin`, `destination`, and `content` when present), with the additional
+signature-covered `origin_ts_at` field from the `X-Matrix-PQC` header. Although
+`origin_ts_at` is encoded as a quoted HTTP header parameter, senders and
+verifiers MUST parse it as a base-10 integer millisecond timestamp and insert it
+into the JSON signing object as a JSON number, not as a JSON string.
 
-```json
-{
-    "challenge_object": { "...": "the notary-signed challenge object" },
-    "proof": {
-        "algorithm": "tk.nutra.msc45xx.pow.cuckoo-cycle-42-29-sha256",
-        "nonce": 8137226,
-        "solution": [123, 456, 789, "..."]
-    }
-}
-```
+`X-Matrix-PQC` uses the same parameter syntax and parsing rules as the existing
+`Authorization: X-Matrix` header. Required parameters are `origin`,
+`destination`, `key`, `origin_ts_at`, and `sig`. Unknown parameters MUST be
+ignored. Duplicate parameters or multiple `X-Matrix-PQC` headers render the PQC
+transport authentication invalid. `origin_ts_at` is an integer millisecond
+timestamp chosen by the origin and covered by the FN-DSA signature. Header
+values for `origin_ts_at` MUST contain only an unsigned base-10 integer
+representation. The `sig` parameter value is the unpadded base64-encoded FN-DSA
+signature. Malformed headers (invalid base64, missing required parameters, or
+unparsable syntax) MUST be treated as absent for enforcement purposes and SHOULD
+be logged.
 
-The completion request MUST carry a valid `Authorization: X-Matrix` header from
-the origin and a valid `X-Matrix-PQC` header signed by the FN-DSA key whose
-`key_id_sha256` is committed in the challenge. The notary MUST verify the
-challenge object's signatures, verify that `resource.issuer` exactly matches the
-notary's own server name, verify that the challenge has not expired, verify the
-proof against the exact challenge object, fetch the origin's server-key
-response, and check that the committed `server_name`, `key_id_sha256`,
-`key_metadata_sha256`, and `server_key_package_sha256` values match the fetched
-key package. Completion failures return `400 M_INVALID_PARAM` for malformed or
-invalid proofs, `403 M_FORBIDDEN` for authentication or keyholder mismatch,
-`409 M_CONFLICT` for a known `(server_name, algorithm, short_id)` collision with
-a different `key_id_sha256`, `410 M_INVALID_PARAM` for expired challenges, and
-`429 M_LIMIT_EXCEEDED` when rate limits are exceeded. A notary MUST NOT accept
-the same `challenge_id` twice within the challenge lifetime.
+For live requests, receiving servers MUST reject the `X-Matrix-PQC` header for
+enforcement purposes if `origin_ts_at` differs from the receiver's local clock
+by more than 5 minutes. This bounds replay and makes the signed timestamp
+meaningful for key-expiry evaluation; it does not let the origin extend an
+expired or closed key's accepted lifetime.
+
+This MSC introduces the header with advisory-but-verified semantics:
+
+- Receiving servers that support this MSC MUST verify the `X-Matrix-PQC` header
+  whenever it is present and the sending server has a published FN-DSA key.
+- A verification failure SHOULD be logged as a warning but MUST NOT cause
+  request rejection, provided the Ed25519 `Authorization` header is valid.
+- If a receiving server has already cached an FN-DSA key for the sending server,
+  absence of the `X-Matrix-PQC` header on requests from that server SHOULD be
+  logged as a potential downgrade indicator.
+- Implementations MAY offer an operator-level strict mode that rejects requests
+  lacking valid PQC transport authentication from peers with cached FN-DSA keys.
+  Strict mode MUST be configurable because legacy servers and advisory-period
+  deployments may omit `X-Matrix-PQC` even when the Ed25519 `Authorization`
+  header is valid.
+- Legacy servers that do not support this MSC ignore the `X-Matrix-PQC` header
+  entirely.
+
+Mandatory room-scoped enforcement is defined by MSC 00E2. Optional session
+amortization that replaces per-request FN-DSA signatures with a negotiated MAC
+is defined by MSC 00E5. The Ed25519 `Authorization` header remains required on
+all federation requests as long as any legacy room version exists in the
+federation.
+
+##### Detached notary provenance bundles
+
+Notary-specific provenance material MUST be carried outside the origin key
+object. A notary MAY retain and redistribute a detached provenance bundle
+describing how it observed a key, but such a bundle is never required for the
+validity of the underlying key object and MUST NOT be treated as part of the
+minting flow.
 
 This preserves a single canonical origin key package signing object: the object
 fetched directly from the origin and the object redistributed by a notary remain
 equivalent after removing `signatures` and `unsigned` and applying Matrix
 Canonical JSON serialization, and therefore hash to the same
-`server_key_package_sha256`. A notary response may add its own signatures or
-observation records, so raw wire JSON and full response objects are not expected
-to be byte-for-byte identical. Notary-specific challenge IDs, issuance
-timestamps, proof receipt timestamps, TLS provenance, and audit notes MUST be
-carried outside the origin key object, either in notary-signed observation
-records or transport metadata. They MUST NOT affect the canonical hash or
-signature input of the origin key package.
+`server_key_package_sha256`. A notary response may add its own signatures,
+observation records, or references to detached artifacts, so raw wire JSON and
+full response objects are not expected to be byte-for-byte identical.
 
-Notary-scoped challenges are advisory provenance. A notary MAY require them as a
-local policy before emitting its own attestation, but other receivers MUST NOT
-reject an otherwise-valid FN-DSA key publication solely because this
-notary-specific challenge metadata is absent, delayed, too fast, or too slow.
+Notary-specific provenance data such as local fetch timestamps, retained TLS
+evidence, challenge/proof artifacts from any optional local anti-spam workflow,
+and audit notes MUST be carried outside the origin key object, either in
+notary-signed observation records or in a separately retained provenance bundle.
+They MUST NOT affect the canonical hash or signature input of the origin key
+package.
+
+Detached provenance bundles are advisory provenance. A notary MAY retain them,
+serve them on demand, or include stable digests of them in a signed observation,
+but other receivers MUST NOT reject an otherwise-valid FN-DSA key object solely
+because such detached provenance metadata is absent, delayed, too fast, or too
+slow.
 
 #### Notary expectations and key validity
 
 Key notaries (`/_matrix/key/v2/query`) MUST include FN-DSA keys and their
 corresponding signatures in responses when present on the queried server.
 Notaries MUST validate the remote server's FN-DSA self-signature for the queried
-`server_name` — and MUST recompute and validate the hash-derived `short_id`
+`server_name` — and MUST recompute and validate the hash-derived `short_key_id`
 against the advertised key body, and MUST verify a valid proof-of-work as
-specified in [Key publication Proof-of-Work](#key-publication-proof-of-work) —
-before attesting to the key; if any check fails, the notary MUST NOT include
-that FN-DSA key in its response. Notary responses are themselves signed objects;
+specified in [Key minting Proof-of-Work](#key-minting-proof-of-work) — before
+attesting to the key; if any check fails, the notary MUST NOT include that
+FN-DSA key in its response. Notary responses are themselves signed objects;
 notaries that support this MSC MUST include FN-DSA signatures on their
 responses.
 
 Before attesting to an FN-DSA key, a notary MUST also check its retained
-observations for the same `(server_name, algorithm, short_id)` with a different
-`key_id_sha256`. If such a conflict is known to that notary, it MUST NOT emit a
-normal attestation for the new key body and SHOULD retain or emit advisory
+observations for the same `(server_name, algorithm, short_key_id)` with a
+different `key_id`. If such a conflict is known to that notary, it MUST NOT emit
+a normal attestation for the new key body and SHOULD retain or emit advisory
 equivocation evidence instead. This check certifies only "no collision known to
 this notary at the time of attestation"; it MUST NOT be described as a global
 non-collision guarantee.
@@ -424,21 +365,14 @@ server-key validation and MUST NOT change acceptance semantics.
                     "server_certificate_verify_signature": "<unpadded-base64url-signature>"
                 }
             },
-            "key_id_sha256": "<unpadded-base64url-sha256>",
+            "key_id": "<unpadded-base64url-key-id>",
             "server_key_package_sha256": "<unpadded-base64url-sha256>",
-            "notary_challenge": {
-                "challenge_id": "<opaque-string>",
-                "challenge_sha256": "<unpadded-base64url-sha256>",
-                "proof_sha256": "<unpadded-base64url-sha256>",
-                "challenge_issued_at": 1798847988000,
-                "pow_observed_at": 1798848000000,
-                "pow_verified_at": 1798848000100
-            },
+            "provenance_bundle_sha256": "<unpadded-base64url-sha256>",
             "valid_until_ts": 1798848000000,
             "signatures": {
                 "notary.example": {
                     "ed25519:auto": "<base64-ed25519-signature>",
-                    "fn-dsa-512:<short_id>": "<base64-fn-dsa-signature>"
+                    "fn-dsa-512:<short_key_id>": "<base64-fn-dsa-signature>"
                 }
             }
         }
@@ -468,14 +402,14 @@ uint8(tls_13_provenance_present) ||
 if tls_13_provenance_present:
     len16(tls_13_provenance_sha256) ||
     tls_13_provenance_sha256 ||
-len16(key_id_sha256) ||
-key_id_sha256 ||
+len16(key_id) ||
+key_id ||
 len16(server_key_package_sha256) ||
 server_key_package_sha256 ||
-uint8(notary_challenge_present) ||
-if notary_challenge_present:
-    len16(notary_challenge_sha256) ||
-    notary_challenge_sha256 ||
+uint8(provenance_bundle_sha256_present) ||
+if provenance_bundle_sha256_present:
+    len16(provenance_bundle_sha256) ||
+    provenance_bundle_sha256 ||
 uint64_be(valid_until_ts)
 ```
 
@@ -491,12 +425,12 @@ Formatting definitions:
 - `server_key_package_sha256` is the unpadded base64url-encoded SHA-256 digest
   of the observed origin server-key package's Matrix Canonical JSON
   representation after removing only `signatures` and `unsigned`.
-- When `notary_challenge` is present, `notary_challenge_sha256` is the unpadded
-  base64url-encoded SHA-256 digest of the Matrix Canonical JSON representation
-  of the `notary_challenge` object. The `challenge_sha256` and `proof_sha256`
-  fields inside that object are the unpadded base64url-encoded SHA-256 digests
-  of the notary-issued challenge object and the origin-submitted proof object,
-  respectively, after Matrix Canonical JSON serialization.
+- When `provenance_bundle_sha256` is present, it is the unpadded
+  base64url-encoded SHA-256 digest of a detached notary provenance bundle
+  retained by that notary for this observation. The bundle format is
+  notary-defined, but any challenge/proof artifacts, retained transcript
+  evidence, or audit notes linked from a signed observation MUST live there
+  rather than inside the origin key object.
 
 Notary and verifier constraints:
 
@@ -508,15 +442,14 @@ Notary and verifier constraints:
   using the notary's Matrix server signing key.
 - When validating an observation, a verifier MUST check that
   `observed_server_name` matches the queried `server_name`.
-- When validating an observation, a verifier MUST check that `key_id_sha256` and
+- When validating an observation, a verifier MUST check that `key_id` and
   `valid_until_ts` match the observed key response described by the record.
 - When validating an observation, a verifier MUST check that
   `server_key_package_sha256` matches the observed key response described by the
   record.
-- When `notary_challenge` is present, a verifier MAY use its digests and
-  timestamps to audit the sequence from notary challenge issuance to proof
-  observation and verification. These fields are advisory and MUST NOT change
-  automated key acceptance semantics.
+- When `provenance_bundle_sha256` is present, a verifier MAY fetch or inspect
+  the detached bundle out of band for diagnostics or audit. This reference is
+  advisory and MUST NOT change automated key acceptance semantics.
 
 ##### TLS 1.3 compact provenance
 
@@ -605,8 +538,8 @@ Trust and enforcement boundaries:
   out of scope for this MSC.
 - Because the compact form carries only the transcript hash, it does not by
   itself let a later auditor inspect or recompute the handshake transcript,
-  confirm the SNI value, confirm a notary challenge, or confirm other handshake
-  contents.
+  confirm the SNI value, confirm detached notary workflow artifacts, or confirm
+  other handshake contents.
 - A notary that wants independently auditable transcript contents MAY retain or
   publish the full TLS Handshake messages, or equivalent transcript evidence, in
   an out-of-band audit bundle. Such transcript evidence MUST use the same RFC
@@ -625,20 +558,28 @@ Trust and enforcement boundaries:
   fidelity.
 
 FN-DSA keys follow identical validity semantics to Ed25519 keys: a signature
-made by `fn-dsa-512:<short_id>` is valid if the key was valid at the time of the
-signed operation. Retired FN-DSA keys appear in `old_verify_keys` with an
+made by `fn-dsa-512:<short_key_id>` is valid if the key was valid at the time of
+the signed operation. Retired FN-DSA keys appear in `old_verify_keys` with an
 `expired_ts`. The `valid_until_ts` field governs cache lifetime for the entire
 key response, identically to existing behavior.
 
 ##### Notary equivocation evidence
 
 When a notary observes conflicting FN-DSA key material for the same
-`(server_name, algorithm, short_id)` with a different `key_id_sha256` (see
+`(server_name, algorithm, short_key_id)` with a different `key_id` (see
 [Notary expectations and key validity](#notary-expectations-and-key-validity)),
 it SHOULD retain or emit a `notary_equivocations` record documenting the
 conflict, alongside `server_keys` and `notary_observations` in
 `/_matrix/key/v2/query` responses, and in the body of a `409 M_CONFLICT`
-response to a notary-scoped publication challenge or completion request.
+response body or in any detached provenance artifact the notary serves.
+
+`M_CONFLICT` is introduced by this MSC for this use case. A `409 M_CONFLICT`
+response means the notary or receiver has already observed a different
+minting-valid FN-DSA key body for the same
+`(server_name, algorithm, short_key_id)` tuple and is refusing to treat the new
+body as an acceptable binding for that tuple. The response SHOULD include
+`notary_equivocations` records when the responder has signed evidence it is
+willing to disclose.
 
 A bare record is only a notary's claim that it observed both key bodies — any
 consumer must trust the notary to believe it. But because each conflicting
@@ -656,15 +597,15 @@ therefore an attestation by default, with an optional embedded-proof upgrade:
             "record_version": 1,
             "observed_server_name": "example.com",
             "algorithm": "fn-dsa-512",
-            "short_id": "<short_id>",
+            "short_key_id": "<short_key_id>",
             "first": {
-                "key_id_sha256": "<unpadded-base64url-sha256>",
+                "key_id": "<unpadded-base64url-key-id>",
                 "server_key_package_sha256": "<unpadded-base64url-sha256>",
                 "first_observed_ts": 1798848000000,
                 "observed_via": "direct"
             },
             "conflicting": {
-                "key_id_sha256": "<unpadded-base64url-sha256>",
+                "key_id": "<unpadded-base64url-key-id>",
                 "server_key_package_sha256": "<unpadded-base64url-sha256>",
                 "first_observed_ts": 1798848600000,
                 "observed_via": "notary"
@@ -677,7 +618,7 @@ therefore an attestation by default, with an optional embedded-proof upgrade:
             "signatures": {
                 "notary.example": {
                     "ed25519:auto": "<base64-ed25519-signature>",
-                    "fn-dsa-512:<short_id>": "<base64-fn-dsa-signature>"
+                    "fn-dsa-512:<short_key_id>": "<base64-fn-dsa-signature>"
                 }
             }
         }
@@ -688,14 +629,15 @@ therefore an attestation by default, with an optional embedded-proof upgrade:
 Field semantics:
 
 - `record_version` is `1` for this shape.
-- `observed_server_name`, `algorithm`, and `short_id` identify the equivocating
-  origin and the colliding key family.
+- `observed_server_name`, `algorithm`, and `short_key_id` identify the
+  equivocating origin and the colliding key family.
 - `first` and `conflicting` are each an observation of one of the two
   conflicting key bodies. Despite the naming, the pair is unordered for dedup
   purposes (see below); `first` denotes whichever observation this notary
   learned of earlier, per its own `first_observed_ts`.
-- `key_id_sha256` in each observation is the unpadded base64url-encoded SHA-256
-  digest of that observation's raw key ID bytes.
+- `key_id` in each observation is the unpadded base64url-encoded full key
+  identifier for that key body, derived as specified in
+  [Key minting Proof-of-Work](#key-minting-proof-of-work).
 - `server_key_package_sha256` is the unpadded base64url-encoded SHA-256 digest
   of that observation's origin `/_matrix/key/v2/server` response, after Matrix
   Canonical JSON serialization with `signatures` and `unsigned` removed,
@@ -754,17 +696,17 @@ len16(observed_server_name) ||
 observed_server_name ||
 len16(algorithm) ||
 algorithm ||
-len16(short_id) ||
-short_id ||
-len16(first.key_id_sha256) ||
-first.key_id_sha256 ||
+len16(short_key_id) ||
+short_key_id ||
+len16(first.key_id) ||
+first.key_id ||
 len16(first.server_key_package_sha256) ||
 first.server_key_package_sha256 ||
 uint64_be(first.first_observed_ts) ||
 len16(first.observed_via) ||
 first.observed_via ||
-len16(conflicting.key_id_sha256) ||
-conflicting.key_id_sha256 ||
+len16(conflicting.key_id) ||
+conflicting.key_id ||
 len16(conflicting.server_key_package_sha256) ||
 conflicting.server_key_package_sha256 ||
 uint64_be(conflicting.first_observed_ts) ||
@@ -779,9 +721,9 @@ verified independently via each embedded response's own self-signature, matched
 against `server_key_package_sha256`.
 
 - Dedup identity: a record is identified by the tuple
-  `(observed_server_name, algorithm, short_id, first.key_id_sha256, conflicting.key_id_sha256)`,
-  with the `key_id_sha256` pair treated as unordered. A notary MUST NOT emit
-  more than one record for the same identity within a single response; consumers
+  `(observed_server_name, algorithm, short_key_id, first.key_id, conflicting.key_id)`,
+  with the `key_id` pair treated as unordered. A notary MUST NOT emit more than
+  one record for the same identity within a single response; consumers
   aggregating records from multiple sources or over time MUST deduplicate on
   this identity.
 - Retention: notaries SHOULD retain equivocation records at least as long as
@@ -823,12 +765,12 @@ the origin or from federation gossip in a top-level `expiry_claims` array
 alongside `server_keys` and `notary_observations` in `/_matrix/key/v2/query`
 responses. During the unstable period, the claim type is
 `tk.nutra.msc45xx.server_key.expiry.v1`. A notary MUST verify the claim's
-signatures, `server_name`, and `key_id_sha256` binding before redistributing it.
-A notary that has observed a valid expiry claim for a key it returns MUST
-include that claim. Notary redistribution does not make the claim notary
-specific: receivers continue to authenticate the claim by its own signatures and
-use the smallest observed `not_valid_after_ts` for the closed key as specified
-by MSC45XX. If an enclosing `old_verify_keys` wrapper carries a later
+signatures, `server_name`, and `key_id` binding before redistributing it. A
+notary that has observed a valid expiry claim for a key it returns MUST include
+that claim. Notary redistribution does not make the claim notary specific:
+receivers continue to authenticate the claim by its own signatures and use the
+smallest observed `not_valid_after_ts` for the closed key as specified by this
+MSC family. If an enclosing `old_verify_keys` wrapper carries a later
 `expired_ts` for the same key, the earlier self-signed expiry claim wins.
 
 Any third-party attestation metadata a server or notary chooses to additionally
@@ -843,14 +785,13 @@ legacy federation traffic, and converge according to the established network
 rules.
 
 Because a server's very first FN-DSA key observation is TOFU and authenticates
-only via the existing Ed25519 trust model (see
-[Server key trust model](#server-key-trust-model)), it is vulnerable to an
-attacker positioned on that specific fetch path — a targeted, localized
-man-in-the-middle rather than a global compromise. Implementations MUST NOT
-treat contradictory notary observations, by themselves, as sufficient to reject
-or invalidate an otherwise valid first observation: doing so would let any
-false, compromised, or stale notary create a denial-of-service condition against
-legitimate bootstrap. This MSC therefore leaves first-observation acceptance
-semantics aligned with the existing Matrix server-key trust model; it does not
-define any cross-source consensus or conflict-resolution mechanism for FN-DSA
-bootstrap.
+only via the existing Ed25519 trust model and MSC4499 First Seen Wins semantics,
+it is vulnerable to an attacker positioned on that specific fetch path — a
+targeted, localized man-in-the-middle rather than a global compromise.
+Implementations MUST NOT treat contradictory notary observations, by themselves,
+as sufficient to reject or invalidate an otherwise valid first observation:
+doing so would let any false, compromised, or stale notary create a
+denial-of-service condition against legitimate bootstrap. This MSC therefore
+leaves first-observation acceptance semantics aligned with the existing Matrix
+server-key trust model and MSC4499; it does not define any cross-source
+consensus or conflict-resolution mechanism for FN-DSA bootstrap.

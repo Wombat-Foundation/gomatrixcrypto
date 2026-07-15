@@ -1,10 +1,11 @@
 # MSC 00E5: Post-quantum federation session authentication
 
-This draft contains the optional ML-KEM session-negotiation material split from
-MSC45XX. The body below is intentionally copied nearly verbatim and still needs
-normal MSC integration text.
+This draft defines the optional ML-KEM session-negotiation extension for the
+post-quantum federation authentication profile. It builds on the per-request
+`X-Matrix-PQC` authentication model and server-key material defined by
+[MSC 00E4](./00E4-quantum-sigs-notary-provenance.md).
 
-### Upgraded connections: PQ session negotiation (future MSC)
+### Upgraded connections: PQ session negotiation
 
 The per-request `X-Matrix-PQC` header adds ~888 bytes (base64) of bandwidth
 overhead to every federation request. This section defines an OPTIONAL mechanism
@@ -16,8 +17,7 @@ PQC-capable servers.
 
 Per-request `X-Matrix-PQC` remains the baseline; servers MUST NOT assume peer
 support for session negotiation, and MUST fall back to per-request headers when
-negotiation is unavailable or a session is rejected. A follow-up MSC will
-formally define this standard for ecosystem consistency.
+negotiation is unavailable or a session is rejected.
 
 #### Endpoint
 

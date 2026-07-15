@@ -9,29 +9,30 @@ post-quantum signature scheme `fn-dsa-512`, and upgrades federation transport
 verification from advisory to mandatory for traffic scoped to such rooms.
 
 It builds directly on
-[MSC 45XX: Post-Quantum Server Key Exchange and Federation Transport Authentication](https://github.com/matrix-org/matrix-spec-proposals/pull/45XX),
-which defines the `fn-dsa-512` primitive, its encoding and signing rules, server
-signing key distribution and trust model, and the `X-Matrix-PQC` transport
-header. Readers should be familiar with MSC 45XX; deploying it widely first (key
-pre-distribution and pinning) is the intended path to this MSC. E2EE device and
-cross-signing key migration is addressed separately in
-[MSC 0F00](https://github.com/matrix-org/matrix-spec-proposals/pull/0F00).
+[MSC 00E4: Notary provenance for post-quantum server keys](./00E4-quantum-sigs-notary-provenance.md),
+which defines FN-DSA server-key minting, key identifiers, self-signature
+requirements, notary observations, and advisory TLS provenance. Optional
+session-based transport authentication is defined separately in
+[MSC 00E5](./00E5-quantum-sigs-federation-session-negotiation.md). Readers
+should be familiar with the server-key minting and trust model before deploying
+this MSC. E2EE device and cross-signing key migration is addressed separately in
+[MSC 00EA](./00EA-quantum-sigs-e2ee.md).
 
 ## Proposal
 
-This MSC uses **FN-DSA-512** (`fn-dsa-512`) exactly as defined by MSC 45XX. All
-cryptographic parameters, public key encodings, signature encodings, and the
+This MSC uses **FN-DSA-512** (`fn-dsa-512`) as defined by the companion
+post-quantum server-key MSCs. Public key encodings, signature encodings, and the
 signing operation (Canonical JSON of the event with `signatures` and `unsigned`
-removed; pure mode; empty context) are specified there and are not redefined
-here. Server signing keys are published, discovered, pinned, and rotated per the
-MSC 45XX trust model.
+removed; pure mode; empty context) are inherited from that server-key profile
+and are not redefined here. Server signing keys are minted, published,
+discovered, pinned, and rotated per MSC 00E4 and MSC4499.
 
 > **Note:** For readability, this proposal uses the intended stable identifiers
-> `fn-dsa-512` (key algorithm, defined by MSC 45XX) and a stable room version
+> `fn-dsa-512` (key algorithm, defined by MSC 00E4) and a stable room version
 > throughout the main text and examples. Until the relevant MSCs are accepted
 > and merged into the Matrix specification, implementations MUST use the
 > unstable identifiers `tk.nutra.msc45xx.fn-dsa-512` (algorithm — the canonical
-> prefix defined by MSC 45XX where the algorithm is specified) and
+> prefix defined by the server-key MSC where the algorithm is specified) and
 > `tk.nutra.msc45yy.pqc.v1` (room version). See
 > [Unstable Prefix](#unstable-prefix) for the full mapping.
 
@@ -60,13 +61,12 @@ In room versions that require PQC signatures (see
   be rejected.
 - Receiving servers MUST reject the event if the required `fn-dsa-512` signature
   references a malformed key ID, or if the referenced key was advertised under a
-  key ID that does not match the first 16 base64url characters of `SHA-256` over
-  the canonical FN-DSA public key bytes, as defined by MSC 45XX.
-- If the required `fn-dsa-512` signature references a well-formed key ID that
-  corresponds to multiple non-expired FN-DSA key bodies due to a genuine
-  16-character hash-prefix collision, the receiving server MUST attempt
-  verification with each candidate key body for that server and key ID. The
-  event is valid only if exactly one candidate verifies.
+  `short_key_id` that does not match the first 20 base64url characters of the
+  key's full `key_id`, as defined by MSC 00E4.
+- Receiving servers MUST NOT trial-verify multiple FN-DSA key bodies for the
+  same `(server_name, algorithm, short_key_id)` tuple. Collisions are handled by
+  the server-key cache's First Seen Wins rule; if the bound key body does not
+  verify the event, the event fails signature verification.
 - Receiving servers MUST ignore unrecognized or legacy signature algorithm
   entries in the `signatures` object; the presence of additional signatures
   (e.g., `ed25519`) MUST NOT cause event rejection. This prevents a
@@ -169,17 +169,18 @@ for bandwidth and storage integrity monitoring.
 
 ### Federation Transport Enforcement
 
-MSC 45XX defines the `X-Matrix-PQC` header (and the optional
-`X-Matrix-PQC-Session` equivalent) with advisory-but-verified semantics. This
-MSC upgrades enforcement to be **room-scoped**, to avoid an indefinitely
-downgradeable transport layer while leaving legacy traffic untouched:
+The post-quantum server-key profile defines the `X-Matrix-PQC` header with
+advisory-but-verified semantics. MSC 00E5 defines the optional
+`X-Matrix-PQC-Session` equivalent. This MSC upgrades enforcement to be
+**room-scoped**, to avoid an indefinitely downgradeable transport layer while
+leaving legacy traffic untouched:
 
 - **PQC-room traffic:** If the receiving server can determine that a request
   concerns a PQC-required room (e.g., room-specific endpoints such as
   `/make_join`, `/send_join`, `/make_leave`, `/send_leave`, `/invite`, `/state`,
   `/state_ids`, `/backfill`, `/get_missing_events`, or `/event` when the
   resolved event belongs to a PQC room), a valid `X-Matrix-PQC` header (or valid
-  `X-Matrix-PQC-Session` MAC, per MSC 45XX) MUST be present. Requests lacking
+  `X-Matrix-PQC-Session` MAC, per MSC 00E5) MUST be present. Requests lacking
   valid PQC transport authentication MUST be rejected with HTTP
   `401 Unauthorized`.
 - **Mixed transactions:** For `PUT /_matrix/federation/v1/send/{txnId}`
@@ -189,12 +190,13 @@ downgradeable transport layer while leaving legacy traffic untouched:
   `401 Unauthorized`. Sending servers SHOULD avoid mixing PQC-room and
   legacy-room PDUs in the same transaction where possible.
 - **Legacy-only traffic:** For requests that do not involve any PQC-required
-  room, the advisory semantics of MSC 45XX continue to apply: verification
-  failure SHOULD be logged as a warning but MUST NOT cause request rejection,
-  provided the Ed25519 `Authorization` header is valid.
-- **Legacy servers:** Servers that do not support MSC 45XX ignore the
-  `X-Matrix-PQC` header entirely — and cannot participate in PQC-required rooms,
-  since they can neither produce nor verify `fn-dsa-512` PDU signatures.
+  room, the advisory semantics of the server-key profile continue to apply:
+  verification failure SHOULD be logged as a warning but MUST NOT cause request
+  rejection, provided the Ed25519 `Authorization` header is valid.
+- **Legacy servers:** Servers that do not support the post-quantum server-key
+  profile ignore the `X-Matrix-PQC` header entirely — and cannot participate in
+  PQC-required rooms, since they can neither produce nor verify `fn-dsa-512` PDU
+  signatures.
 
 #### Enforcement Order of Operations
 
@@ -220,7 +222,7 @@ sequenceDiagram
     participant S2 as Server B (PQC-capable)
     participant S3 as Server C (Legacy)
 
-    Note over S1: Publishes both keys via /_matrix/key/v2/server (MSC 45XX)
+    Note over S1: Publishes both keys via /_matrix/key/v2/server (MSC 00E4)
 
     S1->>S2: PUT /_matrix/federation/v1/send/...<br/>Authorization: ed25519 (legacy auth)<br/>X-Matrix-PQC: fn-dsa-512 (transport auth)<br/>Event (legacy room): {ed25519 only}
     activate S2
@@ -243,7 +245,7 @@ sequenceDiagram
 
 ### Migration Timeline
 
-**Phase 1 — Transport & Key Distribution (MSC 45XX, prerequisite)** Servers
+**Phase 1 — Transport & Key Distribution (MSC 00E4, prerequisite)** Servers
 publish FN-DSA keys via `/_matrix/key/v2/server` and transmit the `X-Matrix-PQC`
 header. PDUs continue to be signed exclusively with Ed25519. Wide deployment of
 Phase 1 pre-distributes and pins keys across the federation before anything
@@ -301,7 +303,7 @@ The new room version does **not** change:
   Every event must retain its signature for independent verification. See
   [Performance & Lightweighting Opportunities](#performance--lightweighting-opportunities).
 
-- **FIPS 206 not yet finalized.** See MSC 45XX for full pre-finalization
+- **FIPS 206 not yet finalized.** See MSC 00E4 for full pre-finalization
   deployment guidance. The room-version consequence specific to this MSC is
   covered under [Unstable Prefix](#unstable-prefix): draft-scoped PQC rooms may
   require an upgrade if the final standard is incompatible.
@@ -312,7 +314,7 @@ The new room version does **not** change:
   post-quantum authorship guarantees apply from the upgrade point forward.
 
 - **Ecosystem readiness gate.** A PQC-required room is unusable by servers that
-  have not implemented MSC 45XX + this MSC. This is intentional (it is the
+  have not implemented MSC 00E4 + this MSC. This is intentional (it is the
   security property), but community rooms should weigh reachability before
   upgrading.
 
@@ -322,8 +324,8 @@ The new room version does **not** change:
   constructions, but this MSC avoids hybrid PDU signing — in PQC rooms, FN-DSA
   is the sole authority. Dual mandatory signatures would double verification
   work, complicate the auth rules (which signature wins on partial failure?),
-  and add permanent per-event bloat, while the transport layer (per MSC 45XX)
-  already remains hybrid during transition.
+  and add permanent per-event bloat, while the transport layer already remains
+  hybrid during transition.
 
 - **Signature hash-chaining (future storage savers for highly co-signed
   events).** To reduce the payload tax of multiple co-signatures, subsequent
@@ -372,9 +374,9 @@ The new room version does **not** change:
 - **Extending Olm/Megolm to PQC.** Key agreement migration (Curve25519 → ML-KEM)
   is orthogonal and far more complex. Bundling would delay everything. Signature
   migration provides immediate protection against server impersonation; key
-  agreement (the HNDL concern) is addressed separately (see MSC 0F00).
+  agreement (the HNDL concern) is addressed separately (see MSC 00EA).
 
-- **Alternative signature schemes (ML-DSA, SLH-DSA).** Discussed in MSC 45XX,
+- **Alternative signature schemes (ML-DSA, SLH-DSA).** Discussed in MSC 00E4,
   where the algorithm is selected. The per-event permanence argument weighs even
   more heavily here: ML-DSA-44's 2.4 KB signatures would be stored forever on
   every event, and SLH-DSA's 17 KB signatures would approach the PDU size limit
@@ -393,8 +395,7 @@ signature). The PQC room version is an ideal catalyst to adopt CBOR (MSC2432).
 ### HTTP Overhead
 
 Per-request transport overhead and its amortization via PQ KEM session
-negotiation are addressed in MSC 45XX (optional session extension); they are not
-room-version concerns.
+negotiation are addressed in MSC 00E5; they are not room-version concerns.
 
 ## Security Considerations
 
@@ -409,7 +410,7 @@ room-version concerns.
   — stripping FN-DSA from a PQC room event invalidates it. Federation transport
   authentication is enforced for requests scoped to PQC rooms, preventing
   transport-level downgrade for PQC traffic. For legacy-only traffic, transport
-  auth remains advisory during transition (per MSC 45XX).
+  auth remains advisory during transition.
 
 - **Signature-mutation resistance.** Because signatures are excluded from event
   IDs and content hashes, intermediaries can mutate the `signatures` object
@@ -420,13 +421,13 @@ room-version concerns.
 
 - **Timing side-channels.** FN-DSA's discrete Gaussian sampler leaks private
   keys via timing analysis if implemented incorrectly. All implementations MUST
-  use audited, constant-time libraries (see MSC 45XX Implementation Guidance).
+  use audited, constant-time libraries.
 
 - **Downgrade attacks (E2EE).** E2EE downgrade risks are addressed in
-  [MSC 0F00](https://github.com/matrix-org/matrix-spec-proposals/pull/0F00).
+  [MSC 00EA](./00EA-quantum-sigs-e2ee.md).
 
 - **Key compromise recovery.** Identical to Ed25519: rotate the key, publish the
-  old key in `old_verify_keys` with `expired_ts` (subject to the MSC 45XX FN-DSA
+  old key in `old_verify_keys` with `expired_ts` (subject to the MSC 00E4 FN-DSA
   rotation-authentication rule). Events signed with the compromised key cannot
   be retroactively invalidated.
 
@@ -437,10 +438,10 @@ While this MSC is in development, the following unstable identifiers are used:
 | Stable Identifier            | Unstable Identifier                                 |
 | ---------------------------- | --------------------------------------------------- |
 | PQC room version             | `tk.nutra.msc45yy.pqc.v1`                           |
-| `fn-dsa-512` (key algorithm) | `tk.nutra.msc45xx.fn-dsa-512` (defined by MSC 45XX) |
+| `fn-dsa-512` (key algorithm) | `tk.nutra.msc45xx.fn-dsa-512` (defined by MSC 00E4) |
 | `canonical_sha256` (hashes)  | `tk.nutra.msc45yy.canonical_sha256`                 |
 
-The algorithm identifier is namespaced under MSC 45XX, where the algorithm is
+The algorithm identifier is namespaced under MSC 00E4, where the algorithm is
 specified; this MSC does not define a second algorithm prefix. During the
 unstable period, PDU `signatures` entries use the unstable algorithm identifier:
 
@@ -465,7 +466,7 @@ identifiers, accepting either.
 
 ### Pre-Finalization Deployment Guidance
 
-The constraints in MSC 45XX (draft-revision pinning, provisional keys, rotation
+The constraints in MSC 00E4 (draft-revision pinning, provisional keys, rotation
 on parameter change, no production trust assumptions) apply in full. One
 constraint is specific to this MSC:
 
@@ -477,12 +478,13 @@ constraint is specific to this MSC:
 
 ## Dependencies
 
-- **[MSC 45XX](https://github.com/matrix-org/matrix-spec-proposals/pull/45XX):**
-  Defines `fn-dsa-512`, its encodings and signing operation, server key
-  distribution and trust model, and the `X-Matrix-PQC` transport header that
-  this MSC's enforcement rules build on. This MSC cannot be accepted before MSC
-  45XX.
-- **NIST FIPS 206 (FN-DSA):** Inherited via MSC 45XX.
+- **[MSC 00E4](./00E4-quantum-sigs-notary-provenance.md):** Defines FN-DSA
+  server-key minting, key identifiers, server key distribution and trust model,
+  and notary provenance. This MSC cannot be accepted before MSC 00E4.
+- **[MSC 00E5](./00E5-quantum-sigs-federation-session-negotiation.md):** Defines
+  optional session authentication that can replace per-request `X-Matrix-PQC`
+  signatures where this MSC permits `X-Matrix-PQC-Session`.
+- **NIST FIPS 206 (FN-DSA):** Inherited via MSC 00E4.
 
 ## Backwards Compatibility
 
@@ -493,14 +495,13 @@ verification:
   Rooms that are not upgraded continue to use Ed25519. This spec gives no advice
   on backporting to legacy rooms.
 - **Transport enforcement is room-scoped.** Legacy-room traffic keeps the
-  advisory semantics of MSC 45XX; only PQC-room traffic gains mandatory
-  enforcement.
+  advisory semantics of the server-key profile; only PQC-room traffic gains
+  mandatory enforcement.
 - **No new endpoints.** Existing endpoints are extended in behavior only (PQC
   signature requirements, room-scoped header enforcement).
 - **E2EE backwards compatibility.** E2EE device and cross-signing key migration
-  is addressed in
-  [MSC 0F00](https://github.com/matrix-org/matrix-spec-proposals/pull/0F00) and
-  is fully backwards-compatible.
+  is addressed in [MSC 00EA](./00EA-quantum-sigs-e2ee.md) and is fully
+  backwards-compatible.
 
 ---
 
@@ -510,7 +511,7 @@ verification:
       [appropriate implementation(s)](https://spec.matrix.org/proposals/#implementing-a-proposal)
       specified in the MSC's PR description?
 - [ ] Are all MSCs that this MSC depends on already accepted? (Depends on MSC
-      45XX.)
+      00E4 and MSC 00E5.)
 - [x] For each endpoint that is introduced or modified:
     - [x] Have authentication requirements been specified? (Room-scoped PQC
           transport authentication on existing federation endpoints; no new

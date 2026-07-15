@@ -1,0 +1,33 @@
+{
+    "pow_profile_note": "illustrative low-difficulty sample; not valid for production key minting",
+    "server_key_object": {
+        "old_verify_keys": {},
+        "server_name": "nutra.tk",
+        "signatures": {
+            "nutra.tk": {
+                "fn-dsa-512:<short_key_id>": "<base64-fn-dsa-512-self-signature>"
+            }
+        },
+        "valid_until_ts": 1815617991940,
+        "verify_keys": {
+            "fn-dsa-512:<short_key_id>": {
+                "claims": [
+                    "constant-time-keygen",
+                    "constant-time-signing"
+                ],
+                "fips_206_revision": "ipd-2025-08",
+                "key": "<unpadded-base64-fn-dsa-512-public-key>",
+                "pow": {
+                    "algorithm": "demo.cuckoo-cycle-4-8-keccak256-cogen",
+                    "nonce": 0,
+                    "solution": [
+                        0,
+                        253,
+                        280,
+                        4028
+                    ]
+                }
+            }
+        }
+    }
+}

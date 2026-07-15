@@ -101,6 +101,14 @@ Example:
        panic(err)
    }
 
+   // In production this proof is found by iterating the minting nonce until the
+   // Keccak-derived key_id seed has a valid Cuckoo Cycle solution.
+   proof := serverkey.FNDSAMintingProof{
+       Algorithm: serverkey.ProductionPoW,
+       Nonce:     8137226,
+       Solution:  []uint32{ /* 42 sorted edge nonces */ },
+   }
+
    obj, keyName, err := serverkey.NewSignedFNDSA(
        nil,
        "example.com",
@@ -114,6 +122,7 @@ Example:
                "constant-time-signing",
            },
        },
+       proof,
    )
    if err != nil {
        panic(err)
@@ -124,17 +133,18 @@ Example:
        panic("invalid self-signature")
    }
 
-Demo command, including a low-difficulty Cuckoo proof bound to the generated
-key ID, key metadata, and canonical signed server-key object:
+Demo command, including a low-difficulty Cuckoo proof embedded in the generated
+FN-DSA verify key object:
 
 .. code-block:: bash
 
    go run ./cmd/serverkey-demo -server example.com -valid-days 7
 
 The demo uses ``-pow-edge-bits 8 -pow-proof-size 4`` and searches ``1<<12``
-edge nonces by default, so it is intentionally easy: it looks for a 4-cycle in
-a tiny graph and often solves at graph nonce 0. The production profile described
-in ``res/`` is ``42-29`` and is intentionally much more expensive.
+edge nonces per minting nonce by default, so it is intentionally easy: it looks
+for a 4-cycle in a tiny graph. The live production profile described in
+``res/`` is ``42-29`` with a Keccak-256 co-generation seed and is intentionally
+much more expensive.
 
 PoW profile examples:
 
@@ -144,7 +154,7 @@ PoW profile examples:
    go run ./cmd/serverkey-demo -server example.com
 
    # Custom profile and algorithm label.
-   go run ./cmd/serverkey-demo -pow-profile custom -pow-algorithm local.cuckoo-cycle-6-12-sha256 -pow-edge-bits 12 -pow-proof-size 6 -pow-max-nonce 65536
+   go run ./cmd/serverkey-demo -pow-profile custom -pow-algorithm local.cuckoo-cycle-6-12-keccak256-cogen -pow-edge-bits 12 -pow-proof-size 6 -pow-max-nonce 65536
 
    # Production parameter labels. This is expected to be expensive with the Go helper.
    go run ./cmd/serverkey-demo -pow-profile production -pow-max-nonce 536870912 -pow-max-graph-nonce 1024
