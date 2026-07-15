@@ -11,6 +11,8 @@ This repository currently provides:
 * ``matrixjson``: Matrix Canonical JSON encoding for signed objects
 * ``serverkey``: FN-DSA server-key object construction and self-signing
 * ``cuckoo``: Cuckoo Cycle proof generation and verification helpers
+* ``cmd/cuckoo-scan``: helper command that scans graph nonces until the
+  reference mean-miner finds a proof
 
 Status
 ------
@@ -166,6 +168,21 @@ Example:
    }
 
    err = cuckoo.Verify(cfg, seed, proof)
+
+Reference mean-miner scan helper:
+
+.. code-block:: bash
+
+   # Build the reference solver first.
+   (cd cuckoo/meanminer/csrc && make)
+
+   # Scan graph nonces until the first solvable graph is found.
+   go run ./cmd/cuckoo-scan -prefix manual-test -start 0 -limit 200 -threads 6
+
+The helper hashes ``<prefix> + little-endian uint64(graph_nonce)`` with
+``SHA-256`` to derive the 32-byte graph seed for each attempt. It is useful
+when you want to reproduce the shell loop used during solver testing without
+retyping the loop each time.
 
 Testing
 -------

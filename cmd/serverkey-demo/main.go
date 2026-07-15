@@ -8,9 +8,11 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"slices"
 	"time"
 
 	"gomatrixlib/cuckoo"
+	"gomatrixlib/cuckoo/meanminer"
 	"gomatrixlib/fndsa512"
 	"gomatrixlib/keyid"
 	"gomatrixlib/matrixjson"
@@ -181,17 +183,43 @@ func solvePublicationPoW(serverName, keyIDSHA256, metadataDigest, serverKeyObjec
 		return nil, nil, err
 	}
 
+	// The production profile (EdgeBits=29, ProofSize=42) is the one case
+	// where the pure-Go solver is too slow to be practical (single-thread
+	// bitmap trimming, tens of minutes per graph attempt). When the
+	// reference C++ mean-miner has been built (see cuckoo/meanminer), use
+	// it instead — same graph_seed derivation, same SipHash key
+	// convention, just Tromp's actual bucket-sort algorithm rather than a
+	// from-scratch reimplementation.
+	useMeanMiner := profile.Config.EdgeBits == 29 && profile.Config.ProofSize == 42 && meanminer.Available()
+
 	for graphNonce := uint64(0); graphNonce < maxGraphNonce; graphNonce++ {
 		seed := cuckoo.GraphSeed(canonicalChallenge, graphNonce)
-		proof, err := cuckoo.FindProof(profile.Config, seed[:], maxNonce, func(msg string) {
-			fmt.Fprintf(os.Stderr, "[graph %d] %s\n", graphNonce, msg)
-		})
-		if err == cuckoo.ErrNoSolution {
-			continue
+
+		var proof []uint32
+		if useMeanMiner {
+			fmt.Fprintf(os.Stderr, "[graph %d] meanminer: solving EdgeBits=29 ProofSize=42\n", graphNonce)
+			p, ok, err := meanminer.Solve(seed[:], 0)
+			if err != nil {
+				return nil, nil, err
+			}
+			if !ok {
+				continue
+			}
+			slices.Sort(p)
+			proof = p
+		} else {
+			p, err := cuckoo.FindProof(profile.Config, seed[:], maxNonce, func(msg string) {
+				fmt.Fprintf(os.Stderr, "[graph %d] %s\n", graphNonce, msg)
+			})
+			if err == cuckoo.ErrNoSolution {
+				continue
+			}
+			if err != nil {
+				return nil, nil, err
+			}
+			proof = p
 		}
-		if err != nil {
-			return nil, nil, err
-		}
+
 		if err := cuckoo.Verify(profile.Config, seed[:], proof); err != nil {
 			return nil, nil, err
 		}
