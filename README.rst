@@ -102,7 +102,8 @@ Example:
    }
 
    // In production this proof is found by iterating the minting nonce until the
-   // Keccak-derived key_id seed has a valid Cuckoo Cycle solution.
+   // Keccak-derived graph seed has a valid Cuckoo Cycle solution. The final
+   // key_id is derived from that graph seed and the sorted proof solution.
    proof := serverkey.FNDSAMintingProof{
        Algorithm: serverkey.ProductionPoW,
        Nonce:     8137226,
@@ -158,6 +159,10 @@ PoW profile examples:
 
    # Production parameter labels. This is expected to be expensive with the Go helper.
    go run ./cmd/serverkey-demo -pow-profile production -pow-max-nonce 536870912 -pow-max-graph-nonce 1024
+
+   # Production-style nutra.tk bundle using the reference mean-miner.
+   (cd cuckoo/meanminer/csrc && make)
+   go run ./cmd/serverkey-demo -server nutra.tk -valid-days 365 -pow-profile production -pow-max-graph-nonce 1024
 
 Cuckoo Cycle
 ~~~~~~~~~~~~

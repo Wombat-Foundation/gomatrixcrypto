@@ -62,7 +62,7 @@ func NewUnsignedFNDSA(serverName string, publicKey []byte, validUntilTS int64, m
 		return nil, "", fndsa512.ErrInvalidPublicKey
 	}
 
-	keyID, err := KeyID(publicKey, serverName, proof.Nonce)
+	keyID, err := KeyID(publicKey, serverName, proof)
 	if err != nil {
 		return nil, "", err
 	}
@@ -106,7 +106,7 @@ func CogenStamp(publicKey []byte, serverName string) map[string]any {
 	}
 }
 
-func KeyID(publicKey []byte, serverName string, nonce uint64) ([32]byte, error) {
+func GraphSeed(publicKey []byte, serverName string, nonce uint64) ([32]byte, error) {
 	var out [32]byte
 	canonical, err := matrixjson.Canonical(CogenStamp(publicKey, serverName))
 	if err != nil {
@@ -122,8 +122,26 @@ func KeyID(publicKey []byte, serverName string, nonce uint64) ([32]byte, error) 
 	return out, nil
 }
 
-func KeyIDBase64(publicKey []byte, serverName string, nonce uint64) (string, error) {
-	keyID, err := KeyID(publicKey, serverName, nonce)
+func KeyID(publicKey []byte, serverName string, proof FNDSAMintingProof) ([32]byte, error) {
+	var out [32]byte
+	seed, err := GraphSeed(publicKey, serverName, proof.Nonce)
+	if err != nil {
+		return out, err
+	}
+
+	h := sha3.NewLegacyKeccak256()
+	_, _ = h.Write(seed[:])
+	for _, nonce := range proof.Solution {
+		var nonceBytes [4]byte
+		binary.LittleEndian.PutUint32(nonceBytes[:], nonce)
+		_, _ = h.Write(nonceBytes[:])
+	}
+	copy(out[:], h.Sum(nil))
+	return out, nil
+}
+
+func KeyIDBase64(publicKey []byte, serverName string, proof FNDSAMintingProof) (string, error) {
+	keyID, err := KeyID(publicKey, serverName, proof)
 	if err != nil {
 		return "", err
 	}
@@ -238,7 +256,7 @@ func VerifyFNDSASelfSignature(obj map[string]any, serverName string) (string, er
 		if err != nil {
 			return "", err
 		}
-		keyID, err := KeyID(publicKey, serverName, proof.Nonce)
+		keyID, err := KeyID(publicKey, serverName, proof)
 		if err != nil {
 			return "", err
 		}
@@ -290,11 +308,17 @@ func mintingProofFromObject(keyObject map[string]any) (FNDSAMintingProof, error)
 	if err != nil {
 		return FNDSAMintingProof{}, err
 	}
-	return FNDSAMintingProof{Algorithm: algorithm, Nonce: nonce}, nil
+	solution, err := uint32sFromAny(rawPow["solution"])
+	if err != nil {
+		return FNDSAMintingProof{}, err
+	}
+	return FNDSAMintingProof{Algorithm: algorithm, Nonce: nonce, Solution: solution}, nil
 }
 
 func uint64FromAny(v any) (uint64, error) {
 	switch n := v.(type) {
+	case uint32:
+		return uint64(n), nil
 	case uint64:
 		return n, nil
 	case uint:
@@ -325,4 +349,28 @@ func uint32sToAny(values []uint32) []any {
 		out[i] = v
 	}
 	return out
+}
+
+func uint32sFromAny(v any) ([]uint32, error) {
+	if values, ok := v.([]uint32); ok {
+		out := make([]uint32, len(values))
+		copy(out, values)
+		return out, nil
+	}
+	rawValues, ok := v.([]any)
+	if !ok {
+		return nil, ErrInvalidKeyObject
+	}
+	values := make([]uint32, len(rawValues))
+	for i, raw := range rawValues {
+		n, err := uint64FromAny(raw)
+		if err != nil {
+			return nil, err
+		}
+		if n > uint64(^uint32(0)) {
+			return nil, ErrInvalidKeyObject
+		}
+		values[i] = uint32(n)
+	}
+	return values, nil
 }

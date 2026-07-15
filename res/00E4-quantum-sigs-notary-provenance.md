@@ -106,14 +106,14 @@ the Matrix signing object, so the stamp is covered by the origin's server-key
 signatures, included in `server_key_package_sha256`, and preserved by notary
 redistribution without special handling.
 
-**A valid `pow` does not, by itself, prove private-key possession.** `S(nonce)`
-and every input to it — the public key body, `server_name`, and the nonce — are
-public values; anyone who has observed a public key (their own, or one copied
-from another server's response) can mint a valid co-generation proof for it. The
-proof's only job is to rate-limit and anti-spam-gate key minting and rotation;
-it is not an identity credential. Possession of the FN-DSA private key is
-established exclusively by the FN-DSA self-signature: once a server publishes an
-FN-DSA key, its `/_matrix/key/v2/server` response MUST include an FN-DSA
+**A valid `pow` does not, by itself, prove private-key possession.** The graph
+seed and every input to it — the public key body, `server_name`, and the nonce —
+are public values; anyone who has observed a public key (their own, or one
+copied from another server's response) can mint a valid co-generation proof for
+it. The proof's only job is to rate-limit and anti-spam-gate key minting and
+rotation; it is not an identity credential. Possession of the FN-DSA private key
+is established exclusively by the FN-DSA self-signature: once a server publishes
+an FN-DSA key, its `/_matrix/key/v2/server` response MUST include an FN-DSA
 self-signature in the `signatures` field, keyed by that key's `short_key_id`,
 alongside the existing Ed25519 signature. Receiving servers and notaries MUST
 verify this self-signature before trusting the FN-DSA key, independently of and
@@ -126,11 +126,10 @@ above.
 
 Unlike a plain hash of the public key, the key's identity digest here is itself
 proof-of-work-bound: it is a function of the raw public key body, `server_name`,
-and a nonce, and that same digest seeds the Cuckoo Cycle graph. This forces key
-minting and proof-of-work to happen together — an attacker cannot grind
-candidate public keys cheaply and mine a proof for the winner afterward, and
-cannot mine graphs in advance of choosing a key, because no valid digest, and
-therefore no valid graph, exists until a specific candidate key is fixed.
+nonce, and the proof solution. This forces key minting and proof-of-work to
+happen together — an attacker cannot cheaply scan nonce values for a favorable
+`short_key_id` prefix and mine only the winner, because the advertised `key_id`
+does not exist until a concrete Cuckoo Cycle solution exists.
 
 **Identity-binding digest.**
 
@@ -141,27 +140,35 @@ cogen_stamp = {
     "server_name": "example.com"
 }
 
-S(nonce) = Keccak-256(
+graph_seed(nonce) = Keccak-256(
     canonical_json(cogen_stamp) || uint64_le(nonce)
+)
+
+key_id = Keccak-256(
+    graph_seed(nonce) ||
+    uint32_le(solution[0]) ||
+    ... ||
+    uint32_le(solution[41])
 )
 ```
 
 where `canonical_json` is Matrix Canonical JSON serialization,
 `uint64_le(nonce)` is the prover-chosen nonce (`0 ≤ nonce < 2^64`) as 8
-little-endian bytes, and `||` is byte-string concatenation. `key_id` — the
+little-endian bytes, `uint32_le(solution[i])` is each sorted proof edge index as
+4 little-endian bytes, and `||` is byte-string concatenation. `key_id` — the
 identity digest used throughout this MSC family to name a specific key body — is
-defined as `S(nonce)` at the nonce for which the origin mints a proof, not as a
-plain hash of the public key alone. `short_key_id` remains the first 20
-base64url characters of `key_id`, unpadded. `key_id` is a Keccak-256 output
-under this proof class, not a SHA-256 output.
+defined only after a valid proof solution has been found, not as a plain hash of
+the public key alone. `short_key_id` remains the first 20 base64url characters
+of `key_id`, unpadded. `key_id` is a Keccak-256 output under this proof class,
+not a SHA-256 output.
 
 The 20-character `short_key_id` is approximately a 120-bit prefix. This is not
-relied on as a standalone anti-grinding control: an attacker choosing public
-keys and nonces can still search for favorable prefixes, but each acceptable
-candidate must carry a valid minting proof for the resulting `S(nonce)`.
-Receivers rely on the combination of minting cost, full `key_id` validation, and
-MSC4499 First Seen Wins binding rather than trial-verifying colliding
-`short_key_id` candidates.
+relied on as a standalone anti-grinding control. Because `key_id` commits to the
+proof solution, searching for favorable `short_key_id` prefixes requires finding
+valid Cuckoo Cycle proofs for each candidate rather than only hashing cheap
+nonce variants. Receivers rely on the combination of minting cost, full `key_id`
+validation, and MSC4499 First Seen Wins binding rather than trial-verifying
+colliding `short_key_id` candidates.
 
 ```json
 {
@@ -178,17 +185,17 @@ MSC4499 First Seen Wins binding rather than trial-verifying colliding
 
 The verifier reconstructs `cogen_stamp` from the enclosing key response's
 advertised public key and `server_name` rather than receiving it on the wire,
-computes `S(nonce)` using the supplied `nonce`, and MUST check that the
-enclosing key's advertised `short_key_id` equals the first 20 base64url
-characters of `S(nonce)` before evaluating the puzzle. If it does not match, the
-proof MUST be rejected without evaluating the graph.
+computes `graph_seed(nonce)` using the supplied `nonce`, verifies the supplied
+solution against that graph seed, computes `key_id` from the graph seed and
+solution, and MUST check that the enclosing key's advertised `short_key_id`
+equals the first 20 base64url characters of `key_id`.
 
 **Graph derivation.** A given graph contains a 42-cycle only with some
-probability, so the prover iterates the nonce until both the identity digest is
-acceptable and the resulting graph is solvable. The 32-byte `S(nonce)` is
-interpreted directly as four little-endian 64-bit words `k0..k3` forming the
-SipHash-2-4 key. The bipartite graph has `2^29` edges and `2^29` nodes in each
-partition. Edge `i` (for `0 ≤ i < 2^29`) connects:
+probability, so the prover iterates the nonce until the resulting graph is
+solvable. The 32-byte `graph_seed(nonce)` is interpreted directly as four
+little-endian 64-bit words `k0..k3` forming the SipHash-2-4 key. The bipartite
+graph has `2^29` edges and `2^29` nodes in each partition. Edge `i` (for
+`0 ≤ i < 2^29`) connects:
 
 ```text
 u(i) = siphash-2-4(k0..k3, 2i)     mod 2^29   (partition U)
@@ -230,13 +237,15 @@ MUST contain exactly 42 unsigned integer edge indices in strictly increasing
 order (the canonical form of the edge set). Each edge index MUST be less than
 `2^29`, and `nonce` MUST be an integer in `[0, 2^64)`. Verification MUST reject
 duplicate, unsorted, out-of-range, or non-integer entries before evaluating the
-Cuckoo Cycle proof; it then recomputes `S(nonce)`, derives the 84 endpoints of
-the 42 supplied edges, and checks that they form a single 42-cycle. The minting
-stamp has no receiver-issued challenge and no expiry time; it remains valid for
-the committed `(server_name, key_id)` tuple. If either committed value changes,
-the origin MUST produce a new proof (a new key body or new `server_name` changes
-`cogen_stamp`, which changes `S(nonce)` for every nonce, so a stale proof cannot
-be reused). Receivers SHOULD cache successful stamp verification by `key_id`.
+Cuckoo Cycle proof; it then recomputes `graph_seed(nonce)`, derives the 84
+endpoints of the 42 supplied edges, checks that they form a single 42-cycle, and
+derives `key_id` from the graph seed and solution. The minting stamp has no
+receiver-issued challenge and no expiry time; it remains valid for the committed
+`(server_name, key_id)` tuple. If either committed value changes, the origin
+MUST produce a new proof (a new key body or new `server_name` changes
+`cogen_stamp`, which changes `graph_seed(nonce)` for every nonce, so a stale
+proof cannot be reused). Receivers SHOULD cache successful stamp verification by
+`key_id`.
 
 ### Key object validation procedure
 
@@ -258,22 +267,19 @@ later step once a step has failed:
    integers, each strictly less than `2^29`, in strictly increasing order, with
    no duplicates. `pow.nonce` MUST be an integer in `[0, 2^64)`. Any violation
    fails validation here, before any hashing is performed.
-4. **Identity digest recomputation.** Recompute `cogen_stamp` from the enclosing
+4. **Graph seed recomputation.** Recompute `cogen_stamp` from the enclosing
    response's advertised `key` and `server_name`, then compute
-   `S(nonce) = Keccak-256(canonical_json(cogen_stamp) || uint64_le(nonce))`
-   using the supplied `nonce`. This step cannot itself fail; it produces the
-   value the next two steps check against.
-5. **`short_key_id` match.** Compare the enclosing dictionary key's
-   `short_key_id` (the string following `fn-dsa-512:`) against the first 20
-   base64url characters of `S(nonce)`. A mismatch fails validation here — the
-   graph MUST NOT be evaluated.
-6. **Cycle verification.** Only if steps 1-5 all passed: derive `k0..k3` from
-   `S(nonce)`, compute the 84 SipHash-2-4 endpoints for the 42 supplied edge
-   indices, and confirm they form a single cycle of length 42, alternating
-   between partitions, visiting 21 distinct nodes in each, with no repeated
-   edges. This is the only step that requires evaluating the graph; every
-   earlier step exists specifically to let a receiver reject cheaply before
-   reaching it.
+   `graph_seed(nonce) = Keccak-256(canonical_json(cogen_stamp) || uint64_le(nonce))`
+   using the supplied `nonce`.
+5. **Cycle verification.** Derive `k0..k3` from `graph_seed(nonce)`, compute the
+   84 SipHash-2-4 endpoints for the 42 supplied edge indices, and confirm they
+   form a single cycle of length 42, alternating between partitions, visiting 21
+   distinct nodes in each, with no repeated edges.
+6. **`short_key_id` match.** Compute `key_id` as
+   `Keccak-256(graph_seed(nonce) || uint32_le(solution[0]) || ... || uint32_le(solution[41]))`.
+   Compare the enclosing dictionary key's `short_key_id` (the string following
+   `fn-dsa-512:`) against the first 20 base64url characters of `key_id`. A
+   mismatch fails validation here.
 7. **Self-signature.** Independently of steps 1-6: verify the FN-DSA
    self-signature over the enclosing response, keyed by the same `short_key_id`,
    using the advertised `key` (see the self-signature requirement above). This

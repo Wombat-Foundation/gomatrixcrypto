@@ -23,7 +23,7 @@ func testMintingProof(t *testing.T, serverName string, pub []byte) FNDSAMintingP
 	t.Helper()
 	cfg := cuckoo.Config{EdgeBits: 8, ProofSize: 4}
 	for nonce := uint64(0); nonce < 64; nonce++ {
-		seed, err := KeyID(pub, serverName, nonce)
+		seed, err := GraphSeed(pub, serverName, nonce)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -60,7 +60,7 @@ func TestNewSignedFNDSAAndVerify(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	keyID, err := KeyID(pub, "example.com", proof.Nonce)
+	keyID, err := KeyID(pub, "example.com", proof)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +153,7 @@ func TestKeyMetadataAndKeyIDDigests(t *testing.T) {
 		t.Fatalf("empty metadata digest")
 	}
 
-	keyID, err := KeyIDBase64(pub, "example.com", proof.Nonce)
+	keyID, err := KeyIDBase64(pub, "example.com", proof)
 	if err != nil {
 		t.Fatal(err)
 	}

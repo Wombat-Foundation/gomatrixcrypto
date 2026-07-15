@@ -13,7 +13,6 @@ import (
 	"gomatrixlib/cuckoo"
 	"gomatrixlib/cuckoo/meanminer"
 	"gomatrixlib/fndsa512"
-	"gomatrixlib/matrixjson"
 	"gomatrixlib/serverkey"
 )
 
@@ -77,7 +76,7 @@ func main() {
 	if err != nil {
 		fatal(err)
 	}
-	serverKeyObjectDigest, err := canonicalSHA256(obj)
+	serverKeyPackageDigest, err := serverKeyPackageSHA256(obj)
 	if err != nil {
 		fatal(err)
 	}
@@ -97,7 +96,7 @@ func main() {
 	fmt.Printf("short_key_id: %s\n", keyName[len(serverkey.FNDSAAlgorithm)+1:])
 	fmt.Printf("key_id: %s\n", keyID)
 	fmt.Printf("key_metadata_sha256: %s\n", metadataDigest)
-	fmt.Printf("server_key_object_sha256: %s\n", serverKeyObjectDigest)
+	fmt.Printf("server_key_package_sha256: %s\n", serverKeyPackageDigest)
 	fmt.Printf("pow_algorithm: %s\n", proof.Algorithm)
 	if profile.Note != "" {
 		fmt.Printf("pow_profile_note: %s\n", profile.Note)
@@ -148,7 +147,7 @@ func solveMintingPoW(serverName string, publicKey []byte, profile powProfile, ma
 	useMeanMiner := profile.Config.EdgeBits == 29 && profile.Config.ProofSize == 42 && meanminer.Available()
 
 	for nonce := uint64(0); nonce < maxMintingNonce; nonce++ {
-		seed, err := serverkey.KeyID(publicKey, serverName, nonce)
+		seed, err := serverkey.GraphSeed(publicKey, serverName, nonce)
 		if err != nil {
 			return serverkey.FNDSAMintingProof{}, "", err
 		}
@@ -182,22 +181,27 @@ func solveMintingPoW(serverName string, publicKey []byte, profile powProfile, ma
 			return serverkey.FNDSAMintingProof{}, "", err
 		}
 
-		return serverkey.FNDSAMintingProof{
+		mintingProof := serverkey.FNDSAMintingProof{
 			Algorithm: profile.Algorithm,
 			Nonce:     nonce,
 			Solution:  proof,
-		}, base64.RawURLEncoding.EncodeToString(seed[:]), nil
+		}
+		keyID, err := serverkey.KeyIDBase64(publicKey, serverName, mintingProof)
+		if err != nil {
+			return serverkey.FNDSAMintingProof{}, "", err
+		}
+		return mintingProof, keyID, nil
 	}
 
 	return serverkey.FNDSAMintingProof{}, "", cuckoo.ErrNoSolution
 }
 
-func canonicalSHA256(v any) (string, error) {
-	canonical, err := matrixjson.Canonical(v)
+func serverKeyPackageSHA256(obj map[string]any) (string, error) {
+	signingBytes, err := serverkey.SigningBytes(obj)
 	if err != nil {
 		return "", err
 	}
-	sum := sha256.Sum256(canonical)
+	sum := sha256.Sum256(signingBytes)
 	return base64.RawURLEncoding.EncodeToString(sum[:]), nil
 }
 
