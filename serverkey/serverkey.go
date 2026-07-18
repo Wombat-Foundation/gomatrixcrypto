@@ -3,6 +3,7 @@ package serverkey
 import (
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -11,11 +12,14 @@ import (
 	"gomatrixlib/fndsa512"
 	"gomatrixlib/keyid"
 	"gomatrixlib/matrixjson"
+
+	"golang.org/x/crypto/sha3"
 )
 
 const (
 	FNDSAAlgorithm      = "fn-dsa-512"
 	DefaultFIPSRevision = "ipd-2025-08"
+	ProductionPoW       = "tk.nutra.msc45xx.pow.cuckoo-cycle-42-29-keccak256-cogen"
 )
 
 var (
@@ -30,10 +34,16 @@ type FNDSAMetadata struct {
 	Claims          []string
 }
 
+type FNDSAMintingProof struct {
+	Algorithm string
+	Nonce     uint64
+	Solution  []uint32
+}
+
 // NewSignedFNDSA builds a Matrix server-key object with one FN-DSA verify key
 // and adds the matching self-signature.
-func NewSignedFNDSA(rng io.Reader, serverName string, privateKey, publicKey []byte, validUntilTS int64, metadata FNDSAMetadata) (map[string]any, string, error) {
-	obj, keyName, err := NewUnsignedFNDSA(serverName, publicKey, validUntilTS, metadata)
+func NewSignedFNDSA(rng io.Reader, serverName string, privateKey, publicKey []byte, validUntilTS int64, metadata FNDSAMetadata, proof FNDSAMintingProof) (map[string]any, string, error) {
+	obj, keyName, err := NewUnsignedFNDSA(serverName, publicKey, validUntilTS, metadata, proof)
 	if err != nil {
 		return nil, "", err
 	}
@@ -44,7 +54,7 @@ func NewSignedFNDSA(rng io.Reader, serverName string, privateKey, publicKey []by
 }
 
 // NewUnsignedFNDSA builds the key object before signatures are attached.
-func NewUnsignedFNDSA(serverName string, publicKey []byte, validUntilTS int64, metadata FNDSAMetadata) (map[string]any, string, error) {
+func NewUnsignedFNDSA(serverName string, publicKey []byte, validUntilTS int64, metadata FNDSAMetadata, proof FNDSAMintingProof) (map[string]any, string, error) {
 	if serverName == "" {
 		return nil, "", ErrInvalidServerName
 	}
@@ -52,9 +62,12 @@ func NewUnsignedFNDSA(serverName string, publicKey []byte, validUntilTS int64, m
 		return nil, "", fndsa512.ErrInvalidPublicKey
 	}
 
-	shortID := keyid.ShortID(publicKey)
-	keyName := FNDSAAlgorithm + ":" + shortID
-	keyObject := FNDSAKeyObject(publicKey, metadata)
+	keyID, err := KeyID(publicKey, serverName, proof)
+	if err != nil {
+		return nil, "", err
+	}
+	keyName := FNDSAAlgorithm + ":" + ShortKeyID(keyID)
+	keyObject := FNDSAKeyObject(publicKey, metadata, proof)
 
 	return map[string]any{
 		"server_name":     serverName,
@@ -65,9 +78,14 @@ func NewUnsignedFNDSA(serverName string, publicKey []byte, validUntilTS int64, m
 }
 
 // FNDSAKeyObject returns the verify_keys entry for an FN-DSA public key.
-func FNDSAKeyObject(publicKey []byte, metadata FNDSAMetadata) map[string]any {
+func FNDSAKeyObject(publicKey []byte, metadata FNDSAMetadata, proof FNDSAMintingProof) map[string]any {
 	keyObject := map[string]any{
 		"key": base64.RawStdEncoding.EncodeToString(publicKey),
+		"pow": map[string]any{
+			"algorithm": proof.Algorithm,
+			"nonce":     proof.Nonce,
+			"solution":  uint32sToAny(proof.Solution),
+		},
 	}
 	if metadata.FIPS206Revision != "" {
 		keyObject["fips_206_revision"] = metadata.FIPS206Revision
@@ -78,6 +96,66 @@ func FNDSAKeyObject(publicKey []byte, metadata FNDSAMetadata) map[string]any {
 		keyObject["claims"] = claims
 	}
 	return keyObject
+}
+
+func CogenStamp(publicKey []byte, serverName string) map[string]any {
+	return map[string]any{
+		"action":      "fn-dsa-key-graph",
+		"public_key":  base64.RawStdEncoding.EncodeToString(publicKey),
+		"server_name": serverName,
+	}
+}
+
+func MintingObject(publicKey []byte, serverName string, proof FNDSAMintingProof) map[string]any {
+	return map[string]any{
+		"action":      "fn-dsa-minting-object",
+		"algorithm":   proof.Algorithm,
+		"nonce":       proof.Nonce,
+		"public_key":  base64.RawStdEncoding.EncodeToString(publicKey),
+		"server_name": serverName,
+		"solution":    uint32sToAny(proof.Solution),
+	}
+}
+
+func GraphSeed(publicKey []byte, serverName string, nonce uint64) ([32]byte, error) {
+	var out [32]byte
+	canonical, err := matrixjson.Canonical(CogenStamp(publicKey, serverName))
+	if err != nil {
+		return out, err
+	}
+	var nonceBytes [8]byte
+	binary.LittleEndian.PutUint64(nonceBytes[:], nonce)
+
+	h := sha3.NewLegacyKeccak256()
+	_, _ = h.Write(canonical)
+	_, _ = h.Write(nonceBytes[:])
+	copy(out[:], h.Sum(nil))
+	return out, nil
+}
+
+func KeyID(publicKey []byte, serverName string, proof FNDSAMintingProof) ([32]byte, error) {
+	var out [32]byte
+	canonical, err := matrixjson.Canonical(MintingObject(publicKey, serverName, proof))
+	if err != nil {
+		return out, err
+	}
+
+	h := sha3.NewLegacyKeccak256()
+	_, _ = h.Write(canonical)
+	copy(out[:], h.Sum(nil))
+	return out, nil
+}
+
+func KeyIDBase64(publicKey []byte, serverName string, proof FNDSAMintingProof) (string, error) {
+	keyID, err := KeyID(publicKey, serverName, proof)
+	if err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(keyID[:]), nil
+}
+
+func ShortKeyID(keyID [32]byte) string {
+	return base64.RawURLEncoding.EncodeToString(keyID[:])[:20]
 }
 
 // SignFNDSA signs obj as a Matrix server-key object and stores the signature in
@@ -141,7 +219,7 @@ func KeyMetadataSHA256(keyObject map[string]any) (string, error) {
 	return base64.RawURLEncoding.EncodeToString(sum[:]), nil
 }
 
-// KeyIDSHA256 returns the base64url canonical full key ID digest for publicKey.
+// KeyIDSHA256 returns the archived SHA-256 key fingerprint for publicKey.
 func KeyIDSHA256(publicKey []byte) string {
 	sum := keyid.SHA256(publicKey)
 	return base64.RawURLEncoding.EncodeToString(sum[:])
@@ -180,7 +258,15 @@ func VerifyFNDSASelfSignature(obj map[string]any, serverName string) (string, er
 		if err != nil {
 			return "", err
 		}
-		if keyName != FNDSAAlgorithm+":"+keyid.ShortID(publicKey) {
+		proof, err := mintingProofFromObject(keyObject)
+		if err != nil {
+			return "", err
+		}
+		keyID, err := KeyID(publicKey, serverName, proof)
+		if err != nil {
+			return "", err
+		}
+		if keyName != FNDSAAlgorithm+":"+ShortKeyID(keyID) {
 			return "", ErrInvalidKeyName
 		}
 		rawSig, ok := serverSigs[keyName].(string)
@@ -213,4 +299,84 @@ func publicKeyFromObject(keyObject map[string]any) ([]byte, error) {
 		return nil, fmt.Errorf("%w: got %d want %d", fndsa512.ErrInvalidPublicKey, len(publicKey), fndsa512.PublicKeySize)
 	}
 	return publicKey, nil
+}
+
+func mintingProofFromObject(keyObject map[string]any) (FNDSAMintingProof, error) {
+	rawPow, ok := keyObject["pow"].(map[string]any)
+	if !ok {
+		return FNDSAMintingProof{}, ErrInvalidKeyObject
+	}
+	algorithm, ok := rawPow["algorithm"].(string)
+	if !ok || algorithm == "" {
+		return FNDSAMintingProof{}, ErrInvalidKeyObject
+	}
+	nonce, err := uint64FromAny(rawPow["nonce"])
+	if err != nil {
+		return FNDSAMintingProof{}, err
+	}
+	solution, err := uint32sFromAny(rawPow["solution"])
+	if err != nil {
+		return FNDSAMintingProof{}, err
+	}
+	return FNDSAMintingProof{Algorithm: algorithm, Nonce: nonce, Solution: solution}, nil
+}
+
+func uint64FromAny(v any) (uint64, error) {
+	switch n := v.(type) {
+	case uint32:
+		return uint64(n), nil
+	case uint64:
+		return n, nil
+	case uint:
+		return uint64(n), nil
+	case int:
+		if n < 0 {
+			return 0, ErrInvalidKeyObject
+		}
+		return uint64(n), nil
+	case int64:
+		if n < 0 {
+			return 0, ErrInvalidKeyObject
+		}
+		return uint64(n), nil
+	case float64:
+		if n < 0 || n != float64(uint64(n)) {
+			return 0, ErrInvalidKeyObject
+		}
+		return uint64(n), nil
+	default:
+		return 0, ErrInvalidKeyObject
+	}
+}
+
+func uint32sToAny(values []uint32) []any {
+	out := make([]any, len(values))
+	for i, v := range values {
+		out[i] = v
+	}
+	return out
+}
+
+func uint32sFromAny(v any) ([]uint32, error) {
+	if values, ok := v.([]uint32); ok {
+		out := make([]uint32, len(values))
+		copy(out, values)
+		return out, nil
+	}
+	rawValues, ok := v.([]any)
+	if !ok {
+		return nil, ErrInvalidKeyObject
+	}
+	values := make([]uint32, len(rawValues))
+	for i, raw := range rawValues {
+		n, err := uint64FromAny(raw)
+		if err != nil {
+			return nil, err
+		}
+		if n > uint64(^uint32(0)) {
+			return nil, ErrInvalidKeyObject
+		}
+		values[i] = uint32(n)
+	}
+	return values, nil
 }

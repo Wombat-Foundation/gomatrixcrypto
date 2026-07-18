@@ -43,7 +43,7 @@ func (c Config) edgeMask() uint64 {
 }
 
 func (c Config) nodeMask() uint64 {
-	return c.edgeMask() >> 1
+	return c.edgeMask()
 }
 
 type Edge struct {
@@ -287,7 +287,10 @@ func FindProof(cfg Config, seed []byte, maxNonce uint32, onProgress ...func(stri
 
 	startTime := time.Now()
 	numEdges := uint64(maxNonce)
-	nodeCount := uint64(1) << cfg.EdgeBits
+	// Each partition now spans the full 2^EdgeBits node range (nodeMask is
+	// full-width), and u/v encode the partition as an extra low bit, so the
+	// combined tagged node-id space is 2^(EdgeBits+1).
+	nodeCount := uint64(2) << cfg.EdgeBits
 	mask := cfg.nodeMask()
 
 	edgeEndpoints := func(nonce uint32) (u, v uint64) {

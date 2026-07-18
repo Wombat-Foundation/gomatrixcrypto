@@ -5,9 +5,15 @@
 .DS_Store
 *.swp
 
+# IDE stuff
+.idea/
+
 # Go build/test artifacts
 *.test
 *.out
 coverage.out
 cover.out
 /bin/
+
+# compiled meanminer solver binary (build via cuckoo/meanminer/csrc/Makefile)
+cuckoo/meanminer/cuckoo_solve_29_42

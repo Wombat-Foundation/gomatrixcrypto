@@ -11,6 +11,8 @@ This repository currently provides:
 * ``matrixjson``: Matrix Canonical JSON encoding for signed objects
 * ``serverkey``: FN-DSA server-key object construction and self-signing
 * ``cuckoo``: Cuckoo Cycle proof generation and verification helpers
+* ``cmd/cuckoo-scan``: helper command that scans graph nonces until the
+  reference mean-miner finds a proof
 
 Status
 ------
@@ -99,6 +101,15 @@ Example:
        panic(err)
    }
 
+   // In production this proof is found by iterating the minting nonce until the
+   // Keccak-derived graph seed has a valid Cuckoo Cycle solution. The final
+   // key_id is derived from that graph seed and the sorted proof solution.
+   proof := serverkey.FNDSAMintingProof{
+       Algorithm: serverkey.ProductionPoW,
+       Nonce:     8137226,
+       Solution:  []uint32{ /* 42 sorted edge nonces */ },
+   }
+
    obj, keyName, err := serverkey.NewSignedFNDSA(
        nil,
        "example.com",
@@ -112,6 +123,7 @@ Example:
                "constant-time-signing",
            },
        },
+       proof,
    )
    if err != nil {
        panic(err)
@@ -122,17 +134,18 @@ Example:
        panic("invalid self-signature")
    }
 
-Demo command, including a low-difficulty Cuckoo proof bound to the generated
-key ID, key metadata, and canonical signed server-key object:
+Demo command, including a low-difficulty Cuckoo proof embedded in the generated
+FN-DSA verify key object:
 
 .. code-block:: bash
 
    go run ./cmd/serverkey-demo -server example.com -valid-days 7
 
 The demo uses ``-pow-edge-bits 8 -pow-proof-size 4`` and searches ``1<<12``
-edge nonces by default, so it is intentionally easy: it looks for a 4-cycle in
-a tiny graph and often solves at graph nonce 0. The production profile described
-in ``res/`` is ``42-29`` and is intentionally much more expensive.
+edge nonces per minting nonce by default, so it is intentionally easy: it looks
+for a 4-cycle in a tiny graph. The live production profile described in
+``res/`` is ``42-29`` with a Keccak-256 co-generation seed and is intentionally
+much more expensive.
 
 PoW profile examples:
 
@@ -142,10 +155,14 @@ PoW profile examples:
    go run ./cmd/serverkey-demo -server example.com
 
    # Custom profile and algorithm label.
-   go run ./cmd/serverkey-demo -pow-profile custom -pow-algorithm local.cuckoo-cycle-6-12-sha256 -pow-edge-bits 12 -pow-proof-size 6 -pow-max-nonce 65536
+   go run ./cmd/serverkey-demo -pow-profile custom -pow-algorithm local.cuckoo-cycle-6-12-keccak256-cogen -pow-edge-bits 12 -pow-proof-size 6 -pow-max-nonce 65536
 
    # Production parameter labels. This is expected to be expensive with the Go helper.
    go run ./cmd/serverkey-demo -pow-profile production -pow-max-nonce 536870912 -pow-max-graph-nonce 1024
+
+   # Production-style nutra.tk bundle using the reference mean-miner.
+   (cd cuckoo/meanminer/csrc && make)
+   go run ./cmd/serverkey-demo -server nutra.tk -valid-days 365 -pow-profile production -pow-max-graph-nonce 1024
 
 Cuckoo Cycle
 ~~~~~~~~~~~~
@@ -166,6 +183,21 @@ Example:
    }
 
    err = cuckoo.Verify(cfg, seed, proof)
+
+Reference mean-miner scan helper:
+
+.. code-block:: bash
+
+   # Build the reference solver first.
+   (cd cuckoo/meanminer/csrc && make)
+
+   # Scan graph nonces until the first solvable graph is found.
+   go run ./cmd/cuckoo-scan -prefix manual-test -start 0 -limit 200 -threads 6
+
+The helper hashes ``<prefix> + little-endian uint64(graph_nonce)`` with
+``SHA-256`` to derive the 32-byte graph seed for each attempt. It is useful
+when you want to reproduce the shell loop used during solver testing without
+retyping the loop each time.
 
 Testing
 -------
