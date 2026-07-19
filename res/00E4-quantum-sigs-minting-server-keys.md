@@ -66,12 +66,13 @@ interoperate only when they implement the same FIPS 206 revision, encodings, and
 signing operation. Subtle differences in encoding or signature mode can cause
 network divergence.
 
-Implementations that generate FN-DSA server-key private material SHOULD support
+Implementations that generate FN-DSA server-key private material MUST support
 encrypting that material immediately after generation and before displaying,
-logging, or writing any export artifact. A passphrase-based export format SHOULD
-use a memory-hard password KDF such as Argon2id with a fresh random salt, and an
-AEAD such as XChaCha20-Poly1305 with a fresh random nonce. The encrypted private
-key export is operator-local secret material: it MUST NOT appear in
+logging, or writing any export artifact. Operators MAY choose whether to use
+that encryption support for a given deployment. A passphrase-based export format
+SHOULD use a memory-hard password KDF such as Argon2id with a fresh random salt,
+and an AEAD such as XChaCha20-Poly1305 with a fresh random nonce. The encrypted
+private key export is operator-local secret material: it MUST NOT appear in
 `/_matrix/key/v2/server`, notary responses, signed observation records, or any
 canonical server-key package hash.
 
