@@ -1,6 +1,7 @@
 package serverkey
 
 import (
+	"bytes"
 	"encoding/base64"
 	"errors"
 	"io"
@@ -35,7 +36,7 @@ func testMintingProof(t *testing.T, serverName string, pub []byte) FNDSAMintingP
 			t.Fatal(err)
 		}
 		return FNDSAMintingProof{
-			Algorithm: "test.cuckoo-cycle-4-8-keccak256-cogen",
+			Algorithm: "test.cuckoo-cycle-4-8-sha3-256-cogen",
 			Nonce:     nonce,
 			Solution:  proof,
 		}
@@ -82,6 +83,9 @@ func TestNewSignedFNDSAAndVerify(t *testing.T) {
 	}
 	if _, ok := keyObject["pow"].(map[string]any); !ok {
 		t.Fatalf("missing pow object")
+	}
+	if trustedNotaryKeys, ok := obj["trusted_notary_keys"].([]any); !ok || len(trustedNotaryKeys) != 0 {
+		t.Fatalf("trusted_notary_keys should default to an empty array")
 	}
 }
 
@@ -285,5 +289,50 @@ func TestVerifyFNDSASelfSignatureRejectsMissingAndBadSignature(t *testing.T) {
 func TestKeyMetadataSHA256RejectsUnsupportedObject(t *testing.T) {
 	if _, err := KeyMetadataSHA256(map[string]any{"bad": 1.5}); !errors.Is(err, matrixjson.ErrUnsupportedType) {
 		t.Fatalf("expected unsupported metadata object, got %v", err)
+	}
+}
+
+func TestEncryptPrivateKeyRoundTrip(t *testing.T) {
+	priv, _, err := fndsa512.GenerateKey(testRNG("serverkey-encryption-keygen"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	params := PrivateKeyEncryptionParams{
+		Time:      1,
+		MemoryKiB: 8 * 1024,
+		Threads:   1,
+		Salt:      bytes.Repeat([]byte{0x11}, privateKeySaltSize),
+		Nonce:     bytes.Repeat([]byte{0x22}, 24),
+	}
+	encrypted, err := EncryptPrivateKey(nil, priv, []byte("correct horse battery staple"), params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := encrypted["algorithm"]; got != EncryptedPrivateKeyAlgorithm {
+		t.Fatalf("algorithm mismatch: got %v", got)
+	}
+
+	decrypted, err := DecryptPrivateKey(encrypted, []byte("correct horse battery staple"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(decrypted, priv) {
+		t.Fatalf("private key round trip mismatch")
+	}
+	if _, err := DecryptPrivateKey(encrypted, []byte("wrong passphrase")); err == nil {
+		t.Fatalf("expected wrong passphrase to fail")
+	}
+}
+
+func TestEncryptPrivateKeyRejectsInvalidInputs(t *testing.T) {
+	params := PrivateKeyEncryptionParams{Time: 1, MemoryKiB: 8 * 1024, Threads: 1}
+	if _, err := EncryptPrivateKey(nil, []byte("short"), []byte("passphrase"), params); !errors.Is(err, fndsa512.ErrInvalidPrivateKey) {
+		t.Fatalf("expected invalid private key, got %v", err)
+	}
+	if _, err := EncryptPrivateKey(nil, make([]byte, fndsa512.PrivateKeySize), nil, params); !errors.Is(err, ErrInvalidPassphrase) {
+		t.Fatalf("expected invalid passphrase, got %v", err)
+	}
+	if _, err := EncryptPrivateKey(nil, make([]byte, fndsa512.PrivateKeySize), []byte("passphrase"), PrivateKeyEncryptionParams{}); !errors.Is(err, ErrInvalidKeyObject) {
+		t.Fatalf("expected invalid params, got %v", err)
 	}
 }

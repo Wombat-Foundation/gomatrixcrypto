@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"slices"
+	"strings"
 	"time"
 
 	"gomatrixlib/cuckoo"
@@ -35,6 +36,8 @@ func main() {
 	demoProfile := flag.Bool("pow-demo-profile", true, "mark -pow-profile custom output as demo-only")
 	maxNonce := flag.Uint("pow-max-nonce", 1<<12, "maximum edge nonce to search per minting nonce")
 	maxMintingNonce := flag.Uint64("pow-max-graph-nonce", 256, "maximum minting nonce attempts")
+	privateKeyPassphraseEnv := flag.String("private-key-passphrase-env", "", "environment variable containing a passphrase for encrypted private-key output")
+	privateKeyPassphraseFile := flag.String("private-key-passphrase-file", "", "file containing a passphrase for encrypted private-key output")
 	flag.Parse()
 
 	profile, err := configurePoWProfile(*profileName, *edgeBits, *proofSize, *powAlgorithm, *demoProfile)
@@ -42,9 +45,21 @@ func main() {
 		fatal(err)
 	}
 
+	passphrase, err := privateKeyPassphrase(*privateKeyPassphraseEnv, *privateKeyPassphraseFile)
+	if err != nil {
+		fatal(err)
+	}
+
 	priv, pub, err := fndsa512.GenerateKey(nil)
 	if err != nil {
 		fatal(err)
+	}
+	var encryptedPrivateKey map[string]any
+	if len(passphrase) > 0 {
+		encryptedPrivateKey, err = serverkey.EncryptPrivateKey(nil, priv, passphrase, serverkey.DefaultPrivateKeyEncryptionParams())
+		if err != nil {
+			fatal(err)
+		}
 	}
 
 	proof, keyID, err := solveMintingPoW(*serverName, pub, profile, uint32(*maxNonce), *maxMintingNonce)
@@ -102,11 +117,39 @@ func main() {
 		fmt.Printf("pow_profile_note: %s\n", profile.Note)
 	}
 	fmt.Printf("pow_nonce: %v\n", proof.Nonce)
-	fmt.Printf("private_key_base64: %s\n", base64.RawStdEncoding.EncodeToString(priv))
+	if encryptedPrivateKey != nil {
+		fmt.Println("encrypted_private_key:")
+		if err := enc.Encode(encryptedPrivateKey); err != nil {
+			fatal(err)
+		}
+	} else {
+		fmt.Printf("private_key_base64: %s\n", base64.RawStdEncoding.EncodeToString(priv))
+	}
 	fmt.Println("server_key_response:")
 	if err := enc.Encode(bundle); err != nil {
 		fatal(err)
 	}
+}
+
+func privateKeyPassphrase(envName, fileName string) ([]byte, error) {
+	if envName != "" && fileName != "" {
+		return nil, fmt.Errorf("use only one of -private-key-passphrase-env or -private-key-passphrase-file")
+	}
+	if envName != "" {
+		passphrase, ok := os.LookupEnv(envName)
+		if !ok {
+			return nil, fmt.Errorf("environment variable %s is not set", envName)
+		}
+		return []byte(passphrase), nil
+	}
+	if fileName != "" {
+		passphrase, err := os.ReadFile(fileName)
+		if err != nil {
+			return nil, err
+		}
+		return []byte(strings.TrimRight(string(passphrase), "\r\n")), nil
+	}
+	return nil, nil
 }
 
 func configurePoWProfile(name string, edgeBits uint, proofSize int, algorithm string, demo bool) (powProfile, error) {
@@ -114,7 +157,7 @@ func configurePoWProfile(name string, edgeBits uint, proofSize int, algorithm st
 	case "demo":
 		cfg := cuckoo.Config{EdgeBits: edgeBits, ProofSize: proofSize}
 		return powProfile{
-			Algorithm: fmt.Sprintf("demo.cuckoo-cycle-%d-%d-keccak256-cogen", cfg.ProofSize, cfg.EdgeBits),
+			Algorithm: fmt.Sprintf("demo.cuckoo-cycle-%d-%d-sha3-256-cogen", cfg.ProofSize, cfg.EdgeBits),
 			Config:    cfg,
 			Demo:      true,
 			Note:      demoPoWProfileNote,

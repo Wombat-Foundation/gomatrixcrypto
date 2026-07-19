@@ -109,8 +109,8 @@ unaffected — they continue to use the device ID as their `<key_id>` (e.g.,
 
 This E2EE cross-signing `<key_id>` construction is intentionally separate from
 the server-key `key_id` defined by MSC00E4. Server keys use the minting-bound
-Keccak-derived identifier from MSC00E4 because their identifier participates in
-server-key publication, notary observation, and First Seen Wins collision
+SHA3-256-derived identifier from MSC00E4 because their identifier participates
+in server-key publication, notary observation, and First Seen Wins collision
 handling. E2EE cross-signing keys do not use that server-key minting flow.
 
 When cross-signing a device key, the signing client SHOULD produce both an

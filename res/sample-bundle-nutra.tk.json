@@ -8,6 +8,7 @@
                 "fn-dsa-512:<short_key_id>": "<base64-fn-dsa-512-self-signature>"
             }
         },
+        "trusted_notary_keys": [],
         "valid_until_ts": 1815617991940,
         "verify_keys": {
             "fn-dsa-512:<short_key_id>": {
@@ -18,7 +19,7 @@
                 "fips_206_revision": "ipd-2025-08",
                 "key": "<unpadded-base64-fn-dsa-512-public-key>",
                 "pow": {
-                    "algorithm": "demo.cuckoo-cycle-4-8-keccak256-cogen",
+                    "algorithm": "demo.cuckoo-cycle-4-8-sha3-256-cogen",
                     "nonce": 0,
                     "solution": [
                         0,

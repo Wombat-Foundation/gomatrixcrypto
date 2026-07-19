@@ -19,7 +19,7 @@ import (
 const (
 	FNDSAAlgorithm      = "fn-dsa-512"
 	DefaultFIPSRevision = "ipd-2025-08"
-	ProductionPoW       = "tk.nutra.msc45xx.pow.cuckoo-cycle-42-29-keccak256-cogen"
+	ProductionPoW       = "tk.nutra.msc45xx.pow.cuckoo-cycle-42-29-sha3-256-cogen"
 )
 
 var (
@@ -70,10 +70,11 @@ func NewUnsignedFNDSA(serverName string, publicKey []byte, validUntilTS int64, m
 	keyObject := FNDSAKeyObject(publicKey, metadata, proof)
 
 	return map[string]any{
-		"server_name":     serverName,
-		"verify_keys":     map[string]any{keyName: keyObject},
-		"old_verify_keys": map[string]any{},
-		"valid_until_ts":  validUntilTS,
+		"server_name":         serverName,
+		"verify_keys":         map[string]any{keyName: keyObject},
+		"old_verify_keys":     map[string]any{},
+		"trusted_notary_keys": []any{},
+		"valid_until_ts":      validUntilTS,
 	}, keyName, nil
 }
 
@@ -126,7 +127,7 @@ func GraphSeed(publicKey []byte, serverName string, nonce uint64) ([32]byte, err
 	var nonceBytes [8]byte
 	binary.LittleEndian.PutUint64(nonceBytes[:], nonce)
 
-	h := sha3.NewLegacyKeccak256()
+	h := sha3.New256()
 	_, _ = h.Write(canonical)
 	_, _ = h.Write(nonceBytes[:])
 	copy(out[:], h.Sum(nil))
@@ -140,7 +141,7 @@ func KeyID(publicKey []byte, serverName string, proof FNDSAMintingProof) ([32]by
 		return out, err
 	}
 
-	h := sha3.NewLegacyKeccak256()
+	h := sha3.New256()
 	_, _ = h.Write(canonical)
 	copy(out[:], h.Sum(nil))
 	return out, nil
@@ -323,6 +324,10 @@ func mintingProofFromObject(keyObject map[string]any) (FNDSAMintingProof, error)
 
 func uint64FromAny(v any) (uint64, error) {
 	switch n := v.(type) {
+	case uint8:
+		return uint64(n), nil
+	case uint16:
+		return uint64(n), nil
 	case uint32:
 		return uint64(n), nil
 	case uint64:

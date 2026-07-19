@@ -102,7 +102,7 @@ Example:
    }
 
    // In production this proof is found by iterating the minting nonce until the
-   // Keccak-derived graph seed has a valid Cuckoo Cycle solution. The final
+   // SHA3-256-derived graph seed has a valid Cuckoo Cycle solution. The final
    // key_id is derived from that graph seed and the sorted proof solution.
    proof := serverkey.FNDSAMintingProof{
        Algorithm: serverkey.ProductionPoW,
@@ -141,10 +141,17 @@ FN-DSA verify key object:
 
    go run ./cmd/serverkey-demo -server example.com -valid-days 7
 
+To encrypt the generated private key before it is printed, provide the
+passphrase through an environment variable or a file:
+
+.. code-block:: bash
+
+   SERVERKEY_PASSPHRASE='replace with a secret phrase' go run ./cmd/serverkey-demo -server example.com -private-key-passphrase-env SERVERKEY_PASSPHRASE
+
 The demo uses ``-pow-edge-bits 8 -pow-proof-size 4`` and searches ``1<<12``
 edge nonces per minting nonce by default, so it is intentionally easy: it looks
 for a 4-cycle in a tiny graph. The live production profile described in
-``res/`` is ``42-29`` with a Keccak-256 co-generation seed and is intentionally
+``res/`` is ``42-29`` with a SHA3-256 co-generation seed and is intentionally
 much more expensive.
 
 PoW profile examples:
@@ -155,7 +162,7 @@ PoW profile examples:
    go run ./cmd/serverkey-demo -server example.com
 
    # Custom profile and algorithm label.
-   go run ./cmd/serverkey-demo -pow-profile custom -pow-algorithm local.cuckoo-cycle-6-12-keccak256-cogen -pow-edge-bits 12 -pow-proof-size 6 -pow-max-nonce 65536
+   go run ./cmd/serverkey-demo -pow-profile custom -pow-algorithm local.cuckoo-cycle-6-12-sha3-256-cogen -pow-edge-bits 12 -pow-proof-size 6 -pow-max-nonce 65536
 
    # Production parameter labels. This is expected to be expensive with the Go helper.
    go run ./cmd/serverkey-demo -pow-profile production -pow-max-nonce 536870912 -pow-max-graph-nonce 1024
