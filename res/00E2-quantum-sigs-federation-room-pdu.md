@@ -80,11 +80,11 @@ In room versions that require PQC signatures (see
 
 ```json
 {
-    "signatures": {
-        "example.com": {
-            "fn-dsa-512:5FQ2xg4sWqj3Kp9N": "<base64-fn-dsa-512-signature>"
-        }
+  "signatures": {
+    "example.com": {
+      "fn-dsa-512:5FQ2xg4sWqj3Kp9N": "<base64-fn-dsa-512-signature>"
     }
+  }
 }
 ```
 
@@ -102,10 +102,10 @@ is placed alongside the existing content hash in the `hashes` object:
 
 ```json
 {
-    "hashes": {
-        "sha256": "<content-hash-excluding-signatures>",
-        "canonical_sha256": "<hash-over-entire-event-including-signatures>"
-    }
+  "hashes": {
+    "sha256": "<content-hash-excluding-signatures>",
+    "canonical_sha256": "<hash-over-entire-event-including-signatures>"
+  }
 }
 ```
 
@@ -351,31 +351,30 @@ The new room version does **not** change:
   signature set of event N, theoretically allowing the original signatures to be
   pruned once a successor exists. This is fundamentally incompatible with
   Matrix's zero-trust federation model:
-    1. **Zero-trust violation.** Independent verification is a core invariant.
-       Every server must independently verify historical signatures during state
-       resolution, backfill, or gap-fill. If signatures are pruned, late-joining
-       servers must blindly trust the chain rather than verifying the
-       cryptography.
-    2. **Identity mutation DoS.** If signatures were part of the Event ID, any
-       intermediary server could fork the DAG by appending a spurious signature
-       to an event in transit — creating a mathematically distinct Event ID for
-       identical content. This is the exact class of attack that motivated the
-       Room Version 3 redesign (MSC1659).
-    3. **Co-signing paradox.** The `/send_join` protocol requires the resident
-       server to append its co-signature to the joining server's event. If
-       signatures were hashed into the Event ID, the joining server and the rest
-       of the federation would compute different Event IDs for the same join
-       event, permanently splintering the DAG.
-    4. **DAG topology.** Matrix's DAG contains forks and merges. There is no
-       single linear canonical successor to cleanly anchor a signature
-       commitment.
+  1. **Zero-trust violation.** Independent verification is a core invariant.
+     Every server must independently verify historical signatures during state
+     resolution, backfill, or gap-fill. If signatures are pruned, late-joining
+     servers must blindly trust the chain rather than verifying the
+     cryptography.
+  2. **Identity mutation DoS.** If signatures were part of the Event ID, any
+     intermediary server could fork the DAG by appending a spurious signature to
+     an event in transit — creating a mathematically distinct Event ID for
+     identical content. This is the exact class of attack that motivated the
+     Room Version 3 redesign (MSC1659).
+  3. **Co-signing paradox.** The `/send_join` protocol requires the resident
+     server to append its co-signature to the joining server's event. If
+     signatures were hashed into the Event ID, the joining server and the rest
+     of the federation would compute different Event IDs for the same join
+     event, permanently splintering the DAG.
+  4. **DAG topology.** Matrix's DAG contains forks and merges. There is no
+     single linear canonical successor to cleanly anchor a signature commitment.
 
-    Matrix explicitly excludes signatures from the Event ID so that the DAG
-    commits to content, not authorship, by design (Room Version 3+). Changing
-    this would be a fundamental protocol redesign, not an optimization. The
-    [`canonical_sha256`](#canonical-event-hash-canonical_sha256) field provides
-    the useful subset of this idea — mutation detection — without touching event
-    identity.
+  Matrix explicitly excludes signatures from the Event ID so that the DAG
+  commits to content, not authorship, by design (Room Version 3+). Changing this
+  would be a fundamental protocol redesign, not an optimization. The
+  [`canonical_sha256`](#canonical-event-hash-canonical_sha256) field provides
+  the useful subset of this idea — mutation detection — without touching event
+  identity.
 
 - **Extending Olm/Megolm to PQC.** Key agreement migration (Curve25519 → ML-KEM)
   is orthogonal and far more complex. Bundling would delay everything. Signature
@@ -453,16 +452,16 @@ unstable period, PDU `signatures` entries use the unstable algorithm identifier:
 
 ```json
 {
-    "room_version": "tk.nutra.msc45yy.pqc.v1",
-    "hashes": {
-        "sha256": "<content-hash>",
-        "tk.nutra.msc45yy.canonical_sha256": "<canonical-hash>"
-    },
-    "signatures": {
-        "example.com": {
-            "tk.nutra.msc45xx.fn-dsa-512:5FQ2xg4sWqj3Kp9N": "<base64-fn-dsa-512-signature>"
-        }
+  "room_version": "tk.nutra.msc45yy.pqc.v1",
+  "hashes": {
+    "sha256": "<content-hash>",
+    "tk.nutra.msc45yy.canonical_sha256": "<canonical-hash>"
+  },
+  "signatures": {
+    "example.com": {
+      "tk.nutra.msc45xx.fn-dsa-512:5FQ2xg4sWqj3Kp9N": "<base64-fn-dsa-512-signature>"
     }
+  }
 }
 ```
 
@@ -519,42 +518,42 @@ verification:
 - [ ] Are all MSCs that this MSC depends on already accepted? (Depends on MSC
       00E4 and MSC 00E5.)
 - [x] For each endpoint that is introduced or modified:
-    - [x] Have authentication requirements been specified? (Room-scoped PQC
-          transport authentication on existing federation endpoints; no new
-          endpoints.)
-    - [x] Have rate-limiting requirements been specified? (Unchanged from
-          existing federation endpoints.)
-    - [x] Have guest access requirements been specified? (N/A — server-to-server
-          API.)
-    - [x] Are error responses specified?
-        - [x] Does each error case have a specified `errcode` (i.e.
-              `M_FORBIDDEN`) and HTTP status code? (`401 Unauthorized` for
-              missing/invalid PQC transport authentication on PQC-room traffic.)
-            - [x] If a new `errcode` is introduced, is it clear that it is new?
-                  (No new errcodes.)
-    - [x] Are the
-          [endpoint conventions](https://spec.matrix.org/latest/appendices/#conventions-for-matrix-apis)
-          honoured?
-        - [x] Do HTTP endpoints `use_underscores_like_this`?
-        - [x] Will the endpoint return unbounded data? If so, has pagination
-              been considered? (N/A.)
-        - [x] If the endpoint utilises pagination, is it consistent with
-              [the appendices](https://spec.matrix.org/latest/appendices/#pagination)?
-              (N/A.)
+  - [x] Have authentication requirements been specified? (Room-scoped PQC
+        transport authentication on existing federation endpoints; no new
+        endpoints.)
+  - [x] Have rate-limiting requirements been specified? (Unchanged from existing
+        federation endpoints.)
+  - [x] Have guest access requirements been specified? (N/A — server-to-server
+        API.)
+  - [x] Are error responses specified?
+    - [x] Does each error case have a specified `errcode` (i.e. `M_FORBIDDEN`)
+          and HTTP status code? (`401 Unauthorized` for missing/invalid PQC
+          transport authentication on PQC-room traffic.)
+      - [x] If a new `errcode` is introduced, is it clear that it is new? (No
+            new errcodes.)
+  - [x] Are the
+        [endpoint conventions](https://spec.matrix.org/latest/appendices/#conventions-for-matrix-apis)
+        honoured?
+    - [x] Do HTTP endpoints `use_underscores_like_this`?
+    - [x] Will the endpoint return unbounded data? If so, has pagination been
+          considered? (N/A.)
+    - [x] If the endpoint utilises pagination, is it consistent with
+          [the appendices](https://spec.matrix.org/latest/appendices/#pagination)?
+          (N/A.)
 - [x] Will the MSC require a new room version, and if so, has that been made
       clear?
-    - [x] Is the reason for a new room version clearly stated? For example,
-          modifying the set of redacted fields changes how event IDs are
-          calculated, thus requiring a new room version. (PDU signature
-          requirements and the `hashes` event format change are consensus rules,
-          and so must be gated on a room version.)
+  - [x] Is the reason for a new room version clearly stated? For example,
+        modifying the set of redacted fields changes how event IDs are
+        calculated, thus requiring a new room version. (PDU signature
+        requirements and the `hashes` event format change are consensus rules,
+        and so must be gated on a room version.)
 - [x] Are backwards-compatibility concerns appropriately addressed?
 - [x] An introduction exists and clearly outlines the problem being solved.
       Ideally, the first paragraph should be understandable by a non-technical
       audience.
 - [ ] All outstanding threads are resolved
-    - [ ] All feedback is incorporated into the proposal text itself, either as
-          a fix or noted as an alternative
+  - [ ] All feedback is incorporated into the proposal text itself, either as a
+        fix or noted as an alternative
 - [x] There is a dedicated "Security Considerations" section which detail any
       possible attacks/vulnerabilities this proposal may introduce, even if this
       is "None.". See [RFC3552](https://datatracker.ietf.org/doc/html/rfc3552)
@@ -563,19 +562,19 @@ verification:
 - [x] The other section headings in the template are optional, but even if they
       are omitted, the relevant details should still be considered somewhere in
       the text of the proposal. Those section headings are:
-    - [x] Introduction
-    - [x] Proposal text
-    - [x] Potential issues
-    - [x] Alternatives
-    - [x] Unstable prefix
-    - [x] Dependencies
+  - [x] Introduction
+  - [x] Proposal text
+  - [x] Potential issues
+  - [x] Alternatives
+  - [x] Unstable prefix
+  - [x] Dependencies
 - [x] Stable identifiers are used throughout the proposal, except for the
       unstable prefix section
-    - [x] Unstable prefixes
-          [consider](https://github.com/matrix-org/matrix-spec-proposals/blob/main/README.md#unstable-prefixes)
-          the awkward accepted-but-not-merged state
-    - [x] Chosen unstable prefixes do not pollute any global namespace (use
-          "tk.nutra.msc45yy", not "tk.nutra").
+  - [x] Unstable prefixes
+        [consider](https://github.com/matrix-org/matrix-spec-proposals/blob/main/README.md#unstable-prefixes)
+        the awkward accepted-but-not-merged state
+  - [x] Chosen unstable prefixes do not pollute any global namespace (use
+        "tk.nutra.msc45yy", not "tk.nutra").
 - [ ] Changes have applicable
       [Sign Off](https://github.com/matrix-org/matrix-spec-proposals/blob/main/CONTRIBUTING.md#sign-off)
       from all authors/editors/contributors

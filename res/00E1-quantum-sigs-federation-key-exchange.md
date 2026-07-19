@@ -243,42 +243,42 @@ The `GET /_matrix/key/v2/server` response includes both key types:
 
 ```json
 {
-    "server_name": "example.com",
-    "verify_keys": {
-        "ed25519:auto": {
-            "key": "<unpadded-base64-ed25519-pubkey>"
-        },
-        "fn-dsa-512:IP0hvDGShf-70PxUumyF": {
-            "key": "<unpadded-base64-fn-dsa-512-pubkey>",
-            "fips_206_revision": "ipd-2025-08",
-            "claims": ["constant-time-keygen", "constant-time-signing"],
-            "pow": {
-                "algorithm": "tk.nutra.msc45xx.pow.cuckoo-cycle-42-29-sha256",
-                "nonce": 8137226,
-                "solution": [123, 456, 789, "..."]
-            }
-        }
+  "server_name": "example.com",
+  "verify_keys": {
+    "ed25519:auto": {
+      "key": "<unpadded-base64-ed25519-pubkey>"
     },
-    "old_verify_keys": {
-        "fn-dsa-512:Rd3x2U9cQK8mV4sA7bYp": {
-            "key": "<unpadded-base64-fn-dsa-512-pubkey>",
-            "expired_ts": 1798761600000,
-            "fips_206_revision": "ipd-2025-08",
-            "claims": ["constant-time-keygen", "constant-time-signing"],
-            "pow": {
-                "algorithm": "tk.nutra.msc45xx.pow.cuckoo-cycle-42-29-sha256",
-                "nonce": 9137226,
-                "solution": [123, 456, 789, "..."]
-            }
-        }
-    },
-    "signatures": {
-        "example.com": {
-            "ed25519:auto": "<base64-ed25519-signature>",
-            "fn-dsa-512:IP0hvDGShf-70PxUumyF": "<base64-fn-dsa-512-signature>"
-        }
-    },
-    "valid_until_ts": 1798848000000
+    "fn-dsa-512:IP0hvDGShf-70PxUumyF": {
+      "key": "<unpadded-base64-fn-dsa-512-pubkey>",
+      "fips_206_revision": "ipd-2025-08",
+      "claims": ["constant-time-keygen", "constant-time-signing"],
+      "pow": {
+        "algorithm": "tk.nutra.msc45xx.pow.cuckoo-cycle-42-29-sha256",
+        "nonce": 8137226,
+        "solution": [123, 456, 789, "..."]
+      }
+    }
+  },
+  "old_verify_keys": {
+    "fn-dsa-512:Rd3x2U9cQK8mV4sA7bYp": {
+      "key": "<unpadded-base64-fn-dsa-512-pubkey>",
+      "expired_ts": 1798761600000,
+      "fips_206_revision": "ipd-2025-08",
+      "claims": ["constant-time-keygen", "constant-time-signing"],
+      "pow": {
+        "algorithm": "tk.nutra.msc45xx.pow.cuckoo-cycle-42-29-sha256",
+        "nonce": 9137226,
+        "solution": [123, 456, 789, "..."]
+      }
+    }
+  },
+  "signatures": {
+    "example.com": {
+      "ed25519:auto": "<base64-ed25519-signature>",
+      "fn-dsa-512:IP0hvDGShf-70PxUumyF": "<base64-fn-dsa-512-signature>"
+    }
+  },
+  "valid_until_ts": 1798848000000
 }
 ```
 
@@ -394,14 +394,14 @@ and audit-friction mechanism, not a defense against infeasible 120-bit
 
 ```json
 {
-    "fn-dsa-512:<short_id>": {
-        "key": "<unpadded-base64-fn-dsa-512-pubkey>",
-        "pow": {
-            "algorithm": "tk.nutra.msc45xx.pow.cuckoo-cycle-42-29-sha256",
-            "nonce": 8137226,
-            "solution": [123, 456, 789, "..."]
-        }
+  "fn-dsa-512:<short_id>": {
+    "key": "<unpadded-base64-fn-dsa-512-pubkey>",
+    "pow": {
+      "algorithm": "tk.nutra.msc45xx.pow.cuckoo-cycle-42-29-sha256",
+      "nonce": 8137226,
+      "solution": [123, 456, 789, "..."]
     }
+  }
 }
 ```
 
@@ -457,9 +457,9 @@ The proof response is:
 
 ```json
 {
-    "algorithm": "tk.nutra.msc45xx.pow.cuckoo-cycle-42-29-sha256",
-    "nonce": 8137226,
-    "solution": [123, 456, 789, "..."]
+  "algorithm": "tk.nutra.msc45xx.pow.cuckoo-cycle-42-29-sha256",
+  "nonce": 8137226,
+  "solution": [123, 456, 789, "..."]
 }
 ```
 
@@ -492,10 +492,10 @@ Request body:
 
 ```json
 {
-    "server_name": "example.com",
-    "key_id_sha256": "<unpadded-base64url-sha256>",
-    "key_metadata_sha256": "<unpadded-base64url-sha256>",
-    "server_key_package_sha256": "<unpadded-base64url-sha256>"
+  "server_name": "example.com",
+  "key_id_sha256": "<unpadded-base64url-sha256>",
+  "key_metadata_sha256": "<unpadded-base64url-sha256>",
+  "server_key_package_sha256": "<unpadded-base64url-sha256>"
 }
 ```
 
@@ -503,25 +503,25 @@ Response body:
 
 ```json
 {
-    "algorithm": "tk.nutra.msc45xx.pow.cuckoo-cycle-42-29-sha256",
-    "challenge": "<unpadded-base64url-random>",
-    "challenge_id": "<opaque-string>",
-    "expires_ts": 1798848000000,
-    "issuer": "notary.example",
-    "resource": {
-        "action": "fn-dsa-key-publication-notary-challenge",
-        "server_name": "example.com",
-        "key_id_sha256": "<unpadded-base64url-sha256>",
-        "key_metadata_sha256": "<unpadded-base64url-sha256>",
-        "server_key_package_sha256": "<unpadded-base64url-sha256>",
-        "issuer": "notary.example"
-    },
-    "signatures": {
-        "notary.example": {
-            "ed25519:auto": "<base64-ed25519-signature>",
-            "fn-dsa-512:<short_id>": "<base64-fn-dsa-signature>"
-        }
+  "algorithm": "tk.nutra.msc45xx.pow.cuckoo-cycle-42-29-sha256",
+  "challenge": "<unpadded-base64url-random>",
+  "challenge_id": "<opaque-string>",
+  "expires_ts": 1798848000000,
+  "issuer": "notary.example",
+  "resource": {
+    "action": "fn-dsa-key-publication-notary-challenge",
+    "server_name": "example.com",
+    "key_id_sha256": "<unpadded-base64url-sha256>",
+    "key_metadata_sha256": "<unpadded-base64url-sha256>",
+    "server_key_package_sha256": "<unpadded-base64url-sha256>",
+    "issuer": "notary.example"
+  },
+  "signatures": {
+    "notary.example": {
+      "ed25519:auto": "<base64-ed25519-signature>",
+      "fn-dsa-512:<short_id>": "<base64-fn-dsa-signature>"
     }
+  }
 }
 ```
 
@@ -567,12 +567,12 @@ Completion request body:
 
 ```json
 {
-    "challenge_object": { "...": "the notary-signed challenge object" },
-    "proof": {
-        "algorithm": "tk.nutra.msc45xx.pow.cuckoo-cycle-42-29-sha256",
-        "nonce": 8137226,
-        "solution": [123, 456, 789, "..."]
-    }
+  "challenge_object": { "...": "the notary-signed challenge object" },
+  "proof": {
+    "algorithm": "tk.nutra.msc45xx.pow.cuckoo-cycle-42-29-sha256",
+    "nonce": 8137226,
+    "solution": [123, 456, 789, "..."]
+  }
 }
 ```
 
@@ -648,42 +648,42 @@ server-key validation and MUST NOT change acceptance semantics.
 
 ```json
 {
-    "notary_observations": [
-        {
-            "notary_server_name": "notary.example",
-            "observed_server_name": "example.com",
-            "observed_at": 1798848000000,
-            "fetch_uri": "https://example.com/_matrix/key/v2/server",
-            "transport": "https",
-            "tls": {
-                "leaf_spki_sha256": "<unpadded-base64url-sha256>",
-                "leaf_cert_sha256": "<unpadded-base64url-sha256>",
-                "tls_13_provenance": {
-                    "transcript_hash_algorithm": "sha256",
-                    "handshake_transcript_hash": "<unpadded-base64url-hash>",
-                    "certificate_verify_signature_scheme": "ecdsa_secp256r1_sha256",
-                    "server_certificate_verify_signature": "<unpadded-base64url-signature>"
-                }
-            },
-            "key_id_sha256": "<unpadded-base64url-sha256>",
-            "server_key_package_sha256": "<unpadded-base64url-sha256>",
-            "notary_challenge": {
-                "challenge_id": "<opaque-string>",
-                "challenge_sha256": "<unpadded-base64url-sha256>",
-                "proof_sha256": "<unpadded-base64url-sha256>",
-                "challenge_issued_at": 1798847988000,
-                "pow_observed_at": 1798848000000,
-                "pow_verified_at": 1798848000100
-            },
-            "valid_until_ts": 1798848000000,
-            "signatures": {
-                "notary.example": {
-                    "ed25519:auto": "<base64-ed25519-signature>",
-                    "fn-dsa-512:<short_id>": "<base64-fn-dsa-signature>"
-                }
-            }
+  "notary_observations": [
+    {
+      "notary_server_name": "notary.example",
+      "observed_server_name": "example.com",
+      "observed_at": 1798848000000,
+      "fetch_uri": "https://example.com/_matrix/key/v2/server",
+      "transport": "https",
+      "tls": {
+        "leaf_spki_sha256": "<unpadded-base64url-sha256>",
+        "leaf_cert_sha256": "<unpadded-base64url-sha256>",
+        "tls_13_provenance": {
+          "transcript_hash_algorithm": "sha256",
+          "handshake_transcript_hash": "<unpadded-base64url-hash>",
+          "certificate_verify_signature_scheme": "ecdsa_secp256r1_sha256",
+          "server_certificate_verify_signature": "<unpadded-base64url-signature>"
         }
-    ]
+      },
+      "key_id_sha256": "<unpadded-base64url-sha256>",
+      "server_key_package_sha256": "<unpadded-base64url-sha256>",
+      "notary_challenge": {
+        "challenge_id": "<opaque-string>",
+        "challenge_sha256": "<unpadded-base64url-sha256>",
+        "proof_sha256": "<unpadded-base64url-sha256>",
+        "challenge_issued_at": 1798847988000,
+        "pow_observed_at": 1798848000000,
+        "pow_verified_at": 1798848000100
+      },
+      "valid_until_ts": 1798848000000,
+      "signatures": {
+        "notary.example": {
+          "ed25519:auto": "<base64-ed25519-signature>",
+          "fn-dsa-512:<short_id>": "<base64-fn-dsa-signature>"
+        }
+      }
+    }
+  ]
 }
 ```
 
@@ -874,37 +874,37 @@ therefore an attestation by default, with an optional embedded-proof upgrade:
 
 ```json
 {
-    "notary_equivocations": [
-        {
-            "record_version": 1,
-            "observed_server_name": "example.com",
-            "algorithm": "fn-dsa-512",
-            "short_id": "<short_id>",
-            "first": {
-                "key_id_sha256": "<unpadded-base64url-sha256>",
-                "server_key_package_sha256": "<unpadded-base64url-sha256>",
-                "first_observed_ts": 1798848000000,
-                "observed_via": "direct"
-            },
-            "conflicting": {
-                "key_id_sha256": "<unpadded-base64url-sha256>",
-                "server_key_package_sha256": "<unpadded-base64url-sha256>",
-                "first_observed_ts": 1798848600000,
-                "observed_via": "notary"
-            },
-            "first_response": { "...": "optional, full origin key response" },
-            "conflicting_response": {
-                "...": "optional, full origin key response"
-            },
-            "notary_server_name": "notary.example",
-            "signatures": {
-                "notary.example": {
-                    "ed25519:auto": "<base64-ed25519-signature>",
-                    "fn-dsa-512:<short_id>": "<base64-fn-dsa-signature>"
-                }
-            }
+  "notary_equivocations": [
+    {
+      "record_version": 1,
+      "observed_server_name": "example.com",
+      "algorithm": "fn-dsa-512",
+      "short_id": "<short_id>",
+      "first": {
+        "key_id_sha256": "<unpadded-base64url-sha256>",
+        "server_key_package_sha256": "<unpadded-base64url-sha256>",
+        "first_observed_ts": 1798848000000,
+        "observed_via": "direct"
+      },
+      "conflicting": {
+        "key_id_sha256": "<unpadded-base64url-sha256>",
+        "server_key_package_sha256": "<unpadded-base64url-sha256>",
+        "first_observed_ts": 1798848600000,
+        "observed_via": "notary"
+      },
+      "first_response": { "...": "optional, full origin key response" },
+      "conflicting_response": {
+        "...": "optional, full origin key response"
+      },
+      "notary_server_name": "notary.example",
+      "signatures": {
+        "notary.example": {
+          "ed25519:auto": "<base64-ed25519-signature>",
+          "fn-dsa-512:<short_id>": "<base64-fn-dsa-signature>"
         }
-    ]
+      }
+    }
+  ]
 }
 ```
 
@@ -1049,18 +1049,18 @@ the key body binding before caching it.
 
 ```json
 {
-    "type": "tk.nutra.msc45xx.server_key.expiry.v1",
-    "server_name": "example.com",
-    "key": "fn-dsa-512:<short_id>",
-    "key_id_sha256": "<unpadded-base64url-sha256>",
-    "not_valid_after_ts": 1798848000000,
-    "issued_at_ts": 1798847900000,
-    "reason": "rotation",
-    "signatures": {
-        "example.com": {
-            "fn-dsa-512:<short_id>": "<base64-fn-dsa-signature>"
-        }
+  "type": "tk.nutra.msc45xx.server_key.expiry.v1",
+  "server_name": "example.com",
+  "key": "fn-dsa-512:<short_id>",
+  "key_id_sha256": "<unpadded-base64url-sha256>",
+  "not_valid_after_ts": 1798848000000,
+  "issued_at_ts": 1798847900000,
+  "reason": "rotation",
+  "signatures": {
+    "example.com": {
+      "fn-dsa-512:<short_id>": "<base64-fn-dsa-signature>"
     }
+  }
 }
 ```
 
@@ -1078,9 +1078,9 @@ response.
 
 ```json
 {
-    "server_keys": ["<server-key-response>"],
-    "notary_observations": ["<notary-observation>"],
-    "expiry_claims": ["<self-signed-expiry-claim>"]
+  "server_keys": ["<server-key-response>"],
+  "notary_observations": ["<notary-observation>"],
+  "expiry_claims": ["<self-signed-expiry-claim>"]
 }
 ```
 
@@ -1247,8 +1247,8 @@ applicable (server-to-server API).
 
 ```json
 {
-    "algorithm": "ml-kem-768",
-    "encapsulation_key": "<unpadded-base64-ml-kem-768-ek>"
+  "algorithm": "ml-kem-768",
+  "encapsulation_key": "<unpadded-base64-ml-kem-768-ek>"
 }
 ```
 
@@ -1262,9 +1262,9 @@ encapsulating, rejecting invalid keys with `400 M_INVALID_PARAM`.
 
 ```json
 {
-    "session_id": "<opaque-string>",
-    "ciphertext": "<unpadded-base64-ml-kem-768-ciphertext>",
-    "expires_ts": 1798848000000
+  "session_id": "<opaque-string>",
+  "ciphertext": "<unpadded-base64-ml-kem-768-ciphertext>",
+  "expires_ts": 1798848000000
 }
 ```
 
@@ -1478,22 +1478,22 @@ increasingly, in mainstream TLS libraries following FIPS 203 finalization.
   `X-Matrix-PQC` requests are signed with FN-DSA, so an attacker who has only
   derived a server's Ed25519 private key cannot forge live federation traffic.
 
-    Key publication and replacement in this MSC authenticate the same way
-    initial publication does: a valid self-signature plus the existing Matrix
-    server-key trust model (fetched from the origin over TLS, or via a notary
-    who did) — see [Server key trust model](#server-key-trust-model). That
-    combination proves only "whoever currently controls this domain's origin, as
-    observed over this fetch, produced this key," identical in strength to what
-    web PKI already provides for TLS certificates; it does not, and is not
-    intended to, prove continuity with any previously-observed key.
-    Consequently, merely deriving a private key is not sufficient to get a
-    forged key response accepted unless the attacker also has an active position
-    on a verifier's fetch path (a real-time MITM) or control of a notary a
-    verifier relies on — i.e., exactly the additional capability already
-    required to impersonate a server under Matrix's existing Ed25519-only
-    key-fetch model. This MSC does not add a new identity-continuity guarantee
-    the classical layer never had; it upgrades the signature algorithm used
-    within the same trust model. Forged _events_ are addressed by MSC 45YY.
+  Key publication and replacement in this MSC authenticate the same way initial
+  publication does: a valid self-signature plus the existing Matrix server-key
+  trust model (fetched from the origin over TLS, or via a notary who did) — see
+  [Server key trust model](#server-key-trust-model). That combination proves
+  only "whoever currently controls this domain's origin, as observed over this
+  fetch, produced this key," identical in strength to what web PKI already
+  provides for TLS certificates; it does not, and is not intended to, prove
+  continuity with any previously-observed key. Consequently, merely deriving a
+  private key is not sufficient to get a forged key response accepted unless the
+  attacker also has an active position on a verifier's fetch path (a real-time
+  MITM) or control of a notary a verifier relies on — i.e., exactly the
+  additional capability already required to impersonate a server under Matrix's
+  existing Ed25519-only key-fetch model. This MSC does not add a new
+  identity-continuity guarantee the classical layer never had; it upgrades the
+  signature algorithm used within the same trust model. Forged _events_ are
+  addressed by MSC 45YY.
 
 - **TOFU bootstrap window.** Initial FN-DSA key discovery is authenticated by
   Ed25519 and the existing server-key trust model, and is therefore only as
@@ -1594,11 +1594,11 @@ identifier in FN-DSA key references:
 
 ```json
 {
-    "verify_keys": {
-        "tk.nutra.msc45xx.fn-dsa-512:IP0hvDGShf-70PxUumyF": {
-            "key": "<base64-fn-dsa-512-pubkey>"
-        }
+  "verify_keys": {
+    "tk.nutra.msc45xx.fn-dsa-512:IP0hvDGShf-70PxUumyF": {
+      "key": "<base64-fn-dsa-512-pubkey>"
     }
+  }
 }
 ```
 
@@ -1703,9 +1703,9 @@ MUST succeed. Verification against the message `tampered` MUST fail.
 
 ```json
 {
-    "private_key_base64": "Wf+vvfAe//AQfuwggPuw/AQQjQdPwBOwe/QQRuwA/vAQPww+/xBQBPQ+x/wfiQBRQg//uQgw+xPR/hgggfQRPfQve+/Qx/hPPAv+gfhAgffRgvBQufAhSPv/x/ABPPhPPugQgRvhfvvRxP/OffQPvAPevQggwPePAAPgvAQwQAPBQA+/vAgBghA/vBfvgBfu/wBPRf/Qxv/RvgRPxvfOgQfgyffyfARgAuwQxQBw/wRvxQhvxPQQPxQgOwfxPNQQAhdwgf//+/xOSBwAgBQPewuhf/fBBgQQg/AxA/hBNgRQgQP/vgPhPwAAPfeAwwgCPvPxA/hw/Phgu/vwBexQOBfBAdwQfAfggfOfv/QvthA/wfw/whgBPBfAiRg/ufRPhiugvffuvuuwvPevfxSPggQQSBCt/QgARwvxRQ//QPAQg/ifAgRBPfPvuwwfvCARAuvdfAewSNgvxg/QvBQvwuuPegvfgQf++BuxvQuQBQi+vyufQ//vf/QAwegQAQgwxPxOgQNvAAAQgBRuQx+ggf/hPPv///AuvvPuwP/vuvfQP/gQP+wyPfQfPwfPg/vvuQwPxvBfffQOhvgvAgfwAQA+vex+wehfyid+xg+xPBvPQOgQQhvAfROhQvfQBPggARfvBfANgxQQOxAPvwQvihPwwAvwPvQQ/QgePxAPvQAO/SAfR/hO/w/QOwgQPROgQvfehevQ/+xxPgP/hBiOgfPNxvfhgOfdgAQOv/PvvgRwPAQf/RN+/fvAQQvQgAxhw+wPhdQ//www/wcuA+QvPQ//+wPwxxBOQvAggSNvAufvxPffO/gAQ/Peu+v//AQ/Pv/h/QPv+gQP/fPPBgAtwQQCvwvQQeu/exARAAQ/eSPwABBfgwQBQwPPP/ee//wv+whwevvvhffhxBPBwP+whf+/BgQfAfQgBgAgP/QP/wfAPgwuvgQQgufQfQw/vQwOvwB/ANvCBQAA+//9/uAfg/fhhQ+QAxghAiAwPgO/xPRAuAv/vwBBQPfO//xwvgOwhf8QGxClDCsZ8BsF7BH8BtwD9PcBLOQXG/rkHSIF2RP8HuhD+hgFD98bxO/w7/r3AtMOBQMn7db68h0K8/70FCvd8eYH+vT9KwDo+wEhCAT68gfl+98D4eYM9e/9FwetDfT0Bu3px/0l7AsMB/oiJfLnFyQEOlEj+vbtBhQu8QI3FwjzCfLqEgva/tglGxQ9Be3v7eHSO9jRG9oYDg4p8Cza/fDxIxTuHAIWzuf++QMI59DY5vz/Ch/p2Q/Pvurs5SMw994AAA/WDA3V8wcP/QAQ/S0DHdf4/OQSQdAB+9wOD/sa7A4C/PD7+/cG87n6+OMH7C7d+QQKz/MRJ+katRL08/gALQT8DgH8EfsBBucf+RMCJDvXKBQB5PAIEfwvFwkR5AkC+x3ezvDa9xUX+/YB2eHlIyEQIh0jCgkgGhX7PgQY9PQNEvn+Ixgd89f1Frr29+X548UOtiPq8AfcAwLK1/ohHP8GDCH8JC0PCfoPAAM9QP8GByQON/sDFP799ggn/QH/Byz98tsFCBgEJMEV8h/n/gES7ikO+CXlGQgCBfnwGQgcDQsM88z86xr14wss9MjjItki0uXw2NADGwvs3eMEyPf99OIX1Sjn6jv1ABQuOR8DHwcC2yMF5PT7Oe3b+uLu8zj3+fEy/inuIf8kGg3uEAsh+xkw/AMIDi0N",
-    "public_key_base64": "CUMlDwB0VzdvaT1nEeaTr21DtluYBSy6dktakGJh1K6o/yrYfthHeoRcG1gCURulT9CUkULCZYQvt2SM20hlAVUB7ehqZjN5fpAFoCtera1xaV8PdqnkbRJwXdtUQf770KVQWPjL9Z4ZwVVyVRpC1P41SehABNsDII0eBcJK65yGHKvnVL+RGBS15oG2oNjQazrWx1S6PZkAVMtq1RIoYJcsAeq6tMOvAW8ML3DXpw2mkYQZKYyxIHBOeDULD1dyO/FAQIRYpdsQumjBHCqiypHdSDu1GLOajB9hxNmAaepGnzWyK24RYgn4p+vd4WI6uhnHlJRJQqq6iOwoD38mIZtHqUIsbAn1xJrkAlRQEHUObZ4O5RNuhRIvuSBa5290pigmdeXhwY+VBjCrJ/mrBS5SOE+njyKqc7fVAYntsGoCrA2AVsOqMwCQpoi7tbLP3lBOzbhFLsWnWJTUkpT5MOqPAWvaSp5+5YEIJiRHteTjm8iVsIF4UWDJ7pNk5HaTCXaoslCgq0cZS4JLGXWS60I2RPL5nzaY/obiT543b5H+CdXXKjUgn0rrwRd+ndzpDpABfu4QMvda/jTV9/TJDZmy/ojyBdUPX1J9sruaTl2pkTkwL11asfrGoRSZt77Cl8FqcgOoXcJEGAeE8SUSmOkdICTVEWesNm9CVJUTJxVOttDjLM4Mvd6SyA/sO1KufVlLIwlH4Z7gH6KPPtJnwsEbSaB0OuWbTntY6K4xTghWvr62Md2TkqQ0CzsTS5y/LqHDcayOc85dcA6ENKMiLLb25cEXegc3uSSegmgKISdfzjeEt1ffK/JGLO16a1luUth6Al5Kv0pRuHXf7uKMWFF3jQQ+ojVyU0dhnD6kvlE8IL5zuYoIFqBAT8ruIw1scmmo+YjK4dJhtWXjOgd8JoHYiJ9GFYkJu3n266KjzQioHQTAPCZzNEFq62hkVSvDWnYJsD5QWRJIKzjLadUYmF0pOUUoq46rQMJi6EiyI6KoNuHj461IbUp726whYgOlZ61xmsgGsFpWDZby/iHN0CVhTQTQROz7fA415ozfIUEi8EU2GkwJcY40mG7ORfF7ixnUzIeC56RSmKtvAnK1n9fDB6CEAAkP7GDlMlRm7UVUnXpHr5jKqOlxMkbcvLytN8sdE/8+WGKwBYhkq13XdNhayVl9W1Ko3m9BxoF5pQZq",
-    "signature_base64": "OR1ILU+zEfglTjfS36YPtmYURnEMjBDlviLlO0yq214jygBVxOcAfTuezSWGIw8sjyKw0bij/Wsi86tqFERfCDQErvbK16xY+izE6Y2BI93lmrJ3s84z1adTn5uhN1L91AbGY4R1JN7szM/KV3jYNNua1xLmrrL3TGRAXlcHRPfkYY3Wk1TzS1kL7SLhCbEq01qqbcY/+RkyMbfXNYzAlylx5wp0z0bO9CxQ1cttgwMwa8jgjaNvaya96FTmuKskCuuLtHAqfAXrJIH4GRdNUmUrve3YiinS9ufe4sd6WkVDA6VITfYVONrk88nNWu+QSA/LYRwxCc8hL2aYZTK0fOkx/6rHdylSyiR9LnYZdT6YsMfVI5tommGdhPJcvKgnRwIyrISylC98SmMfq6OyeexBScItzMLt6to+2MO41dUaqOpXBS15NXpB/Fsx8oYzt4NdZ5VGs33PscfUARf9RDoKBWmIfnN47yX/HcbEcbrpCszaFagOc1PBRxujMxUWrlGW+EkQHc0yetPJqDsUR5lGWaXqRZPUjTCvCgk403LgjURzR0rFm8cRy5XbtyRSLnFTjGkQ2FTq5AR+ulI3pZvT74YNYqxREbNWWKTi4zr2U5BnlwUveCKK41fmiBPOT8WPQOmYs11IpKxHiaQ8D4N9Esmz+/6b1VJgXU0E/UxvY7HNZgrR1qjBr3VfXsnLN5mFotf5Rwp1thUGjT3e1jMnJUKuKzednTIxgpTjLOO6im3XnMRnErNjWXSiEGFYolDcylQmXfLVeBvB+DWjY5UwnIWeF2euSXMxy04rGVyH6+Rn443VwrEQRTWavqHdSdprJpRJEz2DNJOu1whd35Zz3JgyeeOaywnaXYMqpDsegAAAAAAAAAAA"
+  "private_key_base64": "Wf+vvfAe//AQfuwggPuw/AQQjQdPwBOwe/QQRuwA/vAQPww+/xBQBPQ+x/wfiQBRQg//uQgw+xPR/hgggfQRPfQve+/Qx/hPPAv+gfhAgffRgvBQufAhSPv/x/ABPPhPPugQgRvhfvvRxP/OffQPvAPevQggwPePAAPgvAQwQAPBQA+/vAgBghA/vBfvgBfu/wBPRf/Qxv/RvgRPxvfOgQfgyffyfARgAuwQxQBw/wRvxQhvxPQQPxQgOwfxPNQQAhdwgf//+/xOSBwAgBQPewuhf/fBBgQQg/AxA/hBNgRQgQP/vgPhPwAAPfeAwwgCPvPxA/hw/Phgu/vwBexQOBfBAdwQfAfggfOfv/QvthA/wfw/whgBPBfAiRg/ufRPhiugvffuvuuwvPevfxSPggQQSBCt/QgARwvxRQ//QPAQg/ifAgRBPfPvuwwfvCARAuvdfAewSNgvxg/QvBQvwuuPegvfgQf++BuxvQuQBQi+vyufQ//vf/QAwegQAQgwxPxOgQNvAAAQgBRuQx+ggf/hPPv///AuvvPuwP/vuvfQP/gQP+wyPfQfPwfPg/vvuQwPxvBfffQOhvgvAgfwAQA+vex+wehfyid+xg+xPBvPQOgQQhvAfROhQvfQBPggARfvBfANgxQQOxAPvwQvihPwwAvwPvQQ/QgePxAPvQAO/SAfR/hO/w/QOwgQPROgQvfehevQ/+xxPgP/hBiOgfPNxvfhgOfdgAQOv/PvvgRwPAQf/RN+/fvAQQvQgAxhw+wPhdQ//www/wcuA+QvPQ//+wPwxxBOQvAggSNvAufvxPffO/gAQ/Peu+v//AQ/Pv/h/QPv+gQP/fPPBgAtwQQCvwvQQeu/exARAAQ/eSPwABBfgwQBQwPPP/ee//wv+whwevvvhffhxBPBwP+whf+/BgQfAfQgBgAgP/QP/wfAPgwuvgQQgufQfQw/vQwOvwB/ANvCBQAA+//9/uAfg/fhhQ+QAxghAiAwPgO/xPRAuAv/vwBBQPfO//xwvgOwhf8QGxClDCsZ8BsF7BH8BtwD9PcBLOQXG/rkHSIF2RP8HuhD+hgFD98bxO/w7/r3AtMOBQMn7db68h0K8/70FCvd8eYH+vT9KwDo+wEhCAT68gfl+98D4eYM9e/9FwetDfT0Bu3px/0l7AsMB/oiJfLnFyQEOlEj+vbtBhQu8QI3FwjzCfLqEgva/tglGxQ9Be3v7eHSO9jRG9oYDg4p8Cza/fDxIxTuHAIWzuf++QMI59DY5vz/Ch/p2Q/Pvurs5SMw994AAA/WDA3V8wcP/QAQ/S0DHdf4/OQSQdAB+9wOD/sa7A4C/PD7+/cG87n6+OMH7C7d+QQKz/MRJ+katRL08/gALQT8DgH8EfsBBucf+RMCJDvXKBQB5PAIEfwvFwkR5AkC+x3ezvDa9xUX+/YB2eHlIyEQIh0jCgkgGhX7PgQY9PQNEvn+Ixgd89f1Frr29+X548UOtiPq8AfcAwLK1/ohHP8GDCH8JC0PCfoPAAM9QP8GByQON/sDFP799ggn/QH/Byz98tsFCBgEJMEV8h/n/gES7ikO+CXlGQgCBfnwGQgcDQsM88z86xr14wss9MjjItki0uXw2NADGwvs3eMEyPf99OIX1Sjn6jv1ABQuOR8DHwcC2yMF5PT7Oe3b+uLu8zj3+fEy/inuIf8kGg3uEAsh+xkw/AMIDi0N",
+  "public_key_base64": "CUMlDwB0VzdvaT1nEeaTr21DtluYBSy6dktakGJh1K6o/yrYfthHeoRcG1gCURulT9CUkULCZYQvt2SM20hlAVUB7ehqZjN5fpAFoCtera1xaV8PdqnkbRJwXdtUQf770KVQWPjL9Z4ZwVVyVRpC1P41SehABNsDII0eBcJK65yGHKvnVL+RGBS15oG2oNjQazrWx1S6PZkAVMtq1RIoYJcsAeq6tMOvAW8ML3DXpw2mkYQZKYyxIHBOeDULD1dyO/FAQIRYpdsQumjBHCqiypHdSDu1GLOajB9hxNmAaepGnzWyK24RYgn4p+vd4WI6uhnHlJRJQqq6iOwoD38mIZtHqUIsbAn1xJrkAlRQEHUObZ4O5RNuhRIvuSBa5290pigmdeXhwY+VBjCrJ/mrBS5SOE+njyKqc7fVAYntsGoCrA2AVsOqMwCQpoi7tbLP3lBOzbhFLsWnWJTUkpT5MOqPAWvaSp5+5YEIJiRHteTjm8iVsIF4UWDJ7pNk5HaTCXaoslCgq0cZS4JLGXWS60I2RPL5nzaY/obiT543b5H+CdXXKjUgn0rrwRd+ndzpDpABfu4QMvda/jTV9/TJDZmy/ojyBdUPX1J9sruaTl2pkTkwL11asfrGoRSZt77Cl8FqcgOoXcJEGAeE8SUSmOkdICTVEWesNm9CVJUTJxVOttDjLM4Mvd6SyA/sO1KufVlLIwlH4Z7gH6KPPtJnwsEbSaB0OuWbTntY6K4xTghWvr62Md2TkqQ0CzsTS5y/LqHDcayOc85dcA6ENKMiLLb25cEXegc3uSSegmgKISdfzjeEt1ffK/JGLO16a1luUth6Al5Kv0pRuHXf7uKMWFF3jQQ+ojVyU0dhnD6kvlE8IL5zuYoIFqBAT8ruIw1scmmo+YjK4dJhtWXjOgd8JoHYiJ9GFYkJu3n266KjzQioHQTAPCZzNEFq62hkVSvDWnYJsD5QWRJIKzjLadUYmF0pOUUoq46rQMJi6EiyI6KoNuHj461IbUp726whYgOlZ61xmsgGsFpWDZby/iHN0CVhTQTQROz7fA415ozfIUEi8EU2GkwJcY40mG7ORfF7ixnUzIeC56RSmKtvAnK1n9fDB6CEAAkP7GDlMlRm7UVUnXpHr5jKqOlxMkbcvLytN8sdE/8+WGKwBYhkq13XdNhayVl9W1Ko3m9BxoF5pQZq",
+  "signature_base64": "OR1ILU+zEfglTjfS36YPtmYURnEMjBDlviLlO0yq214jygBVxOcAfTuezSWGIw8sjyKw0bij/Wsi86tqFERfCDQErvbK16xY+izE6Y2BI93lmrJ3s84z1adTn5uhN1L91AbGY4R1JN7szM/KV3jYNNua1xLmrrL3TGRAXlcHRPfkYY3Wk1TzS1kL7SLhCbEq01qqbcY/+RkyMbfXNYzAlylx5wp0z0bO9CxQ1cttgwMwa8jgjaNvaya96FTmuKskCuuLtHAqfAXrJIH4GRdNUmUrve3YiinS9ufe4sd6WkVDA6VITfYVONrk88nNWu+QSA/LYRwxCc8hL2aYZTK0fOkx/6rHdylSyiR9LnYZdT6YsMfVI5tommGdhPJcvKgnRwIyrISylC98SmMfq6OyeexBScItzMLt6to+2MO41dUaqOpXBS15NXpB/Fsx8oYzt4NdZ5VGs33PscfUARf9RDoKBWmIfnN47yX/HcbEcbrpCszaFagOc1PBRxujMxUWrlGW+EkQHc0yetPJqDsUR5lGWaXqRZPUjTCvCgk403LgjURzR0rFm8cRy5XbtyRSLnFTjGkQ2FTq5AR+ulI3pZvT74YNYqxREbNWWKTi4zr2U5BnlwUveCKK41fmiBPOT8WPQOmYs11IpKxHiaQ8D4N9Esmz+/6b1VJgXU0E/UxvY7HNZgrR1qjBr3VfXsnLN5mFotf5Rwp1thUGjT3e1jMnJUKuKzednTIxgpTjLOO6im3XnMRnErNjWXSiEGFYolDcylQmXfLVeBvB+DWjY5UwnIWeF2euSXMxy04rGVyH6+Rn443VwrEQRTWavqHdSdprJpRJEz2DNJOu1whd35Zz3JgyeeOaywnaXYMqpDsegAAAAAAAAAAA"
 }
 ```
 
@@ -1747,17 +1747,17 @@ sample production-profile publication stamp.
 
 ```json
 {
-    "stamp": {
-        "algorithm": "tk.nutra.msc45xx.pow.cuckoo-cycle-42-29-sha256",
-        "resource": {
-            "action": "fn-dsa-key-publication",
-            "key_id_sha256": "IP0hvDGShf-70PxUumyFgdlSrGLmcekPQYSotCXS2zg",
-            "server_name": "example.com"
-        }
-    },
-    "canonical_json_utf8": "{\"algorithm\":\"tk.nutra.msc45xx.pow.cuckoo-cycle-42-29-sha256\",\"resource\":{\"action\":\"fn-dsa-key-publication\",\"key_id_sha256\":\"IP0hvDGShf-70PxUumyFgdlSrGLmcekPQYSotCXS2zg\",\"server_name\":\"example.com\"}}",
-    "nonce": 8137226,
-    "graph_seed_hex": "a56e2a7c05499ff6af0f815bd7ab49f8950c4786447877a23d884213c542aa19"
+  "stamp": {
+    "algorithm": "tk.nutra.msc45xx.pow.cuckoo-cycle-42-29-sha256",
+    "resource": {
+      "action": "fn-dsa-key-publication",
+      "key_id_sha256": "IP0hvDGShf-70PxUumyFgdlSrGLmcekPQYSotCXS2zg",
+      "server_name": "example.com"
+    }
+  },
+  "canonical_json_utf8": "{\"algorithm\":\"tk.nutra.msc45xx.pow.cuckoo-cycle-42-29-sha256\",\"resource\":{\"action\":\"fn-dsa-key-publication\",\"key_id_sha256\":\"IP0hvDGShf-70PxUumyFgdlSrGLmcekPQYSotCXS2zg\",\"server_name\":\"example.com\"}}",
+  "nonce": 8137226,
+  "graph_seed_hex": "a56e2a7c05499ff6af0f815bd7ab49f8950c4786447877a23d884213c542aa19"
 }
 ```
 
@@ -1862,30 +1862,30 @@ This proposal is fully backwards-compatible:
 - [ ] Are all MSCs that this MSC depends on already accepted? (Depends on
       MSC4499.)
 - [x] For each endpoint that is introduced or modified:
-    - [x] Have authentication requirements been specified? (`key_exchange`:
-          Ed25519 `Authorization` + `X-Matrix-PQC`, both required.
-          `publication_challenge`: Ed25519 `Authorization` required,
-          `X-Matrix-PQC` recommended when available.
-          `publication_challenge/complete`: Ed25519 `Authorization` +
-          keyholder-bound `X-Matrix-PQC`, both required.)
-    - [x] Have rate-limiting requirements been specified?
-          (`429 M_LIMIT_EXCEEDED`.)
-    - [x] Have guest access requirements been specified? (N/A — server-to-server
-          API.)
-    - [x] Are error responses specified?
-        - [x] Does each error case have a specified `errcode` (i.e.
-              `M_FORBIDDEN`) and HTTP status code?
-            - [x] If a new `errcode` is introduced, is it clear that it is new?
-                  (No new errcodes.)
-    - [x] Are the
-          [endpoint conventions](https://spec.matrix.org/latest/appendices/#conventions-for-matrix-apis)
-          honoured?
-        - [x] Do HTTP endpoints `use_underscores_like_this`?
-        - [x] Will the endpoint return unbounded data? If so, has pagination
-              been considered? (Fixed-size response; no pagination needed.)
-        - [x] If the endpoint utilises pagination, is it consistent with
-              [the appendices](https://spec.matrix.org/latest/appendices/#pagination)?
-              (N/A.)
+  - [x] Have authentication requirements been specified? (`key_exchange`:
+        Ed25519 `Authorization` + `X-Matrix-PQC`, both required.
+        `publication_challenge`: Ed25519 `Authorization` required,
+        `X-Matrix-PQC` recommended when available.
+        `publication_challenge/complete`: Ed25519 `Authorization` +
+        keyholder-bound `X-Matrix-PQC`, both required.)
+  - [x] Have rate-limiting requirements been specified?
+        (`429 M_LIMIT_EXCEEDED`.)
+  - [x] Have guest access requirements been specified? (N/A — server-to-server
+        API.)
+  - [x] Are error responses specified?
+    - [x] Does each error case have a specified `errcode` (i.e. `M_FORBIDDEN`)
+          and HTTP status code?
+      - [x] If a new `errcode` is introduced, is it clear that it is new? (No
+            new errcodes.)
+  - [x] Are the
+        [endpoint conventions](https://spec.matrix.org/latest/appendices/#conventions-for-matrix-apis)
+        honoured?
+    - [x] Do HTTP endpoints `use_underscores_like_this`?
+    - [x] Will the endpoint return unbounded data? If so, has pagination been
+          considered? (Fixed-size response; no pagination needed.)
+    - [x] If the endpoint utilises pagination, is it consistent with
+          [the appendices](https://spec.matrix.org/latest/appendices/#pagination)?
+          (N/A.)
 - [x] Will the MSC require a new room version, and if so, has that been made
       clear? (No new room version — deliberately. Room version changes are
       scoped to the companion PDU-signing proposal.)
@@ -1894,8 +1894,8 @@ This proposal is fully backwards-compatible:
       Ideally, the first paragraph should be understandable by a non-technical
       audience.
 - [ ] All outstanding threads are resolved
-    - [ ] All feedback is incorporated into the proposal text itself, either as
-          a fix or noted as an alternative
+  - [ ] All feedback is incorporated into the proposal text itself, either as a
+        fix or noted as an alternative
 - [x] There is a dedicated "Security Considerations" section which details any
       possible attacks/vulnerabilities this proposal may introduce, even if this
       is "None.". See [RFC3552](https://datatracker.ietf.org/doc/html/rfc3552)
@@ -1904,19 +1904,19 @@ This proposal is fully backwards-compatible:
 - [x] The other section headings in the template are optional, but even if they
       are omitted, the relevant details should still be considered somewhere in
       the text of the proposal. Those section headings are:
-    - [x] Introduction
-    - [x] Proposal text
-    - [x] Potential issues
-    - [x] Alternatives
-    - [x] Unstable prefix
-    - [x] Dependencies
+  - [x] Introduction
+  - [x] Proposal text
+  - [x] Potential issues
+  - [x] Alternatives
+  - [x] Unstable prefix
+  - [x] Dependencies
 - [x] Stable identifiers are used throughout the proposal, except for the
       unstable prefix section
-    - [x] Unstable prefixes
-          [consider](https://github.com/matrix-org/matrix-spec-proposals/blob/main/README.md#unstable-prefixes)
-          the awkward accepted-but-not-merged state
-    - [x] Chosen unstable prefixes do not pollute any global namespace (use
-          "tk.nutra.msc45xx", not "tk.nutra").
+  - [x] Unstable prefixes
+        [consider](https://github.com/matrix-org/matrix-spec-proposals/blob/main/README.md#unstable-prefixes)
+        the awkward accepted-but-not-merged state
+  - [x] Chosen unstable prefixes do not pollute any global namespace (use
+        "tk.nutra.msc45xx", not "tk.nutra").
 - [ ] Changes have applicable
       [Sign Off](https://github.com/matrix-org/matrix-spec-proposals/blob/main/CONTRIBUTING.md#sign-off)
       from all authors/editors/contributors

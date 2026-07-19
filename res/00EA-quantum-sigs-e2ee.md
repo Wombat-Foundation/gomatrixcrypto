@@ -32,22 +32,22 @@ The `/keys/upload` endpoint is extended to accept FN-DSA device signing keys:
 
 ```json
 {
-    "device_keys": {
-        "user_id": "@alice:example.com",
-        "device_id": "JLAFKJWSCS",
-        "algorithms": ["m.olm.v1.curve25519-aes-sha2", "m.megolm.v1.aes-sha2"],
-        "keys": {
-            "curve25519:JLAFKJWSCS": "<base64-curve25519-key>",
-            "ed25519:JLAFKJWSCS": "<base64-ed25519-key>",
-            "fn-dsa-512:JLAFKJWSCS": "<base64-fn-dsa-512-key>"
-        },
-        "signatures": {
-            "@alice:example.com": {
-                "ed25519:JLAFKJWSCS": "<base64-ed25519-self-signature>",
-                "fn-dsa-512:JLAFKJWSCS": "<base64-fn-dsa-512-self-signature>"
-            }
-        }
+  "device_keys": {
+    "user_id": "@alice:example.com",
+    "device_id": "JLAFKJWSCS",
+    "algorithms": ["m.olm.v1.curve25519-aes-sha2", "m.megolm.v1.aes-sha2"],
+    "keys": {
+      "curve25519:JLAFKJWSCS": "<base64-curve25519-key>",
+      "ed25519:JLAFKJWSCS": "<base64-ed25519-key>",
+      "fn-dsa-512:JLAFKJWSCS": "<base64-fn-dsa-512-key>"
+    },
+    "signatures": {
+      "@alice:example.com": {
+        "ed25519:JLAFKJWSCS": "<base64-ed25519-self-signature>",
+        "fn-dsa-512:JLAFKJWSCS": "<base64-fn-dsa-512-self-signature>"
+      }
     }
+  }
 }
 ```
 
@@ -72,20 +72,20 @@ dictionary.
 
 ```json
 {
-    "master_key": {
-        "user_id": "@alice:example.com",
-        "usage": ["master"],
-        "keys": {
-            "ed25519:base64+master+key": "<base64-ed25519-master-key>"
-        }
-    },
-    "master_key_pqc": {
-        "user_id": "@alice:example.com",
-        "usage": ["master"],
-        "keys": {
-            "fn-dsa-512:<base64url-sha256-of-pubkey>": "<base64-fn-dsa-512-master-key>"
-        }
+  "master_key": {
+    "user_id": "@alice:example.com",
+    "usage": ["master"],
+    "keys": {
+      "ed25519:base64+master+key": "<base64-ed25519-master-key>"
     }
+  },
+  "master_key_pqc": {
+    "user_id": "@alice:example.com",
+    "usage": ["master"],
+    "keys": {
+      "fn-dsa-512:<base64url-sha256-of-pubkey>": "<base64-fn-dsa-512-master-key>"
+    }
+  }
 }
 ```
 
@@ -266,16 +266,16 @@ requests and `/keys/query` responses.
 
 ```json
 {
-    "device_keys": {
-        "keys": {
-            "tk.nutra.msc45xx.fn-dsa-512:JLAFKJWSCS": "<base64-fn-dsa-512-key>"
-        },
-        "signatures": {
-            "@alice:example.com": {
-                "tk.nutra.msc45xx.fn-dsa-512:JLAFKJWSCS": "<base64-fn-dsa-512-self-signature>"
-            }
-        }
+  "device_keys": {
+    "keys": {
+      "tk.nutra.msc45xx.fn-dsa-512:JLAFKJWSCS": "<base64-fn-dsa-512-key>"
+    },
+    "signatures": {
+      "@alice:example.com": {
+        "tk.nutra.msc45xx.fn-dsa-512:JLAFKJWSCS": "<base64-fn-dsa-512-self-signature>"
+      }
     }
+  }
 }
 ```
 
@@ -312,21 +312,21 @@ This proposal is fully backwards-compatible:
       specified in the MSC's PR description?
 - [ ] Are all MSCs that this MSC depends on already accepted?
 - [ ] For each endpoint that is introduced or modified:
-    - [ ] Have authentication requirements been specified?
-    - [ ] Have rate-limiting requirements been specified?
-    - [ ] Have guest access requirements been specified?
-    - [ ] Are error responses specified?
-        - [ ] Does each error case have a specified `errcode` (i.e.
-              `M_FORBIDDEN`) and HTTP status code?
-            - [ ] If a new `errcode` is introduced, is it clear that it is new?
-    - [x] Are the
-          [endpoint conventions](https://spec.matrix.org/latest/appendices/#conventions-for-matrix-apis)
-          honoured?
-        - [x] Do HTTP endpoints `use_underscores_like_this`?
-        - [x] Will the endpoint return unbounded data? If so, has pagination
-              been considered?
-        - [ ] If the endpoint utilises pagination, is it consistent with
-              [the appendices](https://spec.matrix.org/latest/appendices/#pagination)?
+  - [ ] Have authentication requirements been specified?
+  - [ ] Have rate-limiting requirements been specified?
+  - [ ] Have guest access requirements been specified?
+  - [ ] Are error responses specified?
+    - [ ] Does each error case have a specified `errcode` (i.e. `M_FORBIDDEN`)
+          and HTTP status code?
+      - [ ] If a new `errcode` is introduced, is it clear that it is new?
+  - [x] Are the
+        [endpoint conventions](https://spec.matrix.org/latest/appendices/#conventions-for-matrix-apis)
+        honoured?
+    - [x] Do HTTP endpoints `use_underscores_like_this`?
+    - [x] Will the endpoint return unbounded data? If so, has pagination been
+          considered?
+    - [ ] If the endpoint utilises pagination, is it consistent with
+          [the appendices](https://spec.matrix.org/latest/appendices/#pagination)?
 - [ ] Will the MSC require a new room version, and if so, has that been made
       clear?
 - [x] Are backwards-compatibility concerns appropriately addressed?
@@ -334,8 +334,8 @@ This proposal is fully backwards-compatible:
       Ideally, the first paragraph should be understandable by a non-technical
       audience.
 - [ ] All outstanding threads are resolved
-    - [ ] All feedback is incorporated into the proposal text itself, either as
-          a fix or noted as an alternative
+  - [ ] All feedback is incorporated into the proposal text itself, either as a
+        fix or noted as an alternative
 - [x] There is a dedicated "Security Considerations" section which detail any
       possible attacks/vulnerabilities this proposal may introduce, even if this
       is "None.". See [RFC3552](https://datatracker.ietf.org/doc/html/rfc3552)
@@ -344,19 +344,19 @@ This proposal is fully backwards-compatible:
 - [x] The other section headings in the template are optional, but even if they
       are omitted, the relevant details should still be considered somewhere in
       the text of the proposal. Those section headings are:
-    - [x] Introduction
-    - [x] Proposal text
-    - [x] Potential issues
-    - [x] Alternatives
-    - [x] Unstable prefix
-    - [x] Dependencies
+  - [x] Introduction
+  - [x] Proposal text
+  - [x] Potential issues
+  - [x] Alternatives
+  - [x] Unstable prefix
+  - [x] Dependencies
 - [x] Stable identifiers are used throughout the proposal, except for the
       unstable prefix section
-    - [x] Unstable prefixes
-          [consider](https://github.com/matrix-org/matrix-spec-proposals/blob/main/README.md#unstable-prefixes)
-          the awkward accepted-but-not-merged state
-    - [x] Chosen unstable prefixes do not pollute any global namespace (reuses
-          `tk.nutra.msc45xx` from the defining MSC).
+  - [x] Unstable prefixes
+        [consider](https://github.com/matrix-org/matrix-spec-proposals/blob/main/README.md#unstable-prefixes)
+        the awkward accepted-but-not-merged state
+  - [x] Chosen unstable prefixes do not pollute any global namespace (reuses
+        `tk.nutra.msc45xx` from the defining MSC).
 - [ ] Changes have applicable
       [Sign Off](https://github.com/matrix-org/matrix-spec-proposals/blob/main/CONTRIBUTING.md#sign-off)
       from all authors/editors/contributors

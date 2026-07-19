@@ -121,9 +121,9 @@ An origin MAY include a top-level `trusted_notary_keys` array in its
 `/_matrix/key/v2/server` response. Each entry is a full content-addressed FN-DSA
 server-key identifier of the form `fn-dsa-512:<key_id>`, where `<key_id>` is the
 unpadded base64url encoding of the 32-byte SHA3-256 `key_id` defined in this
-MSC. The field is part of the Matrix signing object and therefore covered by
-the origin's server-key signatures. If present but empty, it explicitly
-authorizes no notary-supplied historical keys.
+MSC. The field is part of the Matrix signing object and therefore covered by the
+origin's server-key signatures. If present but empty, it explicitly authorizes
+no notary-supplied historical keys.
 
 `trusted_notary_keys` lets the origin extend its own signed publication without
 embedding every historical key body in `old_verify_keys`. A listed identifier is
@@ -197,11 +197,11 @@ object is reconstructed by the verifier from the enclosing key object and the
 validated `pow` fields; it is not transmitted as a separate object and does not
 include `short_key_id`, signatures, `valid_until_ts`, `claims`, notary metadata,
 or unknown future extension fields. `key_id` — the identity digest used
-throughout this MSC family to name a specific key body — is the SHA3-256
-digest of this canonical minting object, not a plain hash of the public key and
-not the pre-solve Cuckoo graph selector. `short_key_id` is the first 20
-base64url characters of `key_id`, unpadded; it is not a separate digest.
-`key_id` is a SHA3-256 output under this proof class, not a SHA-256 output.
+throughout this MSC family to name a specific key body — is the SHA3-256 digest
+of this canonical minting object, not a plain hash of the public key and not the
+pre-solve Cuckoo graph selector. `short_key_id` is the first 20 base64url
+characters of `key_id`, unpadded; it is not a separate digest. `key_id` is a
+SHA3-256 output under this proof class, not a SHA-256 output.
 
 The 20-character `short_key_id` is approximately a 120-bit prefix. This is not
 relied on as a standalone anti-grinding control: an attacker choosing public
@@ -213,14 +213,14 @@ colliding `short_key_id` candidates.
 
 ```json
 {
-    "fn-dsa-512:<short_key_id>": {
-        "key": "<unpadded-base64-fn-dsa-512-pubkey>",
-        "pow": {
-            "algorithm": "tk.nutra.msc45xx.pow.cuckoo-cycle-42-29-sha3-256-cogen",
-            "nonce": 8137226,
-            "solution": [123, 456, 789, "..."]
-        }
+  "fn-dsa-512:<short_key_id>": {
+    "key": "<unpadded-base64-fn-dsa-512-pubkey>",
+    "pow": {
+      "algorithm": "tk.nutra.msc45xx.pow.cuckoo-cycle-42-29-sha3-256-cogen",
+      "nonce": 8137226,
+      "solution": [123, 456, 789, "..."]
     }
+  }
 }
 ```
 
@@ -277,9 +277,9 @@ The proof response is:
 
 ```json
 {
-    "algorithm": "tk.nutra.msc45xx.pow.cuckoo-cycle-42-29-sha3-256-cogen",
-    "nonce": 8137226,
-    "solution": [123, 456, 789, "..."]
+  "algorithm": "tk.nutra.msc45xx.pow.cuckoo-cycle-42-29-sha3-256-cogen",
+  "nonce": 8137226,
+  "solution": [123, 456, 789, "..."]
 }
 ```
 
@@ -494,35 +494,35 @@ server-key validation and MUST NOT change acceptance semantics.
 
 ```json
 {
-    "notary_observations": [
-        {
-            "notary_server_name": "notary.example",
-            "observed_server_name": "example.com",
-            "observed_at": 1798848000000,
-            "fetch_uri": "https://example.com/_matrix/key/v2/server",
-            "transport": "https",
-            "tls": {
-                "leaf_spki_sha256": "<unpadded-base64url-sha256>",
-                "leaf_cert_sha256": "<unpadded-base64url-sha256>",
-                "tls_13_provenance": {
-                    "transcript_hash_algorithm": "sha256",
-                    "handshake_transcript_hash": "<unpadded-base64url-hash>",
-                    "certificate_verify_signature_scheme": "ecdsa_secp256r1_sha256",
-                    "server_certificate_verify_signature": "<unpadded-base64url-signature>"
-                }
-            },
-            "key_id": "<unpadded-base64url-key-id>",
-            "server_key_package_sha256": "<unpadded-base64url-sha256>",
-            "provenance_bundle_sha256": "<unpadded-base64url-sha256>",
-            "valid_until_ts": 1798848000000,
-            "signatures": {
-                "notary.example": {
-                    "ed25519:auto": "<base64-ed25519-signature>",
-                    "fn-dsa-512:<short_key_id>": "<base64-fn-dsa-signature>"
-                }
-            }
+  "notary_observations": [
+    {
+      "notary_server_name": "notary.example",
+      "observed_server_name": "example.com",
+      "observed_at": 1798848000000,
+      "fetch_uri": "https://example.com/_matrix/key/v2/server",
+      "transport": "https",
+      "tls": {
+        "leaf_spki_sha256": "<unpadded-base64url-sha256>",
+        "leaf_cert_sha256": "<unpadded-base64url-sha256>",
+        "tls_13_provenance": {
+          "transcript_hash_algorithm": "sha256",
+          "handshake_transcript_hash": "<unpadded-base64url-hash>",
+          "certificate_verify_signature_scheme": "ecdsa_secp256r1_sha256",
+          "server_certificate_verify_signature": "<unpadded-base64url-signature>"
         }
-    ]
+      },
+      "key_id": "<unpadded-base64url-key-id>",
+      "server_key_package_sha256": "<unpadded-base64url-sha256>",
+      "provenance_bundle_sha256": "<unpadded-base64url-sha256>",
+      "valid_until_ts": 1798848000000,
+      "signatures": {
+        "notary.example": {
+          "ed25519:auto": "<base64-ed25519-signature>",
+          "fn-dsa-512:<short_key_id>": "<base64-fn-dsa-signature>"
+        }
+      }
+    }
+  ]
 }
 ```
 
@@ -738,37 +738,37 @@ therefore an attestation by default, with an optional embedded-proof upgrade:
 
 ```json
 {
-    "notary_equivocations": [
-        {
-            "record_version": 1,
-            "observed_server_name": "example.com",
-            "algorithm": "fn-dsa-512",
-            "short_key_id": "<short_key_id>",
-            "first": {
-                "key_id": "<unpadded-base64url-key-id>",
-                "server_key_package_sha256": "<unpadded-base64url-sha256>",
-                "first_observed_ts": 1798848000000,
-                "observed_via": "direct"
-            },
-            "conflicting": {
-                "key_id": "<unpadded-base64url-key-id>",
-                "server_key_package_sha256": "<unpadded-base64url-sha256>",
-                "first_observed_ts": 1798848600000,
-                "observed_via": "notary"
-            },
-            "first_response": { "...": "optional, full origin key response" },
-            "conflicting_response": {
-                "...": "optional, full origin key response"
-            },
-            "notary_server_name": "notary.example",
-            "signatures": {
-                "notary.example": {
-                    "ed25519:auto": "<base64-ed25519-signature>",
-                    "fn-dsa-512:<short_key_id>": "<base64-fn-dsa-signature>"
-                }
-            }
+  "notary_equivocations": [
+    {
+      "record_version": 1,
+      "observed_server_name": "example.com",
+      "algorithm": "fn-dsa-512",
+      "short_key_id": "<short_key_id>",
+      "first": {
+        "key_id": "<unpadded-base64url-key-id>",
+        "server_key_package_sha256": "<unpadded-base64url-sha256>",
+        "first_observed_ts": 1798848000000,
+        "observed_via": "direct"
+      },
+      "conflicting": {
+        "key_id": "<unpadded-base64url-key-id>",
+        "server_key_package_sha256": "<unpadded-base64url-sha256>",
+        "first_observed_ts": 1798848600000,
+        "observed_via": "notary"
+      },
+      "first_response": { "...": "optional, full origin key response" },
+      "conflicting_response": {
+        "...": "optional, full origin key response"
+      },
+      "notary_server_name": "notary.example",
+      "signatures": {
+        "notary.example": {
+          "ed25519:auto": "<base64-ed25519-signature>",
+          "fn-dsa-512:<short_key_id>": "<base64-fn-dsa-signature>"
         }
-    ]
+      }
+    }
+  ]
 }
 ```
 
