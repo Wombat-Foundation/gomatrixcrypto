@@ -164,6 +164,11 @@ func TestKeyMetadataAndKeyIDDigests(t *testing.T) {
 	if len(keyID) != 43 {
 		t.Fatalf("unexpected base64url key id length: got %d", len(keyID))
 	}
+
+	archivedKeyID := KeyIDSHA256(pub)
+	if len(archivedKeyID) != 43 {
+		t.Fatalf("unexpected archived key id length: got %d", len(archivedKeyID))
+	}
 }
 
 func TestNewUnsignedFNDSARejectsInvalidInputs(t *testing.T) {
@@ -297,6 +302,10 @@ func TestEncryptPrivateKeyRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defaultParams := DefaultPrivateKeyEncryptionParams()
+	if defaultParams.Time == 0 || defaultParams.MemoryKiB == 0 || defaultParams.Threads == 0 {
+		t.Fatalf("invalid default encryption params: %#v", defaultParams)
+	}
 	params := PrivateKeyEncryptionParams{
 		Time:      1,
 		MemoryKiB: 8 * 1024,
@@ -374,4 +383,117 @@ func TestEncryptPrivateKeyRejectsInvalidInputs(t *testing.T) {
 	if _, err := EncryptPrivateKey(nil, make([]byte, fndsa512.PrivateKeySize), []byte("passphrase"), PrivateKeyEncryptionParams{}); !errors.Is(err, ErrInvalidKeyObject) {
 		t.Fatalf("expected invalid params, got %v", err)
 	}
+}
+
+func TestDecryptPrivateKeyRejectsMalformedObjects(t *testing.T) {
+	if _, err := DecryptPrivateKey(map[string]any{}, []byte("passphrase")); !errors.Is(err, ErrInvalidKeyObject) {
+		t.Fatalf("expected invalid algorithm, got %v", err)
+	}
+	valid := map[string]any{
+		"algorithm": EncryptedPrivateKeyAlgorithm,
+		"kdf": map[string]any{
+			"algorithm":  privateKeyKDFAlgorithm,
+			"time":       uint64(1),
+			"memory_kib": uint64(8 * 1024),
+			"threads":    uint64(1),
+			"salt":       base64.RawStdEncoding.EncodeToString(bytes.Repeat([]byte{0x77}, privateKeySaltSize)),
+		},
+		"aead": map[string]any{
+			"algorithm": privateKeyAEADAlgorithm,
+			"nonce":     base64.RawStdEncoding.EncodeToString(bytes.Repeat([]byte{0x88}, 24)),
+		},
+		"ciphertext": base64.RawStdEncoding.EncodeToString([]byte("bad ciphertext")),
+	}
+	cases := []struct {
+		name string
+		edit func(map[string]any)
+	}{
+		{
+			name: "missing kdf",
+			edit: func(encrypted map[string]any) {
+				delete(encrypted, "kdf")
+			},
+		},
+		{
+			name: "bad kdf algorithm",
+			edit: func(encrypted map[string]any) {
+				encrypted["kdf"].(map[string]any)["algorithm"] = "other"
+			},
+		},
+		{
+			name: "bad salt",
+			edit: func(encrypted map[string]any) {
+				encrypted["kdf"].(map[string]any)["salt"] = "not base64!"
+			},
+		},
+		{
+			name: "missing aead",
+			edit: func(encrypted map[string]any) {
+				delete(encrypted, "aead")
+			},
+		},
+		{
+			name: "bad aead algorithm",
+			edit: func(encrypted map[string]any) {
+				encrypted["aead"].(map[string]any)["algorithm"] = "other"
+			},
+		},
+		{
+			name: "bad nonce",
+			edit: func(encrypted map[string]any) {
+				encrypted["aead"].(map[string]any)["nonce"] = "not base64!"
+			},
+		},
+		{
+			name: "missing ciphertext",
+			edit: func(encrypted map[string]any) {
+				delete(encrypted, "ciphertext")
+			},
+		},
+		{
+			name: "bad ciphertext",
+			edit: func(encrypted map[string]any) {
+				encrypted["ciphertext"] = "not base64!"
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			encrypted := cloneMap(valid)
+			tc.edit(encrypted)
+			if _, err := DecryptPrivateKey(encrypted, []byte("passphrase")); err == nil {
+				t.Fatalf("expected malformed encrypted key to fail")
+			}
+		})
+	}
+	if _, err := DecryptPrivateKey(valid, []byte("passphrase")); err == nil {
+		t.Fatalf("expected authentication failure for malformed ciphertext")
+	}
+}
+
+func TestMintingProofFromObjectRejectsMalformedProofs(t *testing.T) {
+	cases := []map[string]any{
+		{},
+		{"pow": map[string]any{"algorithm": "", "nonce": uint64(0), "solution": []any{uint64(1)}}},
+		{"pow": map[string]any{"algorithm": "test", "nonce": int64(-1), "solution": []any{uint64(1)}}},
+		{"pow": map[string]any{"algorithm": "test", "nonce": uint64(0), "solution": "bad"}},
+		{"pow": map[string]any{"algorithm": "test", "nonce": uint64(0), "solution": []any{uint64(^uint32(0)) + 1}}},
+	}
+	for i, keyObject := range cases {
+		if _, err := mintingProofFromObject(keyObject); err == nil {
+			t.Fatalf("case %d: expected invalid proof to fail", i)
+		}
+	}
+}
+
+func cloneMap(in map[string]any) map[string]any {
+	out := make(map[string]any, len(in))
+	for key, value := range in {
+		if nested, ok := value.(map[string]any); ok {
+			out[key] = cloneMap(nested)
+			continue
+		}
+		out[key] = value
+	}
+	return out
 }
