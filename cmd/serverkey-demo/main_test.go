@@ -1,12 +1,22 @@
 package main
 
 import (
+	"io"
 	"os"
 	"testing"
 
 	"gomatrixlib/cuckoo"
+	"gomatrixlib/fndsa512"
 	"gomatrixlib/serverkey"
+
+	"golang.org/x/crypto/sha3"
 )
+
+func testRNG(seed string) io.Reader {
+	h := sha3.NewShake256()
+	_, _ = h.Write([]byte(seed))
+	return h
+}
 
 func TestPrivateKeyPassphraseSources(t *testing.T) {
 	t.Setenv("SERVERKEY_DEMO_TEST_PASSPHRASE", "from env")
@@ -104,5 +114,47 @@ func TestServerKeyPackageSHA256(t *testing.T) {
 	}
 	if _, err := serverKeyPackageSHA256(map[string]any{"bad": 1.5}); err == nil {
 		t.Fatalf("expected unsupported object to fail")
+	}
+}
+
+func TestSolveMintingPoW(t *testing.T) {
+	_, pub, err := fndsa512.GenerateKey(testRNG("serverkey-demo-pow-keygen"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile := powProfile{
+		Algorithm: "test.cuckoo-cycle-4-8-sha3-256-cogen",
+		Config:    cuckoo.Config{EdgeBits: 8, ProofSize: 4},
+		Demo:      true,
+	}
+	proof, keyID, err := solveMintingPoW("example.com", pub, profile, 1<<12, 64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if proof.Algorithm != profile.Algorithm || len(proof.Solution) != 4 || keyID == "" {
+		t.Fatalf("unexpected proof result: proof=%#v keyID=%q", proof, keyID)
+	}
+
+	seed, err := serverkey.GraphSeed(pub, "example.com", proof.Nonce)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cuckoo.Verify(profile.Config, seed[:], proof.Solution); err != nil {
+		t.Fatalf("proof failed verification: %v", err)
+	}
+}
+
+func TestSolveMintingPoWNoSolution(t *testing.T) {
+	_, pub, err := fndsa512.GenerateKey(testRNG("serverkey-demo-nosol-keygen"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile := powProfile{
+		Algorithm: "test.cuckoo-cycle-4-8-sha3-256-cogen",
+		Config:    cuckoo.Config{EdgeBits: 8, ProofSize: 4},
+		Demo:      true,
+	}
+	if _, _, err := solveMintingPoW("example.com", pub, profile, 1, 1); err != cuckoo.ErrNoSolution {
+		t.Fatalf("expected no solution, got %v", err)
 	}
 }

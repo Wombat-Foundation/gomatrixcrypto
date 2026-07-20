@@ -13,19 +13,29 @@ import (
 )
 
 func main() {
-	mode := flag.String("mode", "", "operation: encrypt or reencrypt")
-	in := flag.String("in", "-", "input file, or - for stdin")
-	passphraseEnv := flag.String("passphrase-env", "", "environment variable containing the passphrase for encrypt")
-	passphraseFile := flag.String("passphrase-file", "", "file containing the passphrase for encrypt")
-	oldPassphraseEnv := flag.String("old-passphrase-env", "", "environment variable containing the old passphrase for reencrypt")
-	oldPassphraseFile := flag.String("old-passphrase-file", "", "file containing the old passphrase for reencrypt")
-	newPassphraseEnv := flag.String("new-passphrase-env", "", "environment variable containing the new passphrase for reencrypt")
-	newPassphraseFile := flag.String("new-passphrase-file", "", "file containing the new passphrase for reencrypt")
-	flag.Parse()
-
-	input, err := readInput(*in)
-	if err != nil {
+	if err := run(os.Args[1:], os.Stdin, os.Stdout); err != nil {
 		fatal(err)
+	}
+}
+
+func run(args []string, stdin io.Reader, stdout io.Writer) error {
+	flags := flag.NewFlagSet("serverkey-keytool", flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	mode := flags.String("mode", "", "operation: encrypt or reencrypt")
+	in := flags.String("in", "-", "input file, or - for stdin")
+	passphraseEnv := flags.String("passphrase-env", "", "environment variable containing the passphrase for encrypt")
+	passphraseFile := flags.String("passphrase-file", "", "file containing the passphrase for encrypt")
+	oldPassphraseEnv := flags.String("old-passphrase-env", "", "environment variable containing the old passphrase for reencrypt")
+	oldPassphraseFile := flags.String("old-passphrase-file", "", "file containing the old passphrase for reencrypt")
+	newPassphraseEnv := flags.String("new-passphrase-env", "", "environment variable containing the new passphrase for reencrypt")
+	newPassphraseFile := flags.String("new-passphrase-file", "", "file containing the new passphrase for reencrypt")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+
+	input, err := readInput(*in, stdin)
+	if err != nil {
+		return err
 	}
 
 	var encrypted map[string]any
@@ -33,47 +43,45 @@ func main() {
 	case "encrypt":
 		passphrase, err := readPassphrase(*passphraseEnv, *passphraseFile, "passphrase")
 		if err != nil {
-			fatal(err)
+			return err
 		}
 		privateKey, err := base64.RawStdEncoding.DecodeString(strings.TrimSpace(string(input)))
 		if err != nil {
-			fatal(err)
+			return err
 		}
 		encrypted, err = serverkey.EncryptPrivateKey(nil, privateKey, passphrase, serverkey.DefaultPrivateKeyEncryptionParams())
 		if err != nil {
-			fatal(err)
+			return err
 		}
 	case "reencrypt":
 		oldPassphrase, err := readPassphrase(*oldPassphraseEnv, *oldPassphraseFile, "old passphrase")
 		if err != nil {
-			fatal(err)
+			return err
 		}
 		newPassphrase, err := readPassphrase(*newPassphraseEnv, *newPassphraseFile, "new passphrase")
 		if err != nil {
-			fatal(err)
+			return err
 		}
 		var oldEncrypted map[string]any
 		if err := json.Unmarshal(input, &oldEncrypted); err != nil {
-			fatal(err)
+			return err
 		}
 		encrypted, err = serverkey.ReencryptPrivateKey(nil, oldEncrypted, oldPassphrase, newPassphrase, serverkey.DefaultPrivateKeyEncryptionParams())
 		if err != nil {
-			fatal(err)
+			return err
 		}
 	default:
-		fatal(fmt.Errorf("set -mode to encrypt or reencrypt"))
+		return fmt.Errorf("set -mode to encrypt or reencrypt")
 	}
 
-	enc := json.NewEncoder(os.Stdout)
+	enc := json.NewEncoder(stdout)
 	enc.SetIndent("", "  ")
-	if err := enc.Encode(encrypted); err != nil {
-		fatal(err)
-	}
+	return enc.Encode(encrypted)
 }
 
-func readInput(path string) ([]byte, error) {
+func readInput(path string, stdin io.Reader) ([]byte, error) {
 	if path == "-" {
-		return io.ReadAll(os.Stdin)
+		return io.ReadAll(stdin)
 	}
 	return os.ReadFile(path)
 }

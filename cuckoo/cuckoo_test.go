@@ -167,3 +167,38 @@ func TestFindProofNoSolution(t *testing.T) {
 		t.Fatalf("expected no solution, got %v", err)
 	}
 }
+
+func TestBitsetHelpers(t *testing.T) {
+	b := newBitset(130)
+	if b.get(65) {
+		t.Fatalf("bit should start unset")
+	}
+	b.set(65)
+	if !b.get(65) {
+		t.Fatalf("bit should be set")
+	}
+	b.clear(65)
+	if b.get(65) {
+		t.Fatalf("bit should be clear")
+	}
+}
+
+func TestLeafCounterHelpers(t *testing.T) {
+	lo := newBitset(8)
+	hi := newBitset(8)
+	if isLeafCounter(lo, hi, 3) {
+		t.Fatalf("empty counter should not be a leaf")
+	}
+	bumpLeafCounter(lo, hi, 3)
+	if !isLeafCounter(lo, hi, 3) {
+		t.Fatalf("single edge should be a leaf")
+	}
+	bumpLeafCounter(lo, hi, 3)
+	if isLeafCounter(lo, hi, 3) {
+		t.Fatalf("two or more edges should not be a leaf")
+	}
+	bumpLeafCounter(lo, hi, 3)
+	if !hi.get(3) {
+		t.Fatalf("counter should stay saturated")
+	}
+}

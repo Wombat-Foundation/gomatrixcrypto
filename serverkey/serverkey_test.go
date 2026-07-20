@@ -486,6 +486,43 @@ func TestMintingProofFromObjectRejectsMalformedProofs(t *testing.T) {
 	}
 }
 
+func TestUint64FromAnyAcceptedTypes(t *testing.T) {
+	cases := []any{
+		uint8(7),
+		uint16(7),
+		uint32(7),
+		uint64(7),
+		uint(7),
+		int(7),
+		int64(7),
+		float64(7),
+	}
+	for _, value := range cases {
+		got, err := uint64FromAny(value)
+		if err != nil {
+			t.Fatalf("uint64FromAny(%T) failed: %v", value, err)
+		}
+		if got != 7 {
+			t.Fatalf("uint64FromAny(%T) = %d, want 7", value, got)
+		}
+	}
+}
+
+func TestUint64FromAnyRejectsInvalidValues(t *testing.T) {
+	cases := []any{
+		int(-1),
+		int64(-1),
+		float64(-1),
+		float64(1.5),
+		"7",
+	}
+	for _, value := range cases {
+		if _, err := uint64FromAny(value); !errors.Is(err, ErrInvalidKeyObject) {
+			t.Fatalf("uint64FromAny(%T) error = %v, want ErrInvalidKeyObject", value, err)
+		}
+	}
+}
+
 func cloneMap(in map[string]any) map[string]any {
 	out := make(map[string]any, len(in))
 	for key, value := range in {
