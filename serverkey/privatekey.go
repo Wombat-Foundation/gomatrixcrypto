@@ -119,6 +119,14 @@ func DecryptPrivateKey(encrypted map[string]any, passphrase []byte) ([]byte, err
 	return privateKey, nil
 }
 
+func ReencryptPrivateKey(rng io.Reader, encrypted map[string]any, oldPassphrase, newPassphrase []byte, params PrivateKeyEncryptionParams) (map[string]any, error) {
+	privateKey, err := DecryptPrivateKey(encrypted, oldPassphrase)
+	if err != nil {
+		return nil, err
+	}
+	return EncryptPrivateKey(rng, privateKey, newPassphrase, params)
+}
+
 func validatePrivateKeyEncryptionInputs(privateKey, passphrase []byte, params PrivateKeyEncryptionParams) error {
 	if len(privateKey) != fndsa512.PrivateKeySize {
 		return fndsa512.ErrInvalidPrivateKey

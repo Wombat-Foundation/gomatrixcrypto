@@ -148,6 +148,18 @@ passphrase through an environment variable or a file:
 
    SERVERKEY_PASSPHRASE='replace with a secret phrase' go run ./cmd/serverkey-demo -server example.com -private-key-passphrase-env SERVERKEY_PASSPHRASE
 
+Existing plaintext private-key exports can be encrypted, and encrypted exports
+can be re-wrapped with a new passphrase:
+
+.. code-block:: bash
+
+   SERVERKEY_PASSPHRASE='replace with a secret phrase' go run ./cmd/serverkey-keytool -mode encrypt -in private-key.b64 -passphrase-env SERVERKEY_PASSPHRASE
+
+   OLD_SERVERKEY_PASSPHRASE='old secret phrase' NEW_SERVERKEY_PASSPHRASE='new secret phrase' go run ./cmd/serverkey-keytool -mode reencrypt -in encrypted-private-key.json -old-passphrase-env OLD_SERVERKEY_PASSPHRASE -new-passphrase-env NEW_SERVERKEY_PASSPHRASE
+
+Empty passphrases are rejected. Removing encryption from an encrypted private
+key is intentionally not provided by this tool.
+
 The demo uses ``-pow-edge-bits 8 -pow-proof-size 4`` and searches ``1<<12``
 edge nonces per minting nonce by default, so it is intentionally easy: it looks
 for a 4-cycle in a tiny graph. The live production profile described in

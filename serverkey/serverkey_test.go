@@ -324,6 +324,45 @@ func TestEncryptPrivateKeyRoundTrip(t *testing.T) {
 	}
 }
 
+func TestReencryptPrivateKeyChangesPassphrase(t *testing.T) {
+	priv, _, err := fndsa512.GenerateKey(testRNG("serverkey-reencrypt-keygen"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldParams := PrivateKeyEncryptionParams{
+		Time:      1,
+		MemoryKiB: 8 * 1024,
+		Threads:   1,
+		Salt:      bytes.Repeat([]byte{0x33}, privateKeySaltSize),
+		Nonce:     bytes.Repeat([]byte{0x44}, 24),
+	}
+	encrypted, err := EncryptPrivateKey(nil, priv, []byte("old passphrase"), oldParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+	newParams := PrivateKeyEncryptionParams{
+		Time:      1,
+		MemoryKiB: 8 * 1024,
+		Threads:   1,
+		Salt:      bytes.Repeat([]byte{0x55}, privateKeySaltSize),
+		Nonce:     bytes.Repeat([]byte{0x66}, 24),
+	}
+	reencrypted, err := ReencryptPrivateKey(nil, encrypted, []byte("old passphrase"), []byte("new passphrase"), newParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := DecryptPrivateKey(reencrypted, []byte("old passphrase")); err == nil {
+		t.Fatalf("expected old passphrase to fail")
+	}
+	decrypted, err := DecryptPrivateKey(reencrypted, []byte("new passphrase"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(decrypted, priv) {
+		t.Fatalf("private key mismatch after reencrypt")
+	}
+}
+
 func TestEncryptPrivateKeyRejectsInvalidInputs(t *testing.T) {
 	params := PrivateKeyEncryptionParams{Time: 1, MemoryKiB: 8 * 1024, Threads: 1}
 	if _, err := EncryptPrivateKey(nil, []byte("short"), []byte("passphrase"), params); !errors.Is(err, fndsa512.ErrInvalidPrivateKey) {
