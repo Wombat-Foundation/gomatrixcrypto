@@ -1,0 +1,49 @@
+7/20/2026
+
+› should the primitives for 4510 be encoded into rezzy, gomatrixcrypto, etc?
+
+
+• Yes, but not all of MSC4510 should be pushed into crypto libraries.
+
+  I’d split it this way:
+
+  Put in gomatrixcrypto / Matrix crypto primitives:
+
+  - Canonical hashing for split event metadata.
+  - Merkle leaf/node/root construction.
+  - Domain separation strings.
+  - Proof verification.
+  - Event-root / event-ID derivation for future room versions.
+  - Signature envelope verification once that design is finalized.
+
+  That belongs in crypto code because implementations must not subtly disagree on hash inputs, field ordering, null handling, or proof path semantics.
+
+  Put in rezzy / reconciliation tooling:
+
+  - Topology query client/server helpers.
+  - Traversal planning.
+  - event_fields + events row decoding/encoding.
+  - Sidecar handling for edge_errors and proofs.
+  - Common ancestor / hop distance request construction.
+  - Repair heuristics using MSC4510 hints.
+
+  That belongs in reconciliation code because it is protocol workflow, not cryptographic identity.
+
+  Probably do not put in crypto libraries:
+
+  - Federation HTTP endpoint handling.
+  - Authorization/history visibility checks.
+  - Storage indexes.
+  - Query planner logic.
+  - Rate limits and traversal caps.
+  - Fallback behavior when proofs are absent.
+
+  Those need homeserver context.
+
+  The clean layering is:
+
+  homeserver federation endpoint
+    -> rezzy-style topology/reconciliation library
+        -> gomatrixcrypto-style proof/hash primitives
+
+  So yes: encode the primitives, especially the Merkleized metadata verification pieces. But keep the query API and traversal machinery outside the crypto package.
