@@ -9,7 +9,7 @@ This repository currently provides:
 * ``fndsa512``: a thin Go wrapper for Falcon ``fn-dsa-512``
 * ``keyid``: canonical ``fn-dsa-512`` key-ID fingerprint and short-ID helper
 * ``matrixjson``: Matrix Canonical JSON encoding for signed objects
-* ``merkle``: MSC4511 SHA3-256 Merkleized metadata primitives
+* ``merkle``: MSC4511 SHA3-256 root derivation and event ID primitives
 * ``serverkey``: FN-DSA server-key object construction and self-signing
 * ``cuckoo``: Cuckoo Cycle proof generation and verification helpers
 * ``cmd/merkle-vectors``: draft MSC4511 Merkle metadata vector generator
@@ -37,7 +37,7 @@ Project Layout
 * ``fndsa512/``: key gen, signing, and verification helpers
 * ``keyid/``: key-ID digest and *pseudo-unique* short-ID derivation
 * ``matrixjson/``: canonical JSON encoder
-* ``merkle/``: field leaves, event roots, and event ID primitives.
+* ``merkle/``: draft MSC4511 field roots, event roots, and event ID helpers
 * ``serverkey/``: FN-DSA helpers for ``/_matrix/key/v2/server``
 * ``cuckoo/``: PoW edge miner and proof verification
 * ``res/``: reference notes and external materials
@@ -246,4 +246,4 @@ Run the main verification path with:
 
 .. code-block:: bash
 
-   make check
+   make format lint cov

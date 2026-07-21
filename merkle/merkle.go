@@ -92,6 +92,8 @@ func leaves(fields []Field) ([]leaf, error) {
 		}
 		leaves[i] = leaf
 	}
+	// Go string ordering is bytewise, matching MSC4511's UTF-8 byte ordering
+	// after leafHash has rejected malformed field names.
 	sort.Slice(leaves, func(i, j int) bool {
 		return leaves[i].Name < leaves[j].Name
 	})
