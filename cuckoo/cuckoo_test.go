@@ -4,7 +4,9 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"testing"
+	"time"
 )
 
 func testSeed() []byte {
@@ -263,6 +265,65 @@ func TestFindProofRejectsInvalidConfigAndSeed(t *testing.T) {
 	}
 	if _, err := FindProof(Config{EdgeBits: 8, ProofSize: 4}, []byte("short"), 1); !errors.Is(err, ErrInvalidSeed) {
 		t.Fatalf("expected invalid seed, got %v", err)
+	}
+}
+
+func TestTrimAliveEdgesAndCollectSurvivors(t *testing.T) {
+	alive := newBitset(4)
+	alive.set(0)
+	alive.set(1)
+	alive.set(2)
+
+	lo := newBitset(5)
+	hi := newBitset(5)
+	endpoints := func(nonce uint32) (uint64, uint64) {
+		switch nonce {
+		case 0:
+			return 0, 1
+		case 1:
+			return 0, 1
+		case 2:
+			return 3, 4
+		default:
+			return 9, 9
+		}
+	}
+
+	removed := trimAliveEdges(alive, lo, hi, 4, endpoints)
+	if removed != 1 {
+		t.Fatalf("expected exactly one edge to be removed, got %d", removed)
+	}
+	if alive.get(2) {
+		t.Fatalf("expected nonce 2 to be cleared")
+	}
+
+	survivors := collectSurvivors(alive, 4, endpoints)
+	if len(survivors) != 2 {
+		t.Fatalf("expected two survivors, got %d", len(survivors))
+	}
+	if survivors[0].nonce != 0 || survivors[1].nonce != 1 {
+		t.Fatalf("unexpected survivors: %#v", survivors)
+	}
+}
+
+func TestLogDFSProgress(t *testing.T) {
+	oldInterval := dfsLogInterval
+	dfsLogInterval = 1
+	t.Cleanup(func() { dfsLogInterval = oldInterval })
+
+	var lines []string
+	log := func(format string, args ...any) {
+		lines = append(lines, fmt.Sprintf(format, args...))
+	}
+
+	logDFSProgress(0, 10, time.Now(), log)
+	if len(lines) != 0 {
+		t.Fatalf("unexpected progress log at start edge 0: %v", lines)
+	}
+
+	logDFSProgress(1, 10, time.Now(), log)
+	if len(lines) != 1 {
+		t.Fatalf("expected progress log at start edge 1")
 	}
 }
 

@@ -14,6 +14,11 @@ import (
 // megabytes.
 type bitset []uint64
 
+type labeledEdge struct {
+	nonce uint32
+	u, v  uint64
+}
+
 func newBitset(n uint64) bitset {
 	return make(bitset, (n+63)/64)
 }
@@ -47,6 +52,8 @@ func bumpLeafCounter(lo, hi bitset, node uint64) {
 func isLeafCounter(lo, hi bitset, node uint64) bool {
 	return lo.get(node) && !hi.get(node)
 }
+
+var dfsLogInterval = 200000
 
 // FindProof performs a bounded search for a valid cycle.
 //
@@ -124,30 +131,7 @@ func FindProof(cfg Config, seed []byte, maxNonce uint32, onProgress ...func(stri
 	survivorTarget := uint64(1) << 22
 	const maxTrimRounds = 64
 	for round := 0; round < maxTrimRounds && aliveCount > survivorTarget; round++ {
-		for i := range lo {
-			lo[i] = 0
-			hi[i] = 0
-		}
-		for nonce := uint32(0); nonce < maxNonce; nonce++ {
-			if !alive.get(uint64(nonce)) {
-				continue
-			}
-			u, v := edgeEndpoints(nonce)
-			bumpLeafCounter(lo, hi, u)
-			bumpLeafCounter(lo, hi, v)
-		}
-
-		removedThisRound := uint64(0)
-		for nonce := uint32(0); nonce < maxNonce; nonce++ {
-			if !alive.get(uint64(nonce)) {
-				continue
-			}
-			u, v := edgeEndpoints(nonce)
-			if isLeafCounter(lo, hi, u) || isLeafCounter(lo, hi, v) {
-				alive.clear(uint64(nonce))
-				removedThisRound++
-			}
-		}
+		removedThisRound := trimAliveEdges(alive, lo, hi, maxNonce, edgeEndpoints)
 		aliveCount -= removedThisRound
 		logf("cuckoo: trim round %d: -%d edges, %d alive (elapsed %s)", round+1, removedThisRound, aliveCount, time.Since(startTime).Round(time.Millisecond))
 		// Diminishing returns: once a round clears under 0.1% of what's
@@ -157,19 +141,7 @@ func FindProof(cfg Config, seed []byte, maxNonce uint32, onProgress ...func(stri
 			break
 		}
 	}
-	type labeledEdge struct {
-		nonce uint32
-		u, v  uint64
-	}
-
-	survivors := make([]labeledEdge, 0, aliveCount)
-	for nonce := uint32(0); nonce < maxNonce; nonce++ {
-		if !alive.get(uint64(nonce)) {
-			continue
-		}
-		u, v := edgeEndpoints(nonce)
-		survivors = append(survivors, labeledEdge{nonce: nonce, u: u, v: v})
-	}
+	survivors := collectSurvivors(alive, maxNonce, edgeEndpoints)
 	logf("cuckoo: bulk trimming done: %d survivor edges (elapsed %s)", len(survivors), time.Since(startTime).Round(time.Millisecond))
 
 	// The bulk rounds above only approximate the 2-core: each round removes
@@ -272,14 +244,11 @@ func FindProof(cfg Config, seed []byte, maxNonce uint32, onProgress ...func(stri
 	// FindProof call already costs 20-30+ seconds. Covering it would add
 	// that cost to every test run, so it's left undocumented-but-uncovered
 	// alongside the bulk-trim loop's rarer paths.
-	const dfsLogInterval = 200000
 	for startIdx, start := range survivors {
 		if removed[startIdx] {
 			continue
 		}
-		if startIdx > 0 && startIdx%dfsLogInterval == 0 {
-			logf("cuckoo: dfs: tried %d/%d starting edges (elapsed %s)", startIdx, len(survivors), time.Since(startTime).Round(time.Millisecond))
-		}
+		logDFSProgress(startIdx, len(survivors), startTime, logf)
 		usedEdges[startIdx] = true
 		seenNodes[start.u] = true
 		seenNodes[start.v] = true
@@ -295,4 +264,50 @@ func FindProof(cfg Config, seed []byte, maxNonce uint32, onProgress ...func(stri
 
 	logf("cuckoo: no cycle found among %d survivor edges (elapsed %s)", len(survivors), time.Since(startTime).Round(time.Millisecond))
 	return nil, ErrNoSolution
+}
+
+func trimAliveEdges(alive bitset, lo, hi bitset, maxNonce uint32, edgeEndpoints func(uint32) (uint64, uint64)) uint64 {
+	for i := range lo {
+		lo[i] = 0
+		hi[i] = 0
+	}
+	for nonce := uint32(0); nonce < maxNonce; nonce++ {
+		if !alive.get(uint64(nonce)) {
+			continue
+		}
+		u, v := edgeEndpoints(nonce)
+		bumpLeafCounter(lo, hi, u)
+		bumpLeafCounter(lo, hi, v)
+	}
+
+	removedThisRound := uint64(0)
+	for nonce := uint32(0); nonce < maxNonce; nonce++ {
+		if !alive.get(uint64(nonce)) {
+			continue
+		}
+		u, v := edgeEndpoints(nonce)
+		if isLeafCounter(lo, hi, u) || isLeafCounter(lo, hi, v) {
+			alive.clear(uint64(nonce))
+			removedThisRound++
+		}
+	}
+	return removedThisRound
+}
+
+func collectSurvivors(alive bitset, maxNonce uint32, edgeEndpoints func(uint32) (uint64, uint64)) []labeledEdge {
+	survivors := make([]labeledEdge, 0, len(alive))
+	for nonce := uint32(0); nonce < maxNonce; nonce++ {
+		if !alive.get(uint64(nonce)) {
+			continue
+		}
+		u, v := edgeEndpoints(nonce)
+		survivors = append(survivors, labeledEdge{nonce: nonce, u: u, v: v})
+	}
+	return survivors
+}
+
+func logDFSProgress(startIdx, total int, startTime time.Time, logf func(string, ...any)) {
+	if startIdx > 0 && startIdx%dfsLogInterval == 0 {
+		logf("cuckoo: dfs: tried %d/%d starting edges (elapsed %s)", startIdx, total, time.Since(startTime).Round(time.Millisecond))
+	}
 }
