@@ -1,5 +1,5 @@
 gomatrixlib
-==========
+===========
 
 Small Go library for Matrix-adjacent cryptographic primitives.
 
@@ -12,13 +12,14 @@ This repository currently provides:
 * ``merkle``: MSC4511 SHA3-256 Merkleized metadata primitives
 * ``serverkey``: FN-DSA server-key object construction and self-signing
 * ``cuckoo``: Cuckoo Cycle proof generation and verification helpers
+* ``cmd/merkle-vectors``: draft MSC4511 Merkle metadata vector generator
 * ``cmd/cuckoo-scan``: helper command that scans graph nonces until the
   reference mean-miner finds a proof
 
 Status
 ------
 
-This is early library code, not a finished application or protocol implementation.
+Early library code, not a finished application or protocol implementation.
 
 The ``fn-dsa-512`` package currently wraps ``github.com/pornin/go-fn-dsa``.
 That upstream implementation explicitly tracks a pre-final FN-DSA standard, so
@@ -32,15 +33,14 @@ Requirements
 Project Layout
 --------------
 
-* ``lthash/``: incremental lattice hash and ``BLAKE`` checksum
-* ``fndsa512/``: key generation, signing, and verification helpers
-* ``keyid/``: key-ID digest and *quasi-unique* short-ID derivation
-* ``matrixjson/``: Matrix Canonical JSON encoder
-* ``merkle/``: MSC4511 field leaves, RFC6962-shaped roots, event roots, and
-  event IDs
-* ``serverkey/``: signed FN-DSA ``/_matrix/key/v2/server`` object helpers
-* ``cuckoo/``: PoW edge derivation, proof verification, and bounded proof search
-* ``res/``: reference notes and external material used during implementation
+* ``lthash/``: reference lattice hash and ``BLAKE`` checksum
+* ``fndsa512/``: key gen, signing, and verification helpers
+* ``keyid/``: key-ID digest and *pseudo-unique* short-ID derivation
+* ``matrixjson/``: canonical JSON encoder
+* ``merkle/``: field leaves, event roots, and event ID primitives.
+* ``serverkey/``: FN-DSA helpers for ``/_matrix/key/v2/server``
+* ``cuckoo/``: PoW edge miner and proof verification
+* ``res/``: reference notes and external materials
 
 Package Overview
 ----------------
@@ -179,12 +179,24 @@ PoW profile examples:
    # Custom profile and algorithm label.
    go run ./cmd/serverkey-demo -pow-profile custom -pow-algorithm local.cuckoo-cycle-6-12-sha3-256-cogen -pow-edge-bits 12 -pow-proof-size 6 -pow-max-nonce 65536
 
-   # Production parameter labels. This is expected to be expensive with the Go helper.
-   go run ./cmd/serverkey-demo -pow-profile production -pow-max-nonce 536870912 -pow-max-graph-nonce 1024
-
    # Production-style nutra.tk bundle using the reference mean-miner.
    (cd cuckoo/meanminer/csrc && make)
    go run ./cmd/serverkey-demo -server nutra.tk -valid-days 365 -pow-profile production -pow-max-graph-nonce 1024
+
+   # Production parameter labels. This is expected to be expensive with the Go helper.
+   go run ./cmd/serverkey-demo -pow-profile production -pow-max-nonce 536870912 -pow-max-graph-nonce 1024
+
+MSC4511 Merkle Vectors
+~~~~~~~~~~~~~~~~~~~~~~
+
+Draft MSC4511 Merkleized metadata vectors can be regenerated with:
+
+.. code-block:: bash
+
+   go run ./cmd/merkle-vectors
+
+These are implementation regression vectors, not official Matrix specification
+vectors.
 
 Cuckoo Cycle
 ~~~~~~~~~~~~
