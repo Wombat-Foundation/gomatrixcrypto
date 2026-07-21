@@ -157,8 +157,6 @@ func FindProof(cfg Config, seed []byte, maxNonce uint32, onProgress ...func(stri
 			break
 		}
 	}
-	lo, hi = nil, nil
-
 	type labeledEdge struct {
 		nonce uint32
 		u, v  uint64
@@ -172,7 +170,6 @@ func FindProof(cfg Config, seed []byte, maxNonce uint32, onProgress ...func(stri
 		u, v := edgeEndpoints(nonce)
 		survivors = append(survivors, labeledEdge{nonce: nonce, u: u, v: v})
 	}
-	alive = nil
 	logf("cuckoo: bulk trimming done: %d survivor edges (elapsed %s)", len(survivors), time.Since(startTime).Round(time.Millisecond))
 
 	// The bulk rounds above only approximate the 2-core: each round removes

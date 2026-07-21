@@ -3,6 +3,18 @@ gomatrixlib
 
 Small Go library for Matrix-adjacent cryptographic primitives.
 
+.. Substitutions for Badges
+
+.. |coverage| image:: https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FWombat-Foundation%2Fgomatrixcrypto%2F_metadata%2Fbadges%2Fcoverage-main.json
+   :target: https://github.com/Wombat-Foundation/gomatrixcrypto/actions/workflows/test.yml?query=branch%3Amain
+   :alt: Coverage
+
+.. |tests| image:: https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FWombat-Foundation%2Fgomatrixcrypto%2F_metadata%2Fbadges%2Ftests-main.json
+   :target: https://github.com/Wombat-Foundation/gomatrixcrypto/actions/workflows/test.yml?query=branch%3Amain
+   :alt: Tests (pass/skip/fail)
+
+|coverage| |tests|
+
 This repository currently provides:
 
 * ``lthash``: LtHash16-style homomorphic state hashing for Matrix state sets

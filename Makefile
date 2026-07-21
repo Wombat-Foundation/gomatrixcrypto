@@ -6,8 +6,10 @@ STYLE_RESET := $(shell tput sgr0 2>/dev/null || printf '\033[0m')
 
 GO ?= go
 STATICCHECK ?= staticcheck
+GOLANGCI_LINT ?= golangci-lint
 VETFLAGS ?=
 STATICCHECKFLAGS ?=
+GOLANGCI_LINTFLAGS ?= -E ineffassign -E wastedassign
 PKGS := ./...
 LIBPKGS = $(shell $(GO) list ./... | grep -v '/cmd/')
 GOFILES := $(shell find . -type f -name '*.go' -not -path './vendor/*')
@@ -45,6 +47,8 @@ _cov/all: ## Run tests with coverage and print a summary for all packages, inclu
 lint:	## Run lint checks
 	$(GO) vet $(VETFLAGS) $(PKGS)
 	$(STATICCHECK) -checks=all $(STATICCHECKFLAGS) $(PKGS)
+	# install with, i.e., `curl -sSfL https://golangci-lint.run/install.sh | sh -s -- -b "$(go env GOPATH)/bin" v2.12.2`
+	$(GOLANGCI_LINT) run $(GOLANGCI_LINTFLAGS) $(PKGS)
 
 .PHONY: build
 build: ## Compile all packages
