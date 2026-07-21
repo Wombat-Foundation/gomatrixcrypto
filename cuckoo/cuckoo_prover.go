@@ -239,11 +239,9 @@ func FindProof(cfg Config, seed []byte, maxNonce uint32, onProgress ...func(stri
 		return nil, false
 	}
 
-	// dfsLogInterval (200k+ failed starting-edge attempts) is only reached
-	// at production-scale graph sizes (EdgeBits~23+), where a single
-	// FindProof call already costs 20-30+ seconds. Covering it would add
-	// that cost to every test run, so it's left undocumented-but-uncovered
-	// alongside the bulk-trim loop's rarer paths.
+	// With the default dfsLogInterval, this progress log only appears at
+	// production-scale graph sizes, where a single FindProof call already costs
+	// tens of seconds.
 	for startIdx, start := range survivors {
 		if removed[startIdx] {
 			continue
