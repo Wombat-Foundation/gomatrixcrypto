@@ -66,10 +66,10 @@ func run() error {
 
 func sampleFields() []merkle.Field {
 	return []merkle.Field{
-		{Name: "event_id", Value: "$b:example.org"},
 		{Name: "depth", Value: int64(7)},
-		{Name: "rejected", Value: false},
+		{Name: "event_id", Value: "$b:example.org"},
 		{Name: "prev_events_hash", Value: "sha256:abc"},
+		{Name: "rejected", Value: false},
 	}
 }
 

@@ -13,6 +13,11 @@ func TestRunOutputsStableVectors(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		os.Stdout = stdout
+		_ = r.Close()
+		_ = w.Close()
+	})
 	os.Stdout = w
 
 	runErr := run()
@@ -27,6 +32,9 @@ func TestRunOutputsStableVectors(t *testing.T) {
 
 	var buf bytes.Buffer
 	if _, err := io.Copy(&buf, r); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Close(); err != nil {
 		t.Fatal(err)
 	}
 
