@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"io"
 	"os"
 	"testing"
@@ -92,6 +93,16 @@ func TestConfigurePoWProfile(t *testing.T) {
 	}
 }
 
+func TestConfigurePoWProfileCustomDemoSetsNote(t *testing.T) {
+	custom, err := configurePoWProfile("custom", 12, 6, "local.example", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !custom.Demo || custom.Note == "" {
+		t.Fatalf("expected demo note to be set: %#v", custom)
+	}
+}
+
 func TestConfigurePoWProfileRejectsInvalidInputs(t *testing.T) {
 	if _, err := configurePoWProfile("custom", 8, 4, "", true); err == nil {
 		t.Fatalf("expected missing custom algorithm to fail")
@@ -141,6 +152,51 @@ func TestSolveMintingPoW(t *testing.T) {
 	}
 	if err := cuckoo.Verify(profile.Config, seed[:], proof.Solution); err != nil {
 		t.Fatalf("proof failed verification: %v", err)
+	}
+}
+
+func TestSolveMintingPoWPropagatesGraphSeedError(t *testing.T) {
+	_, pub, err := fndsa512.GenerateKey(testRNG("serverkey-demo-badserver-keygen"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile := powProfile{
+		Algorithm: "test.cuckoo-cycle-4-8-sha3-256-cogen",
+		Config:    cuckoo.Config{EdgeBits: 8, ProofSize: 4},
+		Demo:      true,
+	}
+	if _, _, err := solveMintingPoW(string([]byte{0xff}), pub, profile, 1<<12, 64); err == nil {
+		t.Fatalf("expected invalid server name to fail")
+	}
+}
+
+func TestSolveMintingPoWPropagatesFindProofError(t *testing.T) {
+	_, pub, err := fndsa512.GenerateKey(testRNG("serverkey-demo-badconfig-keygen"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile := powProfile{
+		Algorithm: "test.cuckoo-cycle-invalid",
+		Config:    cuckoo.Config{EdgeBits: 1, ProofSize: 4},
+		Demo:      true,
+	}
+	if _, _, err := solveMintingPoW("example.com", pub, profile, 1<<12, 64); !errors.Is(err, cuckoo.ErrInvalidEdgeBits) {
+		t.Fatalf("expected invalid edge bits, got %v", err)
+	}
+}
+
+func TestSolveMintingPoWPropagatesKeyIDError(t *testing.T) {
+	_, pub, err := fndsa512.GenerateKey(testRNG("serverkey-demo-badalgo-keygen"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile := powProfile{
+		Algorithm: string([]byte{0xff}),
+		Config:    cuckoo.Config{EdgeBits: 8, ProofSize: 4},
+		Demo:      true,
+	}
+	if _, _, err := solveMintingPoW("example.com", pub, profile, 1<<12, 64); err == nil {
+		t.Fatalf("expected invalid algorithm string to fail key ID computation")
 	}
 }
 
