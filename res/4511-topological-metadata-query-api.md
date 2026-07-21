@@ -759,7 +759,7 @@ passes normal Matrix authorization and event verification.
   current default room-version baseline, including event format behavior
   inherited from room version 11, event IDs inherited from room versions 3 and
   later, and v12-specific room ID and state-resolution changes.
-- [MSC4186: Simplified Sliding Sync](4186-simplified-sliding-sync.md), as prior
+- [MSC4186: Simplified Sliding Sync](https://github.com/matrix-org/matrix-spec-proposals/pull/4186), as prior
   art for selective, client-chosen field/query shapes in Matrix.
 - [MSC2836: Twitter-style Threading](https://github.com/matrix-org/matrix-spec-proposals/pull/2836),
   as prior art for bounded traversal of Matrix event relationships over

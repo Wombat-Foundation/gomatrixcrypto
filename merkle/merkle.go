@@ -116,6 +116,20 @@ func RootFromLeaves(leaves []Leaf) (Hash, error) {
 	if len(leaves) == 0 {
 		return Hash{}, ErrNoLeaves
 	}
+	for i, leaf := range leaves {
+		if leaf.Name == "" {
+			return Hash{}, ErrEmptyFieldName
+		}
+		if i > 0 {
+			prev := leaves[i-1].Name
+			if prev == leaf.Name {
+				return Hash{}, fmt.Errorf("%w: %s", ErrDuplicateField, leaf.Name)
+			}
+			if prev > leaf.Name {
+				return Hash{}, errors.New("merkle: leaves not in canonical order")
+			}
+		}
+	}
 	hashes := make([]Hash, len(leaves))
 	for i, leaf := range leaves {
 		hashes[i] = leaf.Hash
