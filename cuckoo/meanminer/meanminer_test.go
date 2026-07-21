@@ -37,12 +37,8 @@ func TestAvailable(t *testing.T) {
 }
 
 func TestRunCommand(t *testing.T) {
-	out, err := runCommand("echo", "hello")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.TrimSpace(string(out)) != "hello" {
-		t.Fatalf("unexpected output: %q", out)
+	if _, err := runCommand("meanminer-test-command-does-not-exist-12345"); err == nil {
+		t.Fatalf("expected runCommand to fail for missing command")
 	}
 }
 

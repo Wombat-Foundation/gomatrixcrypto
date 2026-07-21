@@ -9,7 +9,7 @@ STATICCHECK ?= staticcheck
 VETFLAGS ?=
 STATICCHECKFLAGS ?=
 PKGS := ./...
-LIBPKGS := $(shell $(GO) list ./... | grep -v '/cmd/')
+LIBPKGS = $(shell $(GO) list ./... | grep -v '/cmd/')
 GOFILES := $(shell find . -type f -name '*.go' -not -path './vendor/*')
 COVERPROFILE ?= coverage.out
 
