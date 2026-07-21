@@ -153,6 +153,57 @@ func TestVerifyRejectsInvalidConfigAndSeed(t *testing.T) {
 	}
 }
 
+func TestNormalizeRejectsOutOfRangeProofSize(t *testing.T) {
+	if _, err := (Config{EdgeBits: 8, ProofSize: 1}).normalize(); !errors.Is(err, ErrInvalidProof) {
+		t.Fatalf("expected invalid proof for too-small ProofSize, got %v", err)
+	}
+	if _, err := (Config{EdgeBits: 8, ProofSize: 256}).normalize(); !errors.Is(err, ErrInvalidProof) {
+		t.Fatalf("expected invalid proof for too-large ProofSize, got %v", err)
+	}
+}
+
+// The following proofs are hand-picked (via offline brute-force search over
+// EdgeForNonce outputs) to exercise cycle-detection branches that a
+// tampered-but-otherwise-plausible proof can hit: a nonzero XOR checksum,
+// more than one edge sharing a partition value on each side, and no edge at
+// all sharing a partition value on the V side. Real proofs from FindProof
+// never trigger these, since they only arise from a proof that isn't an
+// actual 2-regular cycle in the graph.
+func TestVerifyRejectsNonzeroXor(t *testing.T) {
+	cfg := Config{EdgeBits: 3, ProofSize: 4}
+	if err := Verify(cfg, testSeed(), []uint32{0, 1, 2, 3}); !errors.Is(err, ErrInvalidProof) {
+		t.Fatalf("expected invalid proof for nonzero xor, got %v", err)
+	}
+}
+
+func TestVerifyRejectsDuplicateUPartitionMatch(t *testing.T) {
+	cfg := Config{EdgeBits: 3, ProofSize: 4}
+	if err := Verify(cfg, testSeed(), []uint32{9158, 15434, 17863, 25983}); !errors.Is(err, ErrInvalidProof) {
+		t.Fatalf("expected invalid proof for duplicate U-partition match, got %v", err)
+	}
+}
+
+func TestVerifyRejectsDuplicateVPartitionMatch(t *testing.T) {
+	cfg := Config{EdgeBits: 3, ProofSize: 4}
+	if err := Verify(cfg, testSeed(), []uint32{1644, 13078, 23206, 27540}); !errors.Is(err, ErrInvalidProof) {
+		t.Fatalf("expected invalid proof for duplicate V-partition match, got %v", err)
+	}
+}
+
+func TestVerifyRejectsNoVPartitionMatch(t *testing.T) {
+	cfg := Config{EdgeBits: 3, ProofSize: 4}
+	if err := Verify(cfg, testSeed(), []uint32{14684, 15217, 31161, 31439}); !errors.Is(err, ErrInvalidProof) {
+		t.Fatalf("expected invalid proof for missing V-partition match, got %v", err)
+	}
+}
+
+func TestVerifyRejectsSubcycleCountMismatch(t *testing.T) {
+	cfg := Config{EdgeBits: 3, ProofSize: 4}
+	if err := Verify(cfg, testSeed(), []uint32{989, 8277, 12658, 25760}); !errors.Is(err, ErrInvalidProof) {
+		t.Fatalf("expected invalid proof for a disjoint sub-cycle, got %v", err)
+	}
+}
+
 func TestFindProofRejectsInvalidConfigAndSeed(t *testing.T) {
 	if _, err := FindProof(Config{EdgeBits: 1}, testSeed(), 1); !errors.Is(err, ErrInvalidEdgeBits) {
 		t.Fatalf("expected invalid edge bits, got %v", err)
