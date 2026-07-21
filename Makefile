@@ -9,6 +9,7 @@ STATICCHECK ?= staticcheck
 VETFLAGS ?=
 STATICCHECKFLAGS ?=
 PKGS := ./...
+LIBPKGS := $(shell $(GO) list ./... | grep -v '/cmd/')
 GOFILES := $(shell find . -type f -name '*.go' -not -path './vendor/*')
 COVERPROFILE ?= coverage.out
 
@@ -23,11 +24,20 @@ format: ## Format Go source files and run pre-commit hooks
 	pre-commit run --all-files
 
 .PHONY: test
-test: ## Run the test suite
+test: ## Run the test suite (library packages only, excludes cmd/)
+	$(GO) test $(LIBPKGS)
+
+.PHONY: _test/all
+_test/all: ## Run the test suite for all packages, including cmd/
 	$(GO) test $(PKGS)
 
 .PHONY: cov
-cov: ## Run tests with coverage and print a summary
+cov: ## Run tests with coverage and print a summary (library packages only, excludes cmd/)
+	$(GO) test -coverprofile=$(COVERPROFILE) $(LIBPKGS)
+	$(GO) tool cover -func=$(COVERPROFILE)
+
+.PHONY: _cov/all
+_cov/all: ## Run tests with coverage and print a summary for all packages, including cmd/
 	$(GO) test -coverprofile=$(COVERPROFILE) $(PKGS)
 	$(GO) tool cover -func=$(COVERPROFILE)
 
