@@ -47,7 +47,7 @@ _cov/all: ## Run tests with coverage and print a summary for all packages, inclu
 lint:	## Run lint checks
 	$(GO) vet $(VETFLAGS) $(PKGS)
 	$(STATICCHECK) -checks=all $(STATICCHECKFLAGS) $(PKGS)
-	# install with, i.e., `curl -sSfL https://golangci-lint.run/install.sh | sh -s -- -b "$(go env GOPATH)/bin" v2.12.2`
+	# install with, i.e., `curl -sSfL https://golangci-lint.run/install.sh | sh -s -- -b "$$(go env GOPATH)/bin" v2.12.2`
 	$(GOLANGCI_LINT) run $(GOLANGCI_LINTFLAGS) $(PKGS)
 
 .PHONY: build

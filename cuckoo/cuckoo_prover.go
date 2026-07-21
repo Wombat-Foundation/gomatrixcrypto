@@ -294,8 +294,8 @@ func trimAliveEdges(alive bitset, lo, hi bitset, maxNonce uint32, edgeEndpoints 
 	return removedThisRound
 }
 
-func collectSurvivors(alive bitset, maxNonce uint32, edgeEndpoints func(uint32) (uint64, uint64)) []labeledEdge {
-	survivors := make([]labeledEdge, 0, len(alive))
+func collectSurvivors(alive bitset, maxNonce uint32, aliveCount uint64, edgeEndpoints func(uint32) (uint64, uint64)) []labeledEdge {
+	survivors := make([]labeledEdge, 0, aliveCount)
 	for nonce := uint32(0); nonce < maxNonce; nonce++ {
 		if !alive.get(uint64(nonce)) {
 			continue
