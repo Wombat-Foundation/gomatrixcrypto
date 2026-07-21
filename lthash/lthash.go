@@ -114,7 +114,7 @@ func (h Hash) Bytes() [ByteSize]byte {
 	return out
 }
 
-// Checksum returns the SHA-256 checksum of the lattice state bytes.
+// Checksum returns the BLAKE2b-256 checksum of the lattice state bytes.
 func (h Hash) Checksum() [ChecksumLen]byte {
 	bytes := h.Bytes()
 	return blake2b.Sum256(bytes[:])

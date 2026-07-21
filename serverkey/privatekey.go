@@ -21,7 +21,7 @@ const (
 	privateKeyKeySize            = 32
 )
 
-// ErrInvalidPassphrase reports an empty or otherwise invalid passphrase.
+// ErrInvalidPassphrase reports an empty passphrase.
 var ErrInvalidPassphrase = errors.New("invalid private key passphrase")
 
 // PrivateKeyEncryptionParams configures private-key encryption and re-wrapping.
