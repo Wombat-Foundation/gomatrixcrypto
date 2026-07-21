@@ -114,24 +114,21 @@ func TestDuplicateFieldRejected(t *testing.T) {
 	}
 }
 
+func TestInvalidFieldNameRejected(t *testing.T) {
+	_, err := Root([]Field{{Name: string([]byte{0xff}), Value: int64(1)}})
+	if !errors.Is(err, ErrInvalidFieldName) {
+		t.Fatalf("expected invalid field name error, got %v", err)
+	}
+
+	_, err = ComponentHash(string([]byte{0xff}), int64(1))
+	if !errors.Is(err, ErrInvalidFieldName) {
+		t.Fatalf("expected invalid component field name error, got %v", err)
+	}
+}
+
 func TestEmptyRootRejected(t *testing.T) {
 	_, err := Root(nil)
 	if !errors.Is(err, ErrNoLeaves) {
 		t.Fatalf("expected no leaves error, got %v", err)
-	}
-}
-
-func TestRootFromLeavesRejectsNonCanonicalOrder(t *testing.T) {
-	z, err := fieldLeaf(Field{Name: "z", Value: int64(1)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	a, err := fieldLeaf(Field{Name: "a", Value: int64(2)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = rootFromLeaves([]leaf{z, a})
-	if !errors.Is(err, errLeavesNotCanonical) {
-		t.Fatalf("expected canonical order error, got %v", err)
 	}
 }

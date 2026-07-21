@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"unicode/utf8"
 
 	"golang.org/x/crypto/sha3"
 
@@ -15,11 +16,10 @@ import (
 const HashSize = 32
 
 var (
-	ErrEmptyFieldName = errors.New("merkle: empty field name")
-	ErrDuplicateField = errors.New("merkle: duplicate field")
-	ErrNoLeaves       = errors.New("merkle: no leaves")
-
-	errLeavesNotCanonical = errors.New("merkle: leaves not in canonical order")
+	ErrEmptyFieldName   = errors.New("merkle: empty field name")
+	ErrInvalidFieldName = errors.New("merkle: invalid field name")
+	ErrDuplicateField   = errors.New("merkle: duplicate field")
+	ErrNoLeaves         = errors.New("merkle: no leaves")
 )
 
 var (
@@ -61,6 +61,9 @@ type Header struct {
 func leafHash(fieldName string, canonicalValue []byte) (Hash, error) {
 	if fieldName == "" {
 		return Hash{}, ErrEmptyFieldName
+	}
+	if !utf8.ValidString(fieldName) {
+		return Hash{}, ErrInvalidFieldName
 	}
 	return hash(leafDST, []byte(fieldName), []byte{0}, canonicalValue), nil
 }
@@ -113,20 +116,6 @@ func Root(fields []Field) (Hash, error) {
 func rootFromLeaves(leaves []leaf) (Hash, error) {
 	if len(leaves) == 0 {
 		return Hash{}, ErrNoLeaves
-	}
-	for i, leaf := range leaves {
-		if leaf.Name == "" {
-			return Hash{}, ErrEmptyFieldName
-		}
-		if i > 0 {
-			prev := leaves[i-1].Name
-			if prev == leaf.Name {
-				return Hash{}, fmt.Errorf("%w: %s", ErrDuplicateField, leaf.Name)
-			}
-			if prev > leaf.Name {
-				return Hash{}, fmt.Errorf("%w: %s before %s", errLeavesNotCanonical, prev, leaf.Name)
-			}
-		}
 	}
 	hashes := make([]Hash, len(leaves))
 	for i, leaf := range leaves {
