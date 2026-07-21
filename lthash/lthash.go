@@ -4,6 +4,7 @@ package lthash
 import (
 	"encoding/binary"
 	"fmt"
+	"io"
 
 	"golang.org/x/crypto/blake2b"
 	"golang.org/x/crypto/sha3"
@@ -55,7 +56,9 @@ func seed(eventType, stateKey, eventID string) Hash {
 	xof.Write([]byte(eventID))
 
 	var buf [ByteSize]byte
-	xof.Read(buf[:])
+	if _, err := io.ReadFull(xof, buf[:]); err != nil {
+		panic(err)
+	}
 
 	var out Hash
 	for i := range out {
