@@ -78,7 +78,14 @@ func TestSignFNDSAAddsSecondKeyForExistingServer(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	serverSigs := obj["signatures"].(map[string]any)["example.com"].(map[string]any)
+	signatures, ok := obj["signatures"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected signatures map, got %T", obj["signatures"])
+	}
+	serverSigs, ok := signatures["example.com"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected server signatures map, got %T", signatures["example.com"])
+	}
 	if _, ok := serverSigs[keyName1]; !ok {
 		t.Fatalf("expected first key's signature to be preserved")
 	}

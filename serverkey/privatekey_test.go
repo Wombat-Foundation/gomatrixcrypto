@@ -26,7 +26,7 @@ func (r *shortReader) Read(p []byte) (int, error) {
 		return 0, r.err
 	}
 	n := min(len(p), r.remaining)
-	for i := range n {
+	for i := 0; i < n; i++ {
 		p[i] = 0x42
 	}
 	r.remaining -= n
@@ -48,7 +48,7 @@ func TestEncryptPrivateKeyPropagatesSaltRandomnessError(t *testing.T) {
 func TestEncryptPrivateKeyPropagatesNonceRandomnessError(t *testing.T) {
 	wantErr := errors.New("boom")
 	// Succeeds for exactly the salt read, then fails on the nonce read.
-	rng := &shortReader{remaining: 16, err: wantErr}
+	rng := &shortReader{remaining: privateKeySaltSize, err: wantErr}
 	_, err := EncryptPrivateKey(rng, make([]byte, fndsa512.PrivateKeySize), []byte("passphrase"), validPrivateKeyParams())
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("expected nonce randomness error, got %v", err)
