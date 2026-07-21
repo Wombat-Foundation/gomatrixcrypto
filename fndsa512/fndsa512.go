@@ -45,6 +45,7 @@ func checkSignature(sig []byte) error {
 	return nil
 }
 
+// GenerateKey creates a new FN-DSA-512 keypair.
 func GenerateKey(rng io.Reader) (privateKey, publicKey []byte, err error) {
 	privateKey, publicKey, err = fndsa.KeyGen(LogN, rng)
 	return privateKey, publicKey, err
@@ -93,6 +94,7 @@ func Verify(publicKey, message, signature []byte) bool {
 		fndsa.Verify(publicKey, fndsa.DOMAIN_NONE, 0, message, signature)
 }
 
+// VerifyPrehashed verifies a pre-hashed message with explicit domain context.
 func VerifyPrehashed(publicKey []byte, context []byte, hash crypto.Hash, digest, signature []byte) bool {
 	return checkPublicKey(publicKey) == nil &&
 		checkSignature(signature) == nil &&

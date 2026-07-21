@@ -14,6 +14,7 @@ import (
 	"gomatrixlib/matrixjson"
 )
 
+// HashSize is the byte length of every MSC4511 digest in this package.
 const HashSize = 32
 
 var (

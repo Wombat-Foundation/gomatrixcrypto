@@ -9,6 +9,7 @@ import (
 	"slices"
 )
 
+// ProofSize is the default number of edges in a Cuckoo Cycle proof.
 const ProofSize = 42
 
 var (
@@ -45,6 +46,7 @@ func (c Config) nodeMask() uint64 {
 	return c.edgeMask()
 }
 
+// Edge identifies one graph edge by its U and V endpoints.
 type Edge struct {
 	U uint64
 	V uint64
@@ -122,6 +124,7 @@ func EdgeForNonce(cfg Config, seed []byte, nonce uint32) (Edge, error) {
 	return Edge{U: u, V: v}, nil
 }
 
+// Verify checks that nonces form a valid Cuckoo Cycle proof for cfg and seed.
 func Verify(cfg Config, seed []byte, nonces []uint32) error {
 	cfg, err := cfg.normalize()
 	if err != nil {

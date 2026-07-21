@@ -30,11 +30,13 @@ var (
 	ErrInvalidSignature  = errors.New("invalid server key signature")
 )
 
+// FNDSAMetadata carries optional metadata fields for the published key object.
 type FNDSAMetadata struct {
 	FIPS206Revision string
 	Claims          []string
 }
 
+// FNDSAMintingProof records the proof data that binds a key to its graph seed.
 type FNDSAMintingProof struct {
 	Algorithm string
 	Nonce     uint64
@@ -100,6 +102,7 @@ func FNDSAKeyObject(publicKey []byte, metadata FNDSAMetadata, proof FNDSAMinting
 	return keyObject
 }
 
+// CogenStamp returns the canonical stamp object for a key-graph proof.
 func CogenStamp(publicKey []byte, serverName string) map[string]any {
 	return map[string]any{
 		"action":      "fn-dsa-key-graph",
@@ -108,6 +111,7 @@ func CogenStamp(publicKey []byte, serverName string) map[string]any {
 	}
 }
 
+// MintingObject returns the canonical minting object used for key attestation.
 func MintingObject(publicKey []byte, serverName string, proof FNDSAMintingProof) map[string]any {
 	return map[string]any{
 		"action":      "fn-dsa-minting-object",
@@ -119,6 +123,7 @@ func MintingObject(publicKey []byte, serverName string, proof FNDSAMintingProof)
 	}
 }
 
+// GraphSeed returns the key-graph seed used to derive the minting proof.
 func GraphSeed(publicKey []byte, serverName string, nonce uint64) ([32]byte, error) {
 	var out [32]byte
 	canonical, err := matrixjson.Canonical(CogenStamp(publicKey, serverName))
@@ -135,6 +140,7 @@ func GraphSeed(publicKey []byte, serverName string, nonce uint64) ([32]byte, err
 	return out, nil
 }
 
+// KeyID returns the canonical SHA3-256 digest for a minted server key.
 func KeyID(publicKey []byte, serverName string, proof FNDSAMintingProof) ([32]byte, error) {
 	var out [32]byte
 	canonical, err := matrixjson.Canonical(MintingObject(publicKey, serverName, proof))
@@ -148,6 +154,7 @@ func KeyID(publicKey []byte, serverName string, proof FNDSAMintingProof) ([32]by
 	return out, nil
 }
 
+// KeyIDBase64 returns the key ID digest in base64url form.
 func KeyIDBase64(publicKey []byte, serverName string, proof FNDSAMintingProof) (string, error) {
 	keyID, err := KeyID(publicKey, serverName, proof)
 	if err != nil {
@@ -156,6 +163,7 @@ func KeyIDBase64(publicKey []byte, serverName string, proof FNDSAMintingProof) (
 	return base64.RawURLEncoding.EncodeToString(keyID[:]), nil
 }
 
+// ShortKeyID returns the truncated base64url fingerprint used in key names.
 func ShortKeyID(keyID [32]byte) string {
 	return base64.RawURLEncoding.EncodeToString(keyID[:])[:20]
 }

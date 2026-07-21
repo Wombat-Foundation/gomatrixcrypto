@@ -21,8 +21,10 @@ const (
 	privateKeyKeySize            = 32
 )
 
+// ErrInvalidPassphrase reports an empty or otherwise invalid passphrase.
 var ErrInvalidPassphrase = errors.New("invalid private key passphrase")
 
+// PrivateKeyEncryptionParams configures private-key encryption and re-wrapping.
 type PrivateKeyEncryptionParams struct {
 	Time      uint32
 	MemoryKiB uint32
@@ -31,6 +33,7 @@ type PrivateKeyEncryptionParams struct {
 	Nonce     []byte
 }
 
+// DefaultPrivateKeyEncryptionParams returns the package's recommended KDF settings.
 func DefaultPrivateKeyEncryptionParams() PrivateKeyEncryptionParams {
 	return PrivateKeyEncryptionParams{
 		Time:      3,
@@ -39,6 +42,7 @@ func DefaultPrivateKeyEncryptionParams() PrivateKeyEncryptionParams {
 	}
 }
 
+// EncryptPrivateKey wraps a raw FN-DSA private key for storage or transport.
 func EncryptPrivateKey(rng io.Reader, privateKey, passphrase []byte, params PrivateKeyEncryptionParams) (map[string]any, error) {
 	if err := validatePrivateKeyEncryptionInputs(privateKey, passphrase, params); err != nil {
 		return nil, err
@@ -85,6 +89,7 @@ func EncryptPrivateKey(rng io.Reader, privateKey, passphrase []byte, params Priv
 	}, nil
 }
 
+// DecryptPrivateKey unwraps an encrypted private key object.
 func DecryptPrivateKey(encrypted map[string]any, passphrase []byte) ([]byte, error) {
 	if len(passphrase) == 0 {
 		return nil, ErrInvalidPassphrase
@@ -119,6 +124,7 @@ func DecryptPrivateKey(encrypted map[string]any, passphrase []byte) ([]byte, err
 	return privateKey, nil
 }
 
+// ReencryptPrivateKey decrypts encrypted and re-wraps it with newPassphrase.
 func ReencryptPrivateKey(rng io.Reader, encrypted map[string]any, oldPassphrase, newPassphrase []byte, params PrivateKeyEncryptionParams) (map[string]any, error) {
 	privateKey, err := DecryptPrivateKey(encrypted, oldPassphrase)
 	if err != nil {
