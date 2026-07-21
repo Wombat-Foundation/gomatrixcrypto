@@ -6,9 +6,12 @@ STYLE_RESET := $(shell tput sgr0 2>/dev/null || printf '\033[0m')
 
 GO ?= go
 STATICCHECK ?= staticcheck
+GOLANGCI_LINT ?= golangci-lint
 VETFLAGS ?=
 STATICCHECKFLAGS ?=
+GOLANGCI_LINTFLAGS ?= -E ineffassign -E wastedassign
 PKGS := ./...
+LIBPKGS = $(shell $(GO) list ./... | grep -v '/cmd/')
 GOFILES := $(shell find . -type f -name '*.go' -not -path './vendor/*')
 COVERPROFILE ?= coverage.out
 
@@ -23,11 +26,20 @@ format: ## Format Go source files and run pre-commit hooks
 	pre-commit run --all-files
 
 .PHONY: test
-test: ## Run the test suite
+test: ## Run the test suite (library packages only, excludes cmd/)
+	$(GO) test $(LIBPKGS)
+
+.PHONY: _test/all
+_test/all: ## Run the test suite for all packages, including cmd/
 	$(GO) test $(PKGS)
 
 .PHONY: cov
-cov: ## Run tests with coverage and print a summary
+cov: ## Run tests with coverage and print a summary (library packages only, excludes cmd/)
+	$(GO) test -coverprofile=$(COVERPROFILE) $(LIBPKGS)
+	$(GO) tool cover -func=$(COVERPROFILE)
+
+.PHONY: _cov/all
+_cov/all: ## Run tests with coverage and print a summary for all packages, including cmd/
 	$(GO) test -coverprofile=$(COVERPROFILE) $(PKGS)
 	$(GO) tool cover -func=$(COVERPROFILE)
 
@@ -35,6 +47,8 @@ cov: ## Run tests with coverage and print a summary
 lint:	## Run lint checks
 	$(GO) vet $(VETFLAGS) $(PKGS)
 	$(STATICCHECK) -checks=all $(STATICCHECKFLAGS) $(PKGS)
+	# install with, i.e., `curl -sSfL https://golangci-lint.run/install.sh | sh -s -- -b "$$(go env GOPATH)/bin" v2.12.2`
+	$(GOLANGCI_LINT) run $(GOLANGCI_LINTFLAGS) $(PKGS)
 
 .PHONY: build
 build: ## Compile all packages

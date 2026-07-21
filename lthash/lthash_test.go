@@ -1,6 +1,8 @@
 package lthash
 
 import (
+	"errors"
+	"io"
 	"slices"
 	"strings"
 	"testing"
@@ -73,4 +75,20 @@ func TestTruncateToU16LimitPreservesUTF8Boundaries(t *testing.T) {
 	if !strings.HasSuffix(got, "a") {
 		t.Fatalf("truncate cut to the wrong boundary")
 	}
+}
+
+func TestSeedPanicsOnReadFailure(t *testing.T) {
+	oldReadFull := readFull
+	readFull = func(io.Reader, []byte) (int, error) {
+		return 0, errors.New("boom")
+	}
+	t.Cleanup(func() { readFull = oldReadFull })
+
+	defer func() {
+		if recover() == nil {
+			t.Fatalf("expected seed to panic on read failure")
+		}
+	}()
+
+	_ = seed("m.room.create", "", "$a:example.org")
 }

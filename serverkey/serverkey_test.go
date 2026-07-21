@@ -345,7 +345,7 @@ func TestReencryptPrivateKeyChangesPassphrase(t *testing.T) {
 		Salt:      bytes.Repeat([]byte{0x33}, privateKeySaltSize),
 		Nonce:     bytes.Repeat([]byte{0x44}, 24),
 	}
-	encrypted, err := EncryptPrivateKey(nil, priv, []byte("old passphrase"), oldParams)
+	encrypted, err := EncryptPrivateKey(nil, priv, []byte("old horse battery staple"), oldParams)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -356,14 +356,14 @@ func TestReencryptPrivateKeyChangesPassphrase(t *testing.T) {
 		Salt:      bytes.Repeat([]byte{0x55}, privateKeySaltSize),
 		Nonce:     bytes.Repeat([]byte{0x66}, 24),
 	}
-	reencrypted, err := ReencryptPrivateKey(nil, encrypted, []byte("old passphrase"), []byte("new passphrase"), newParams)
+	reencrypted, err := ReencryptPrivateKey(nil, encrypted, []byte("old horse battery staple"), []byte("new horse battery staple"), newParams)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := DecryptPrivateKey(reencrypted, []byte("old passphrase")); err == nil {
+	if _, err := DecryptPrivateKey(reencrypted, []byte("old horse battery staple")); err == nil {
 		t.Fatalf("expected old passphrase to fail")
 	}
-	decrypted, err := DecryptPrivateKey(reencrypted, []byte("new passphrase"))
+	decrypted, err := DecryptPrivateKey(reencrypted, []byte("new horse battery staple"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -374,14 +374,21 @@ func TestReencryptPrivateKeyChangesPassphrase(t *testing.T) {
 
 func TestEncryptPrivateKeyRejectsInvalidInputs(t *testing.T) {
 	params := PrivateKeyEncryptionParams{Time: 1, MemoryKiB: 8 * 1024, Threads: 1}
-	if _, err := EncryptPrivateKey(nil, []byte("short"), []byte("passphrase"), params); !errors.Is(err, fndsa512.ErrInvalidPrivateKey) {
+	if _, err := EncryptPrivateKey(nil, []byte("short"), []byte("correct horse battery staple"), params); !errors.Is(err, fndsa512.ErrInvalidPrivateKey) {
 		t.Fatalf("expected invalid private key, got %v", err)
 	}
 	if _, err := EncryptPrivateKey(nil, make([]byte, fndsa512.PrivateKeySize), nil, params); !errors.Is(err, ErrInvalidPassphrase) {
 		t.Fatalf("expected invalid passphrase, got %v", err)
 	}
-	if _, err := EncryptPrivateKey(nil, make([]byte, fndsa512.PrivateKeySize), []byte("passphrase"), PrivateKeyEncryptionParams{}); !errors.Is(err, ErrInvalidKeyObject) {
+	if _, err := EncryptPrivateKey(nil, make([]byte, fndsa512.PrivateKeySize), []byte("correct horse battery staple"), PrivateKeyEncryptionParams{}); !errors.Is(err, ErrInvalidKeyObject) {
 		t.Fatalf("expected invalid params, got %v", err)
+	}
+}
+
+func TestEncryptPrivateKeyRejectsShortPassphrase(t *testing.T) {
+	params := PrivateKeyEncryptionParams{Time: 1, MemoryKiB: 8 * 1024, Threads: 1}
+	if _, err := EncryptPrivateKey(nil, make([]byte, fndsa512.PrivateKeySize), []byte("too short"), params); !errors.Is(err, ErrWeakPassphrase) {
+		t.Fatalf("expected weak passphrase, got %v", err)
 	}
 }
 

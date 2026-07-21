@@ -28,7 +28,9 @@ func run(args []string, stdout, stderr io.Writer, solve solverFunc) int {
 	limit := flags.Uint64("limit", 200, "number of graph nonces to try")
 	threads := flags.Int("threads", 0, "solver threads; 0 lets the solver choose")
 	if err := flags.Parse(args); err != nil {
-		fmt.Fprintln(stderr, err)
+		if err := writeLine(stderr, err); err != nil {
+			return 1
+		}
 		return 1
 	}
 
@@ -39,19 +41,39 @@ func run(args []string, stdout, stderr io.Writer, solve solverFunc) int {
 
 		proof, ok, err := solve(sum[:], *threads)
 		if err != nil {
-			fmt.Fprintf(stderr, "nonce %d: %v\n", graphNonce, err)
+			if err := writef(stderr, "nonce %d: %v\n", graphNonce, err); err != nil {
+				return 1
+			}
 			return 1
 		}
 		if !ok {
-			fmt.Fprintf(stderr, "attempt %d: no solution, trying next graph nonce\n", graphNonce)
+			if err := writef(stderr, "attempt %d: no solution, trying next graph nonce\n", graphNonce); err != nil {
+				return 1
+			}
 			continue
 		}
 
-		fmt.Fprintf(stdout, "FOUND at nonce %d\n", graphNonce)
-		fmt.Fprintf(stdout, "%v\n", proof)
+		if err := writef(stdout, "FOUND at nonce %d\n", graphNonce); err != nil {
+			return 1
+		}
+		if err := writef(stdout, "%v\n", proof); err != nil {
+			return 1
+		}
 		return 0
 	}
 
-	fmt.Fprintln(stdout, "no solution found in range")
+	if err := writeLine(stdout, "no solution found in range"); err != nil {
+		return 1
+	}
 	return 2
+}
+
+func writeLine(w io.Writer, a ...any) error {
+	_, err := fmt.Fprintln(w, a...)
+	return err
+}
+
+func writef(w io.Writer, format string, a ...any) error {
+	_, err := fmt.Fprintf(w, format, a...)
+	return err
 }

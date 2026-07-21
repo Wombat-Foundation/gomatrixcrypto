@@ -4,6 +4,7 @@ package lthash
 import (
 	"encoding/binary"
 	"fmt"
+	"io"
 
 	"golang.org/x/crypto/blake2b"
 	"golang.org/x/crypto/sha3"
@@ -16,6 +17,7 @@ const (
 )
 
 var dst = []byte("msc4500_lthash16\x00")
+var readFull = io.ReadFull
 
 // Hash is the 2048-byte LtHash16 lattice state.
 type Hash [WordCount]uint16
@@ -55,7 +57,9 @@ func seed(eventType, stateKey, eventID string) Hash {
 	xof.Write([]byte(eventID))
 
 	var buf [ByteSize]byte
-	xof.Read(buf[:])
+	if _, err := readFull(xof, buf[:]); err != nil {
+		panic(err)
+	}
 
 	var out Hash
 	for i := range out {
@@ -76,19 +80,23 @@ func (h *Hash) subSeed(seed Hash) {
 	}
 }
 
+// Insert adds one entry to the hash.
 func (h *Hash) Insert(eventType, stateKey, eventID string) {
 	h.addSeed(seed(eventType, stateKey, eventID))
 }
 
+// Remove subtracts one entry from the hash.
 func (h *Hash) Remove(eventType, stateKey, eventID string) {
 	h.subSeed(seed(eventType, stateKey, eventID))
 }
 
+// Replace removes oldEventID and inserts newEventID for the same state entry.
 func (h *Hash) Replace(eventType, stateKey, oldEventID, newEventID string) {
 	h.subSeed(seed(eventType, stateKey, oldEventID))
 	h.addSeed(seed(eventType, stateKey, newEventID))
 }
 
+// FromEntries builds a Hash by inserting each provided entry.
 func FromEntries(entries []Entry) Hash {
 	var h Hash
 	for _, entry := range entries {
@@ -97,6 +105,7 @@ func FromEntries(entries []Entry) Hash {
 	return h
 }
 
+// Bytes returns the raw 2048-byte lattice state encoding.
 func (h Hash) Bytes() [ByteSize]byte {
 	var out [ByteSize]byte
 	for i, v := range h {
@@ -105,11 +114,13 @@ func (h Hash) Bytes() [ByteSize]byte {
 	return out
 }
 
+// Checksum returns the BLAKE2b-256 checksum of the lattice state bytes.
 func (h Hash) Checksum() [ChecksumLen]byte {
 	bytes := h.Bytes()
 	return blake2b.Sum256(bytes[:])
 }
 
+// String returns the hash checksum as lowercase hex.
 func (h Hash) String() string {
 	sum := h.Checksum()
 	return fmt.Sprintf("%x", sum[:])

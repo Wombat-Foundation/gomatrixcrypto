@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 )
 
+// Context is the domain-separation string used when hashing FN-DSA key IDs.
 const Context = "matrix:fn-dsa-512:key-id:v1"
 
 // SHA256 derives the canonical full FN-DSA key ID fingerprint.

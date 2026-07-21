@@ -22,6 +22,8 @@ var (
 	ErrInvalidSignature  = errors.New("invalid fn-dsa-512 signature")
 )
 
+var sign = fndsa.Sign
+
 func checkPrivateKey(key []byte) error {
 	if len(key) != PrivateKeySize {
 		return ErrInvalidPrivateKey
@@ -43,6 +45,7 @@ func checkSignature(sig []byte) error {
 	return nil
 }
 
+// GenerateKey creates a new FN-DSA-512 keypair.
 func GenerateKey(rng io.Reader) (privateKey, publicKey []byte, err error) {
 	privateKey, publicKey, err = fndsa.KeyGen(LogN, rng)
 	return privateKey, publicKey, err
@@ -53,7 +56,7 @@ func Sign(rng io.Reader, privateKey, message []byte) ([]byte, error) {
 	if err := checkPrivateKey(privateKey); err != nil {
 		return nil, err
 	}
-	sig, err := fndsa.Sign(rng, privateKey, fndsa.DOMAIN_NONE, 0, message)
+	sig, err := sign(rng, privateKey, fndsa.DOMAIN_NONE, 0, message)
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +74,7 @@ func SignPrehashed(rng io.Reader, privateKey []byte, context []byte, hash crypto
 	if err := checkPrivateKey(privateKey); err != nil {
 		return nil, err
 	}
-	sig, err := fndsa.Sign(rng, privateKey, fndsa.DomainContext(context), hash, digest)
+	sig, err := sign(rng, privateKey, fndsa.DomainContext(context), hash, digest)
 	if err != nil {
 		return nil, err
 	}
@@ -91,6 +94,7 @@ func Verify(publicKey, message, signature []byte) bool {
 		fndsa.Verify(publicKey, fndsa.DOMAIN_NONE, 0, message, signature)
 }
 
+// VerifyPrehashed verifies a pre-hashed message with explicit domain context.
 func VerifyPrehashed(publicKey []byte, context []byte, hash crypto.Hash, digest, signature []byte) bool {
 	return checkPublicKey(publicKey) == nil &&
 		checkSignature(signature) == nil &&

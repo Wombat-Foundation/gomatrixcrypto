@@ -1,0 +1,169 @@
+---
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  GOFLAGS: -mod=mod
+
+jobs:
+  test-and-badges:
+    runs-on: ubuntu-latest
+    permissions:
+      # Needed only for the badge publish push step below.
+      contents: write
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-go@cdcb36043654635271a94b9a6d1392de5bb323a7 # v5.0.1
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run tests and coverage
+        id: run
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mapfile -t libpkgs < <(go list ./... | grep -v '/cmd/')
+          mapfile -t allpkgs < <(go list ./...)
+
+          workdir="$(mktemp -d)"
+          lib_test_json="$workdir/lib-test.json"
+          all_test_json="$workdir/all-test.json"
+          badge_dir="$workdir/badges"
+          mkdir -p "$badge_dir"
+
+          status=0
+
+          if ! go test -json -coverprofile="$workdir/coverage.out" "${libpkgs[@]}" >"$lib_test_json"; then
+            status=1
+          fi
+
+          if ! go test -json -coverprofile="$workdir/coverage-all.out" "${allpkgs[@]}" >"$all_test_json"; then
+            status=1
+          fi
+
+          if [ -s "$all_test_json" ]; then
+            pass="$(jq -sr '[.[] | select(.Action == "pass" and .Test != null)] | length' "$all_test_json")"
+            skip="$(jq -sr '[.[] | select(.Action == "skip" and .Test != null)] | length' "$all_test_json")"
+            fail="$(jq -sr '[.[] | select(.Action == "fail" and .Test != null)] | length' "$all_test_json")"
+          elif [ -s "$lib_test_json" ]; then
+            pass="$(jq -sr '[.[] | select(.Action == "pass" and .Test != null)] | length' "$lib_test_json")"
+            skip="$(jq -sr '[.[] | select(.Action == "skip" and .Test != null)] | length' "$lib_test_json")"
+            fail="$(jq -sr '[.[] | select(.Action == "fail" and .Test != null)] | length' "$lib_test_json")"
+          else
+            pass=0
+            skip=0
+            fail=0
+            status=1
+          fi
+
+          if [ -s "$workdir/coverage.out" ]; then
+            coverage="$(go tool cover -func="$workdir/coverage.out" | awk '/^total:/ {gsub("%", "", $3); print $3}')"
+          else
+            coverage="0.0"
+            status=1
+          fi
+
+          coverage_color="$(awk -v c="$coverage" 'BEGIN {
+            if (c >= 90) print "brightgreen";
+            else if (c >= 80) print "green";
+            else if (c >= 70) print "yellowgreen";
+            else if (c >= 60) print "yellow";
+            else print "red";
+          }')"
+
+          test_color="brightgreen"
+          if [ "$fail" -gt 0 ]; then
+            test_color="red"
+          elif [ "$skip" -gt 0 ]; then
+            test_color="yellow"
+          fi
+
+          jq -n \
+            --arg label "coverage" \
+            --arg message "${coverage}%" \
+            --arg color "$coverage_color" \
+            '{schemaVersion: 1, label: $label, message: $message, color: $color}' \
+            >"$badge_dir/coverage-main.json"
+
+          jq -n \
+            --arg label "tests" \
+            --arg message "${pass} pass, ${skip} skip, ${fail} fail" \
+            --arg color "$test_color" \
+            '{schemaVersion: 1, label: $label, message: $message, color: $color}' \
+            >"$badge_dir/tests-main.json"
+
+          {
+            echo "pass=$pass"
+            echo "skip=$skip"
+            echo "fail=$fail"
+            echo "coverage=$coverage"
+            echo "status=$status"
+            echo "badge_dir=$badge_dir"
+          } >>"$GITHUB_OUTPUT"
+
+          {
+            echo "## Test summary"
+            echo
+            echo "| metric | value |"
+            echo "| --- | ---: |"
+            echo "| pass | $pass |"
+            echo "| skip | $skip |"
+            echo "| fail | $fail |"
+            echo "| coverage | ${coverage}% |"
+          } >>"$GITHUB_STEP_SUMMARY"
+
+      - name: Publish badges
+        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          badge_dir="${{ steps.run.outputs.badge_dir }}"
+
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git remote set-url origin "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+
+          git fetch origin _metadata/badges || true
+
+          if git show-ref --verify --quiet refs/remotes/origin/_metadata/badges; then
+            git checkout -B _metadata/badges origin/_metadata/badges
+          else
+            git checkout --orphan _metadata/badges
+            git rm -rf . >/dev/null 2>&1 || true
+          fi
+
+          cp "$badge_dir/coverage-main.json" ./coverage-main.json
+          cp "$badge_dir/tests-main.json" ./tests-main.json
+
+          git add coverage-main.json tests-main.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Update coverage and test badges [skip ci]"
+            git push origin HEAD:_metadata/badges
+          fi
+
+      - name: Fail on test or coverage errors
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.run.outputs.status }}" != "0" ]; then
+            exit 1
+          fi
