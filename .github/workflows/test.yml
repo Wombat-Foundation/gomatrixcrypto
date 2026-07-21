@@ -113,6 +113,17 @@ jobs:
             echo "badge_dir=$badge_dir"
           } >>"$GITHUB_OUTPUT"
 
+          {
+            echo "## Test summary"
+            echo
+            echo "| metric | value |"
+            echo "| --- | ---: |"
+            echo "| pass | $pass |"
+            echo "| skip | $skip |"
+            echo "| fail | $fail |"
+            echo "| coverage | ${coverage}% |"
+          } >>"$GITHUB_STEP_SUMMARY"
+
       - name: Publish badges
         if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: bash
