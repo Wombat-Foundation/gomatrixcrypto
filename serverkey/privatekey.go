@@ -19,7 +19,7 @@ const (
 	privateKeyAEADAlgorithm      = "xchacha20poly1305"
 	privateKeySaltSize           = 16
 	privateKeyKeySize            = 32
-	privateKeyMinPassphraseSize  = 15
+	privateKeyMinPassphraseSize  = 12
 )
 
 // ErrInvalidPassphrase reports an empty passphrase.
