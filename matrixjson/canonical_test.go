@@ -113,3 +113,41 @@ func TestCanonicalEscapesUnitSeparator(t *testing.T) {
 		t.Fatalf("canonical mismatch: got %s want %s", got, want)
 	}
 }
+
+func TestCanonicalEncodesUntypedNilAsNull(t *testing.T) {
+	got, err := Canonical(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "null" {
+		t.Fatalf("canonical mismatch: got %s want null", got)
+	}
+}
+
+func TestCanonicalEncodesFalseBool(t *testing.T) {
+	got, err := Canonical(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "false" {
+		t.Fatalf("canonical mismatch: got %s want false", got)
+	}
+}
+
+func TestCanonicalRejectsInvalidSliceElement(t *testing.T) {
+	if _, err := Canonical([]any{1.5}); !errors.Is(err, ErrUnsupportedType) {
+		t.Fatalf("expected unsupported type error, got %v", err)
+	}
+}
+
+func TestCanonicalRejectsOverflowingJSONNumber(t *testing.T) {
+	if _, err := Canonical(json.Number("999999999999999999999999999999")); err == nil {
+		t.Fatalf("expected overflow error for oversized json.Number")
+	}
+}
+
+func TestCanonicalRejectsInvalidMapKeyString(t *testing.T) {
+	if _, err := Canonical(map[string]any{string([]byte{0xff}): "x"}); !errors.Is(err, ErrInvalidString) {
+		t.Fatalf("expected invalid string error, got %v", err)
+	}
+}
