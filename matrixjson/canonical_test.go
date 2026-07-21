@@ -96,3 +96,14 @@ func TestCanonicalEscapesSpecialStrings(t *testing.T) {
 		t.Fatalf("canonical mismatch: got %s want %s", got, want)
 	}
 }
+
+func TestCanonicalEscapesUnitSeparator(t *testing.T) {
+	got, err := Canonical("\x1f")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const want = `"\u001f"`
+	if string(got) != want {
+		t.Fatalf("canonical mismatch: got %s want %s", got, want)
+	}
+}

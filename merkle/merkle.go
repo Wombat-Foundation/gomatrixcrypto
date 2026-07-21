@@ -172,6 +172,8 @@ func EventID(eventRoot Hash) string {
 
 func merkleRoot(hashes []Hash) Hash {
 	switch len(hashes) {
+	case 0:
+		return Hash{}
 	case 1:
 		return hashes[0]
 	case 2:

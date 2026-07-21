@@ -5,6 +5,8 @@ import (
 	"errors"
 	"slices"
 	"testing"
+
+	"gomatrixlib/matrixjson"
 )
 
 func sampleFields() []Field {
@@ -126,9 +128,40 @@ func TestInvalidFieldNameRejected(t *testing.T) {
 	}
 }
 
+func TestMerkleRootOfEmptyHashesIsZero(t *testing.T) {
+	if got := merkleRoot(nil); got != (Hash{}) {
+		t.Fatalf("expected zero hash for empty input, got %x", got)
+	}
+}
+
 func TestEmptyRootRejected(t *testing.T) {
 	_, err := Root(nil)
 	if !errors.Is(err, ErrNoLeaves) {
 		t.Fatalf("expected no leaves error, got %v", err)
+	}
+}
+
+func TestComponentHashRejectsEmptyName(t *testing.T) {
+	_, err := ComponentHash("", int64(1))
+	if !errors.Is(err, ErrEmptyFieldName) {
+		t.Fatalf("expected empty field name error, got %v", err)
+	}
+}
+
+func TestComponentHashMatchesLeafHash(t *testing.T) {
+	got, err := ComponentHash("depth", int64(42))
+	if err != nil {
+		t.Fatal(err)
+	}
+	canonical, err := matrixjson.Canonical(int64(42))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := leafHash("depth", canonical)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Fatalf("component hash mismatch: got %x want %x", got, want)
 	}
 }
