@@ -128,6 +128,18 @@ func TestInvalidFieldNameRejected(t *testing.T) {
 	}
 }
 
+func TestNULInFieldNameRejected(t *testing.T) {
+	_, err := Root([]Field{{Name: "a\x00b", Value: int64(1)}})
+	if !errors.Is(err, ErrInvalidFieldName) {
+		t.Fatalf("expected invalid field name error, got %v", err)
+	}
+
+	_, err = ComponentHash("a\x00b", int64(1))
+	if !errors.Is(err, ErrInvalidFieldName) {
+		t.Fatalf("expected invalid component field name error, got %v", err)
+	}
+}
+
 func TestMerkleRootDoesNotPanicOnEmptyInput(t *testing.T) {
 	// merkleRoot is unreachable with empty input via the public API (Root
 	// rejects it with ErrNoLeaves); this only guards the private helper

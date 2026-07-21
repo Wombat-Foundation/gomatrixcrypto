@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"unicode/utf8"
 
 	"golang.org/x/crypto/sha3"
@@ -59,13 +60,26 @@ type Header struct {
 // leafHash computes SHA3-256("msc4511:leaf:v1" || field_name || "\x00" ||
 // canonical_value).
 func leafHash(fieldName string, canonicalValue []byte) (Hash, error) {
-	if fieldName == "" {
-		return Hash{}, ErrEmptyFieldName
-	}
-	if !utf8.ValidString(fieldName) {
-		return Hash{}, ErrInvalidFieldName
+	if err := validateFieldName(fieldName); err != nil {
+		return Hash{}, err
 	}
 	return hash(leafDST, []byte(fieldName), []byte{0}, canonicalValue), nil
+}
+
+// validateFieldName rejects empty names, invalid UTF-8, and embedded NUL
+// bytes, which would otherwise collide with the "\x00" delimiter separating
+// field_name from canonical_value in leafHash.
+func validateFieldName(fieldName string) error {
+	if fieldName == "" {
+		return ErrEmptyFieldName
+	}
+	if !utf8.ValidString(fieldName) {
+		return ErrInvalidFieldName
+	}
+	if strings.IndexByte(fieldName, 0) >= 0 {
+		return ErrInvalidFieldName
+	}
+	return nil
 }
 
 func fieldLeaf(field Field) (leaf, error) {
