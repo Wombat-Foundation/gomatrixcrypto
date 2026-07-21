@@ -1,3 +1,4 @@
+// Package fndsa512 wraps FN-DSA-512 signing and verification primitives.
 package fndsa512
 
 import (

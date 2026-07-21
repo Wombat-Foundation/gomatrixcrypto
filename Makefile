@@ -5,6 +5,9 @@ STYLE_CYAN := $(shell tput setaf 6 2>/dev/null || printf '\033[36m')
 STYLE_RESET := $(shell tput sgr0 2>/dev/null || printf '\033[0m')
 
 GO ?= go
+STATICCHECK ?= staticcheck
+VETFLAGS ?=
+STATICCHECKFLAGS ?=
 PKGS := ./...
 GOFILES := $(shell find . -type f -name '*.go' -not -path './vendor/*')
 COVERPROFILE ?= coverage.out
@@ -28,12 +31,10 @@ cov: ## Run tests with coverage and print a summary
 	$(GO) test -coverprofile=$(COVERPROFILE) $(PKGS)
 	$(GO) tool cover -func=$(COVERPROFILE)
 
-.PHONY: vet
-vet: ## Run go vet
-	$(GO) vet $(PKGS)
-
 .PHONY: lint
-lint: vet ## Run lint checks
+lint:	## Run lint checks
+	$(GO) vet $(VETFLAGS) $(PKGS)
+	$(STATICCHECK) -checks=all $(STATICCHECKFLAGS) $(PKGS)
 
 .PHONY: build
 build: ## Compile all packages
@@ -42,13 +43,6 @@ build: ## Compile all packages
 .PHONY: tidy
 tidy: ## Tidy module dependencies
 	$(GO) mod tidy
-
-.PHONY: pre-commit
-pre-commit: ## Run pre-commit hooks
-	pre-commit run --all-files
-
-.PHONY: check
-check: lint test ## Run the main verification steps
 
 .PHONY: clean
 clean: ## Remove generated coverage and bin artifacts

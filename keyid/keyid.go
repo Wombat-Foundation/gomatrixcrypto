@@ -1,3 +1,4 @@
+// Package keyid derives Matrix FN-DSA key identifiers.
 package keyid
 
 import (
