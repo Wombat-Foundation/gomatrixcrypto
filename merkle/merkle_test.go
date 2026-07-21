@@ -128,7 +128,10 @@ func TestInvalidFieldNameRejected(t *testing.T) {
 	}
 }
 
-func TestMerkleRootOfEmptyHashesIsZero(t *testing.T) {
+func TestMerkleRootDoesNotPanicOnEmptyInput(t *testing.T) {
+	// merkleRoot is unreachable with empty input via the public API (Root
+	// rejects it with ErrNoLeaves); this only guards the private helper
+	// against future misuse, not protocol-defined behavior.
 	if got := merkleRoot(nil); got != (Hash{}) {
 		t.Fatalf("expected zero hash for empty input, got %x", got)
 	}

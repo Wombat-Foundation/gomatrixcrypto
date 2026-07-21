@@ -173,6 +173,8 @@ func EventID(eventRoot Hash) string {
 func merkleRoot(hashes []Hash) Hash {
 	switch len(hashes) {
 	case 0:
+		// Defensive guard only: rootFromLeaves already rejects empty input
+		// via ErrNoLeaves, so this has no protocol meaning of its own.
 		return Hash{}
 	case 1:
 		return hashes[0]
