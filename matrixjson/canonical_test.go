@@ -51,6 +51,12 @@ func TestCanonicalRejectsOutOfRangeIntegersAndFloats(t *testing.T) {
 	}
 }
 
+func TestCanonicalRejectsOutOfRangeUint(t *testing.T) {
+	if _, err := Canonical(uint64(1) << 63); !errors.Is(err, ErrIntegerRange) {
+		t.Fatalf("expected integer range error, got %v", err)
+	}
+}
+
 func TestCanonicalRejectsNonStringMapKeys(t *testing.T) {
 	if _, err := Canonical(map[int]string{1: "x"}); !errors.Is(err, ErrUnsupportedType) {
 		t.Fatalf("expected unsupported map key error, got %v", err)

@@ -66,6 +66,36 @@ func TestHeaderRootUsesNullForMissingOptionalFields(t *testing.T) {
 	}
 }
 
+func TestHeaderRootWithStateKeyAndRedacts(t *testing.T) {
+	stateKey := ""
+	redacts := "$a:example.org"
+	withOptional, err := HeaderRoot(Header{
+		RoomID:         "!room:example.org",
+		Sender:         "@alice:example.org",
+		Type:           "m.room.message",
+		StateKey:       &stateKey,
+		Redacts:        &redacts,
+		Depth:          42,
+		OriginServerTS: 123456789,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	withoutOptional, err := HeaderRoot(Header{
+		RoomID:         "!room:example.org",
+		Sender:         "@alice:example.org",
+		Type:           "m.room.message",
+		Depth:          42,
+		OriginServerTS: 123456789,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if withOptional == withoutOptional {
+		t.Fatal("expected header root to change when optional fields are set")
+	}
+}
+
 func TestEventRootAndIDStableVector(t *testing.T) {
 	prev, err := ComponentHash("prev_events", []any{"$a:example.org"})
 	if err != nil {
@@ -149,10 +179,31 @@ func TestMerkleRootDoesNotPanicOnEmptyInput(t *testing.T) {
 	}
 }
 
+func TestRootPropagatesCanonicalEncodingError(t *testing.T) {
+	_, err := Root([]Field{{Name: "n", Value: 1.5}})
+	if !errors.Is(err, matrixjson.ErrUnsupportedType) {
+		t.Fatalf("expected unsupported type error, got %v", err)
+	}
+}
+
 func TestEmptyRootRejected(t *testing.T) {
 	_, err := Root(nil)
 	if !errors.Is(err, ErrNoLeaves) {
 		t.Fatalf("expected no leaves error, got %v", err)
+	}
+}
+
+func TestEmptyFieldNameRejected(t *testing.T) {
+	_, err := Root([]Field{{Name: "", Value: nil}})
+	if !errors.Is(err, ErrEmptyFieldName) {
+		t.Fatalf("expected empty field name error, got %v", err)
+	}
+}
+
+func TestEmptyLeafHashFieldNameRejected(t *testing.T) {
+	_, err := leafHash("", []byte("null"))
+	if !errors.Is(err, ErrEmptyFieldName) {
+		t.Fatalf("expected empty field name error, got %v", err)
 	}
 }
 
