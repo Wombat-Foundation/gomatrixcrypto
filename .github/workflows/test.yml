@@ -19,14 +19,16 @@ jobs:
   test-and-badges:
     runs-on: ubuntu-latest
     permissions:
+      # Needed only for the badge publish push step below.
       contents: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@cdcb36043654635271a94b9a6d1392de5bb323a7 # v5.0.1
         with:
           go-version-file: go.mod
           cache: true
@@ -121,6 +123,7 @@ jobs:
 
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
+          git remote set-url origin "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
 
           git fetch origin _metadata/badges || true
 

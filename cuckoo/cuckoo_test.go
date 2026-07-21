@@ -297,7 +297,7 @@ func TestTrimAliveEdgesAndCollectSurvivors(t *testing.T) {
 		t.Fatalf("expected nonce 2 to be cleared")
 	}
 
-	survivors := collectSurvivors(alive, 4, endpoints)
+	survivors := collectSurvivors(alive, 4, 2, endpoints)
 	if len(survivors) != 2 {
 		t.Fatalf("expected two survivors, got %d", len(survivors))
 	}

@@ -141,7 +141,7 @@ func FindProof(cfg Config, seed []byte, maxNonce uint32, onProgress ...func(stri
 			break
 		}
 	}
-	survivors := collectSurvivors(alive, maxNonce, edgeEndpoints)
+	survivors := collectSurvivors(alive, maxNonce, aliveCount, edgeEndpoints)
 	logf("cuckoo: bulk trimming done: %d survivor edges (elapsed %s)", len(survivors), time.Since(startTime).Round(time.Millisecond))
 
 	// The bulk rounds above only approximate the 2-core: each round removes
