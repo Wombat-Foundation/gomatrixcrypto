@@ -29,11 +29,15 @@ type commandRunner func(path string, args ...string) ([]byte, error)
 type binaryPathFunc func() (string, error)
 type statFunc func(string) (fs.FileInfo, error)
 
+var runtimeCaller = runtime.Caller
+var binaryPathForAvailable = BinaryPath
+var statForAvailable = os.Stat
+
 // BinaryPath returns the expected path to the compiled solver binary,
 // resolved relative to this package's own source directory so it works
 // regardless of the caller's working directory.
 func BinaryPath() (string, error) {
-	_, file, _, ok := runtime.Caller(0)
+	_, file, _, ok := runtimeCaller(0)
 	if !ok {
 		return "", fmt.Errorf("meanminer: cannot resolve package directory")
 	}
@@ -42,7 +46,7 @@ func BinaryPath() (string, error) {
 
 // Available reports whether the solver binary has been built.
 func Available() bool {
-	return availableWithDeps(BinaryPath, os.Stat)
+	return availableWithDeps(binaryPathForAvailable, statForAvailable)
 }
 
 func availableWithDeps(binaryPath binaryPathFunc, stat statFunc) bool {

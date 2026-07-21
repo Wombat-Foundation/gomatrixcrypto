@@ -62,7 +62,7 @@ func EncryptPrivateKey(rng io.Reader, privateKey, passphrase []byte, params Priv
 		return nil, ErrInvalidKeyObject
 	}
 
-	aead, err := privateKeyAEAD(passphrase, params)
+	aead, err := privateKeyAEADFn(passphrase, params)
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +105,7 @@ func DecryptPrivateKey(encrypted map[string]any, passphrase []byte) ([]byte, err
 		return nil, err
 	}
 
-	aead, err := privateKeyAEAD(passphrase, params)
+	aead, err := privateKeyAEADFn(passphrase, params)
 	if err != nil {
 		return nil, err
 	}
@@ -144,6 +144,8 @@ func privateKeyAEAD(passphrase []byte, params PrivateKeyEncryptionParams) (ciphe
 	key := argon2.IDKey(passphrase, params.Salt, params.Time, params.MemoryKiB, params.Threads, privateKeyKeySize)
 	return chacha20poly1305.NewX(key)
 }
+
+var privateKeyAEADFn = privateKeyAEAD
 
 func privateKeyEncryptionParamsFromObject(encrypted map[string]any) (PrivateKeyEncryptionParams, error) {
 	rawKDF, ok := encrypted["kdf"].(map[string]any)

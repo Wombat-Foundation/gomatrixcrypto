@@ -207,17 +207,6 @@ func FindProof(cfg Config, seed []byte, maxNonce uint32, onProgress ...func(stri
 				break
 			}
 		}
-		// degrees[node] is decremented exactly once per removal of an edge
-		// incident to node, in lockstep with marking that edge removed, so
-		// degrees[node]==1 guarantees exactly one non-removed entry in
-		// incident[node]. u and v also always differ (they carry opposite
-		// partition-parity low bits), so no self-loop edge could desync the
-		// two. This makes edgeIdx==-1 unreachable in practice; kept as a
-		// defensive guard rather than a possible real case.
-		if edgeIdx == -1 {
-			continue
-		}
-
 		removed[edgeIdx] = true
 		edge := survivors[edgeIdx]
 		for _, endpoint := range [...]uint64{edge.u, edge.v} {

@@ -1,6 +1,8 @@
 package serverkey
 
 import (
+	"bytes"
+	"crypto/cipher"
 	"encoding/base64"
 	"errors"
 	"testing"
@@ -66,6 +68,61 @@ func TestEncryptPrivateKeyRejectsWrongSizeSaltOrNonce(t *testing.T) {
 	params.Nonce = []byte{0x01, 0x02, 0x03}
 	if _, err := EncryptPrivateKey(nil, make([]byte, fndsa512.PrivateKeySize), []byte("passphrase"), params); !errors.Is(err, ErrInvalidKeyObject) {
 		t.Fatalf("expected invalid key object for wrong-size nonce, got %v", err)
+	}
+}
+
+func TestEncryptPrivateKeyGeneratesSaltAndNonce(t *testing.T) {
+	priv := make([]byte, fndsa512.PrivateKeySize)
+	params := validPrivateKeyParams()
+	rng := &shortReader{remaining: privateKeySaltSize + chacha20poly1305.NonceSizeX, err: errors.New("unexpected rng failure")}
+
+	encrypted, err := EncryptPrivateKey(rng, priv, []byte("passphrase"), params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kdf := encrypted["kdf"].(map[string]any)
+	aead := encrypted["aead"].(map[string]any)
+	if got := kdf["salt"].(string); got == "" {
+		t.Fatalf("expected generated salt")
+	}
+	if got := aead["nonce"].(string); got == "" {
+		t.Fatalf("expected generated nonce")
+	}
+}
+
+func TestEncryptAndDecryptPrivateKeyPropagateAEADErrors(t *testing.T) {
+	oldAEAD := privateKeyAEADFn
+	privateKeyAEADFn = func([]byte, PrivateKeyEncryptionParams) (cipher.AEAD, error) {
+		return nil, errors.New("boom")
+	}
+	t.Cleanup(func() { privateKeyAEADFn = oldAEAD })
+
+	params := validPrivateKeyParams()
+	params.Salt = bytes.Repeat([]byte{0x11}, privateKeySaltSize)
+	params.Nonce = bytes.Repeat([]byte{0x22}, chacha20poly1305.NonceSizeX)
+
+	priv := make([]byte, fndsa512.PrivateKeySize)
+	if _, err := EncryptPrivateKey(nil, priv, []byte("passphrase"), params); err == nil {
+		t.Fatalf("expected AEAD creation to fail")
+	}
+
+	encrypted := map[string]any{
+		"algorithm": EncryptedPrivateKeyAlgorithm,
+		"kdf": map[string]any{
+			"algorithm":  privateKeyKDFAlgorithm,
+			"time":       uint64(params.Time),
+			"memory_kib": uint64(params.MemoryKiB),
+			"threads":    uint64(params.Threads),
+			"salt":       base64.RawStdEncoding.EncodeToString(params.Salt),
+		},
+		"aead": map[string]any{
+			"algorithm": privateKeyAEADAlgorithm,
+			"nonce":     base64.RawStdEncoding.EncodeToString(params.Nonce),
+		},
+		"ciphertext": base64.RawStdEncoding.EncodeToString([]byte("ciphertext")),
+	}
+	if _, err := DecryptPrivateKey(encrypted, []byte("passphrase")); err == nil {
+		t.Fatalf("expected AEAD creation to fail")
 	}
 }
 

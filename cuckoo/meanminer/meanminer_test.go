@@ -22,6 +22,18 @@ func TestBinaryPath(t *testing.T) {
 	}
 }
 
+func TestBinaryPathRejectsCallerFailure(t *testing.T) {
+	oldCaller := runtimeCaller
+	runtimeCaller = func(int) (uintptr, string, int, bool) {
+		return 0, "", 0, false
+	}
+	t.Cleanup(func() { runtimeCaller = oldCaller })
+
+	if _, err := BinaryPath(); err == nil {
+		t.Fatalf("expected runtime caller failure to propagate")
+	}
+}
+
 func TestSolveRejectsInvalidSeedLength(t *testing.T) {
 	if _, _, err := Solve([]byte("short"), 0); err == nil {
 		t.Fatalf("expected invalid seed length to fail")
@@ -31,6 +43,26 @@ func TestSolveRejectsInvalidSeedLength(t *testing.T) {
 func TestRunCommand(t *testing.T) {
 	if _, err := runCommand("meanminer-test-command-does-not-exist-12345"); err == nil {
 		t.Fatalf("expected runCommand to fail for missing command")
+	}
+}
+
+func TestAvailableUsesDeps(t *testing.T) {
+	oldBinaryPath := binaryPathForAvailable
+	oldStat := statForAvailable
+	t.Cleanup(func() {
+		binaryPathForAvailable = oldBinaryPath
+		statForAvailable = oldStat
+	})
+
+	binaryPathForAvailable = func() (string, error) { return "/solver", nil }
+	statForAvailable = func(string) (fs.FileInfo, error) { return fakeFileInfo{}, nil }
+	if !Available() {
+		t.Fatalf("expected fake solver binary to be available")
+	}
+
+	statForAvailable = func(string) (fs.FileInfo, error) { return nil, errors.New("missing") }
+	if Available() {
+		t.Fatalf("expected stat failure to report unavailable")
 	}
 }
 

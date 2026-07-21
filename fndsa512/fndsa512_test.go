@@ -9,6 +9,7 @@ import (
 	"io"
 	"testing"
 
+	"github.com/pornin/go-fn-dsa/fndsa"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -86,6 +87,22 @@ func TestSignRejectsUpstreamInvalidKey(t *testing.T) {
 	}
 	if _, err := SignPrehashed(nil, bad, []byte("ctx"), crypto.SHA256, make([]byte, sha256.Size)); err == nil {
 		t.Fatalf("expected upstream invalid private key error")
+	}
+}
+
+func TestSignRejectsShortUpstreamSignature(t *testing.T) {
+	oldSign := sign
+	sign = func(io.Reader, []byte, fndsa.DomainContext, crypto.Hash, []byte) ([]byte, error) {
+		return make([]byte, SignatureSize-1), nil
+	}
+	t.Cleanup(func() { sign = oldSign })
+
+	priv := make([]byte, PrivateKeySize)
+	if _, err := Sign(nil, priv, []byte("msg")); !errors.Is(err, ErrInvalidSignature) {
+		t.Fatalf("expected invalid signature error, got %v", err)
+	}
+	if _, err := SignPrehashed(nil, priv, []byte("ctx"), crypto.SHA256, make([]byte, sha256.Size)); !errors.Is(err, ErrInvalidSignature) {
+		t.Fatalf("expected invalid signature error, got %v", err)
 	}
 }
 

@@ -17,6 +17,7 @@ const (
 )
 
 var dst = []byte("msc4500_lthash16\x00")
+var readFull = io.ReadFull
 
 // Hash is the 2048-byte LtHash16 lattice state.
 type Hash [WordCount]uint16
@@ -56,7 +57,7 @@ func seed(eventType, stateKey, eventID string) Hash {
 	xof.Write([]byte(eventID))
 
 	var buf [ByteSize]byte
-	if _, err := io.ReadFull(xof, buf[:]); err != nil {
+	if _, err := readFull(xof, buf[:]); err != nil {
 		panic(err)
 	}
 
