@@ -1,3 +1,4 @@
+// Package serverkey builds and verifies Matrix server-key objects.
 package serverkey
 
 import (

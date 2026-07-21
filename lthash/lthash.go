@@ -1,3 +1,4 @@
+// Package lthash implements MSC4500 LtHash16 state accumulators.
 package lthash
 
 import (

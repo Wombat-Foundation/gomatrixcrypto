@@ -1,3 +1,4 @@
+// Package matrixjson encodes Matrix Canonical JSON values.
 package matrixjson
 
 import (

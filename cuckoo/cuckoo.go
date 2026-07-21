@@ -1,3 +1,4 @@
+// Package cuckoo implements Cuckoo Cycle proof derivation and verification.
 package cuckoo
 
 import (
