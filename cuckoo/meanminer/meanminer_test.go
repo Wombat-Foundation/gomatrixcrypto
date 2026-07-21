@@ -28,14 +28,6 @@ func TestSolveRejectsInvalidSeedLength(t *testing.T) {
 	}
 }
 
-func TestAvailable(t *testing.T) {
-	// Available() just wires the real BinaryPath/os.Stat into
-	// availableWithDeps (already covered above with fakes); this only
-	// exercises that wiring, since whether the solver binary is actually
-	// built is environment-dependent.
-	_ = Available()
-}
-
 func TestRunCommand(t *testing.T) {
 	if _, err := runCommand("meanminer-test-command-does-not-exist-12345"); err == nil {
 		t.Fatalf("expected runCommand to fail for missing command")
