@@ -37,8 +37,7 @@ type Field struct {
 	Value any
 }
 
-// Leaf is a canonical field commitment.
-type Leaf struct {
+type leaf struct {
 	Name          string
 	CanonicalJSON []byte
 	Hash          Hash
@@ -55,36 +54,34 @@ type Header struct {
 	OriginServerTS int64
 }
 
-// LeafHash computes SHA3-256("msc4511:leaf:v1" || field_name || "\x00" ||
+// leafHash computes SHA3-256("msc4511:leaf:v1" || field_name || "\x00" ||
 // canonical_value).
-func LeafHash(fieldName string, canonicalValue []byte) (Hash, error) {
+func leafHash(fieldName string, canonicalValue []byte) (Hash, error) {
 	if fieldName == "" {
 		return Hash{}, ErrEmptyFieldName
 	}
 	return hash(leafDST, []byte(fieldName), []byte{0}, canonicalValue), nil
 }
 
-// FieldLeaf canonicalizes and hashes a field value.
-func FieldLeaf(field Field) (Leaf, error) {
+func fieldLeaf(field Field) (leaf, error) {
 	if field.Name == "" {
-		return Leaf{}, ErrEmptyFieldName
+		return leaf{}, ErrEmptyFieldName
 	}
 	canonical, err := matrixjson.Canonical(field.Value)
 	if err != nil {
-		return Leaf{}, err
+		return leaf{}, err
 	}
-	h, err := LeafHash(field.Name, canonical)
+	h, err := leafHash(field.Name, canonical)
 	if err != nil {
-		return Leaf{}, err
+		return leaf{}, err
 	}
-	return Leaf{Name: field.Name, CanonicalJSON: canonical, Hash: h}, nil
+	return leaf{Name: field.Name, CanonicalJSON: canonical, Hash: h}, nil
 }
 
-// Leaves canonicalizes fields and returns them sorted bytewise by field name.
-func Leaves(fields []Field) ([]Leaf, error) {
-	leaves := make([]Leaf, len(fields))
+func leaves(fields []Field) ([]leaf, error) {
+	leaves := make([]leaf, len(fields))
 	for i, field := range fields {
-		leaf, err := FieldLeaf(field)
+		leaf, err := fieldLeaf(field)
 		if err != nil {
 			return nil, err
 		}
@@ -104,15 +101,14 @@ func Leaves(fields []Field) ([]Leaf, error) {
 // Root computes the RFC 6962 tree shape over field leaves, substituting the
 // MSC4511 leaf and inner hash functions. No padding leaves are added.
 func Root(fields []Field) (Hash, error) {
-	leaves, err := Leaves(fields)
+	leaves, err := leaves(fields)
 	if err != nil {
 		return Hash{}, err
 	}
-	return RootFromLeaves(leaves)
+	return rootFromLeaves(leaves)
 }
 
-// RootFromLeaves computes the RFC 6962 tree shape over already-ordered leaves.
-func RootFromLeaves(leaves []Leaf) (Hash, error) {
+func rootFromLeaves(leaves []leaf) (Hash, error) {
 	if len(leaves) == 0 {
 		return Hash{}, ErrNoLeaves
 	}
@@ -140,7 +136,7 @@ func RootFromLeaves(leaves []Leaf) (Hash, error) {
 // ComponentHash computes one top-level event-root component with the standard
 // leaf-hash construction.
 func ComponentHash(fieldName string, value any) (Hash, error) {
-	leaf, err := FieldLeaf(Field{Name: fieldName, Value: value})
+	leaf, err := fieldLeaf(Field{Name: fieldName, Value: value})
 	if err != nil {
 		return Hash{}, err
 	}
