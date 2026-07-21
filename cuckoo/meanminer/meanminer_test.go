@@ -28,6 +28,24 @@ func TestSolveRejectsInvalidSeedLength(t *testing.T) {
 	}
 }
 
+func TestAvailable(t *testing.T) {
+	// Available() just wires the real BinaryPath/os.Stat into
+	// availableWithDeps (already covered above with fakes); this only
+	// exercises that wiring, since whether the solver binary is actually
+	// built is environment-dependent.
+	_ = Available()
+}
+
+func TestRunCommand(t *testing.T) {
+	out, err := runCommand("echo", "hello")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(string(out)) != "hello" {
+		t.Fatalf("unexpected output: %q", out)
+	}
+}
+
 func TestAvailableWithDeps(t *testing.T) {
 	fileInfo := fakeFileInfo{}
 	dirInfo := fakeFileInfo{mode: fs.ModeDir}
