@@ -210,6 +210,13 @@ func FindProof(cfg Config, seed []byte, maxNonce uint32, onProgress ...func(stri
 				break
 			}
 		}
+		// degrees[node] is decremented exactly once per removal of an edge
+		// incident to node, in lockstep with marking that edge removed, so
+		// degrees[node]==1 guarantees exactly one non-removed entry in
+		// incident[node]. u and v also always differ (they carry opposite
+		// partition-parity low bits), so no self-loop edge could desync the
+		// two. This makes edgeIdx==-1 unreachable in practice; kept as a
+		// defensive guard rather than a possible real case.
 		if edgeIdx == -1 {
 			continue
 		}
@@ -274,6 +281,11 @@ func FindProof(cfg Config, seed []byte, maxNonce uint32, onProgress ...func(stri
 		return nil, false
 	}
 
+	// dfsLogInterval (200k+ failed starting-edge attempts) is only reached
+	// at production-scale graph sizes (EdgeBits~23+), where a single
+	// FindProof call already costs 20-30+ seconds. Covering it would add
+	// that cost to every test run, so it's left undocumented-but-uncovered
+	// alongside the bulk-trim loop's rarer paths.
 	const dfsLogInterval = 200000
 	for startIdx, start := range survivors {
 		if removed[startIdx] {

@@ -64,6 +64,24 @@ func TestFindProofCallsOnProgress(t *testing.T) {
 	}
 }
 
+// FindProof only enters its bulk-trim loop once the live edge count exceeds
+// survivorTarget (1<<22). EdgeBits=16 keeps the node space small relative to
+// that many edges, so the very first trim round removes nothing and the
+// loop exits via its diminishing-returns break rather than the outer
+// round-count/target condition, covering both paths in about two seconds.
+func TestFindProofEntersBulkTrimLoop(t *testing.T) {
+	cfg := Config{EdgeBits: 16, ProofSize: 4}
+	seed := testSeed()
+
+	proof, err := FindProof(cfg, seed, (1<<22)+1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Verify(cfg, seed, proof); err != nil {
+		t.Fatalf("verify failed: %v", err)
+	}
+}
+
 // A smaller maxNonce than TestFindProofAndVerify's produces a live-edge set
 // with at least one degree-1 node, exercising FindProof's incremental peel
 // (which the larger, denser graph in other tests never needs).
