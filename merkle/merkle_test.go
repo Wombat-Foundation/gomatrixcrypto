@@ -120,3 +120,18 @@ func TestEmptyRootRejected(t *testing.T) {
 		t.Fatalf("expected no leaves error, got %v", err)
 	}
 }
+
+func TestRootFromLeavesRejectsNonCanonicalOrder(t *testing.T) {
+	z, err := fieldLeaf(Field{Name: "z", Value: int64(1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, err := fieldLeaf(Field{Name: "a", Value: int64(2)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = rootFromLeaves([]leaf{z, a})
+	if !errors.Is(err, errLeavesNotCanonical) {
+		t.Fatalf("expected canonical order error, got %v", err)
+	}
+}

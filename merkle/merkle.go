@@ -18,6 +18,8 @@ var (
 	ErrEmptyFieldName = errors.New("merkle: empty field name")
 	ErrDuplicateField = errors.New("merkle: duplicate field")
 	ErrNoLeaves       = errors.New("merkle: no leaves")
+
+	errLeavesNotCanonical = errors.New("merkle: leaves not in canonical order")
 )
 
 var (
@@ -122,7 +124,7 @@ func rootFromLeaves(leaves []leaf) (Hash, error) {
 				return Hash{}, fmt.Errorf("%w: %s", ErrDuplicateField, leaf.Name)
 			}
 			if prev > leaf.Name {
-				return Hash{}, errors.New("merkle: leaves not in canonical order")
+				return Hash{}, fmt.Errorf("%w: %s before %s", errLeavesNotCanonical, prev, leaf.Name)
 			}
 		}
 	}
