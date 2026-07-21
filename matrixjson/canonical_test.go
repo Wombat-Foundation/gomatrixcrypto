@@ -3,6 +3,7 @@ package matrixjson
 import (
 	"encoding/json"
 	"errors"
+	"strconv"
 	"testing"
 )
 
@@ -141,8 +142,8 @@ func TestCanonicalRejectsInvalidSliceElement(t *testing.T) {
 }
 
 func TestCanonicalRejectsOverflowingJSONNumber(t *testing.T) {
-	if _, err := Canonical(json.Number("999999999999999999999999999999")); err == nil {
-		t.Fatalf("expected overflow error for oversized json.Number")
+	if _, err := Canonical(json.Number("999999999999999999999999999999")); !errors.Is(err, strconv.ErrRange) {
+		t.Fatalf("expected overflow error for oversized json.Number, got %v", err)
 	}
 }
 
