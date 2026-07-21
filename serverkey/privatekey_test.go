@@ -41,7 +41,7 @@ func validPrivateKeyParams() PrivateKeyEncryptionParams {
 
 func TestEncryptPrivateKeyPropagatesSaltRandomnessError(t *testing.T) {
 	wantErr := errors.New("boom")
-	_, err := EncryptPrivateKey(failingReader{wantErr}, make([]byte, fndsa512.PrivateKeySize), []byte("passphrase"), validPrivateKeyParams())
+	_, err := EncryptPrivateKey(failingReader{wantErr}, make([]byte, fndsa512.PrivateKeySize), []byte("correct horse battery staple"), validPrivateKeyParams())
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("expected salt randomness error, got %v", err)
 	}
@@ -51,7 +51,7 @@ func TestEncryptPrivateKeyPropagatesNonceRandomnessError(t *testing.T) {
 	wantErr := errors.New("boom")
 	// Succeeds for exactly the salt read, then fails on the nonce read.
 	rng := &shortReader{remaining: privateKeySaltSize, err: wantErr}
-	_, err := EncryptPrivateKey(rng, make([]byte, fndsa512.PrivateKeySize), []byte("passphrase"), validPrivateKeyParams())
+	_, err := EncryptPrivateKey(rng, make([]byte, fndsa512.PrivateKeySize), []byte("correct horse battery staple"), validPrivateKeyParams())
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("expected nonce randomness error, got %v", err)
 	}
@@ -60,13 +60,13 @@ func TestEncryptPrivateKeyPropagatesNonceRandomnessError(t *testing.T) {
 func TestEncryptPrivateKeyRejectsWrongSizeSaltOrNonce(t *testing.T) {
 	params := validPrivateKeyParams()
 	params.Salt = []byte{0x01, 0x02, 0x03}
-	if _, err := EncryptPrivateKey(nil, make([]byte, fndsa512.PrivateKeySize), []byte("passphrase"), params); !errors.Is(err, ErrInvalidKeyObject) {
+	if _, err := EncryptPrivateKey(nil, make([]byte, fndsa512.PrivateKeySize), []byte("correct horse battery staple"), params); !errors.Is(err, ErrInvalidKeyObject) {
 		t.Fatalf("expected invalid key object for wrong-size salt, got %v", err)
 	}
 
 	params = validPrivateKeyParams()
 	params.Nonce = []byte{0x01, 0x02, 0x03}
-	if _, err := EncryptPrivateKey(nil, make([]byte, fndsa512.PrivateKeySize), []byte("passphrase"), params); !errors.Is(err, ErrInvalidKeyObject) {
+	if _, err := EncryptPrivateKey(nil, make([]byte, fndsa512.PrivateKeySize), []byte("correct horse battery staple"), params); !errors.Is(err, ErrInvalidKeyObject) {
 		t.Fatalf("expected invalid key object for wrong-size nonce, got %v", err)
 	}
 }
@@ -76,7 +76,7 @@ func TestEncryptPrivateKeyGeneratesSaltAndNonce(t *testing.T) {
 	params := validPrivateKeyParams()
 	rng := &shortReader{remaining: privateKeySaltSize + chacha20poly1305.NonceSizeX, err: errors.New("unexpected rng failure")}
 
-	encrypted, err := EncryptPrivateKey(rng, priv, []byte("passphrase"), params)
+	encrypted, err := EncryptPrivateKey(rng, priv, []byte("correct horse battery staple"), params)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +102,7 @@ func TestEncryptAndDecryptPrivateKeyPropagateAEADErrors(t *testing.T) {
 	params.Nonce = bytes.Repeat([]byte{0x22}, chacha20poly1305.NonceSizeX)
 
 	priv := make([]byte, fndsa512.PrivateKeySize)
-	if _, err := EncryptPrivateKey(nil, priv, []byte("passphrase"), params); err == nil {
+	if _, err := EncryptPrivateKey(nil, priv, []byte("correct horse battery staple"), params); err == nil {
 		t.Fatalf("expected AEAD creation to fail")
 	}
 
@@ -176,11 +176,11 @@ func TestDecryptPrivateKeyRejectsWrongSizeDecryptedKey(t *testing.T) {
 
 func TestReencryptPrivateKeyPropagatesDecryptError(t *testing.T) {
 	priv := make([]byte, fndsa512.PrivateKeySize)
-	encrypted, err := EncryptPrivateKey(nil, priv, []byte("old passphrase"), validPrivateKeyParams())
+	encrypted, err := EncryptPrivateKey(nil, priv, []byte("old horse battery staple"), validPrivateKeyParams())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ReencryptPrivateKey(nil, encrypted, []byte("wrong passphrase"), []byte("new passphrase"), validPrivateKeyParams()); err == nil {
+	if _, err := ReencryptPrivateKey(nil, encrypted, []byte("wrong passphrase"), []byte("new horse battery staple"), validPrivateKeyParams()); err == nil {
 		t.Fatalf("expected reencrypt to propagate decrypt error")
 	}
 }

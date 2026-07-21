@@ -19,10 +19,14 @@ const (
 	privateKeyAEADAlgorithm      = "xchacha20poly1305"
 	privateKeySaltSize           = 16
 	privateKeyKeySize            = 32
+	privateKeyMinPassphraseSize  = 15
 )
 
 // ErrInvalidPassphrase reports an empty passphrase.
 var ErrInvalidPassphrase = errors.New("invalid private key passphrase")
+
+// ErrWeakPassphrase reports a passphrase that is too short.
+var ErrWeakPassphrase = errors.New("private key passphrase too short")
 
 // PrivateKeyEncryptionParams configures private-key encryption and re-wrapping.
 type PrivateKeyEncryptionParams struct {
@@ -44,7 +48,10 @@ func DefaultPrivateKeyEncryptionParams() PrivateKeyEncryptionParams {
 
 // EncryptPrivateKey wraps a raw FN-DSA private key for storage or transport.
 func EncryptPrivateKey(rng io.Reader, privateKey, passphrase []byte, params PrivateKeyEncryptionParams) (map[string]any, error) {
-	if err := validatePrivateKeyEncryptionInputs(privateKey, passphrase, params); err != nil {
+	if err := validatePrivateKeyEncryptionInputs(privateKey, params); err != nil {
+		return nil, err
+	}
+	if err := validatePrivateKeyPassphrase(passphrase); err != nil {
 		return nil, err
 	}
 	if rng == nil {
@@ -133,12 +140,19 @@ func ReencryptPrivateKey(rng io.Reader, encrypted map[string]any, oldPassphrase,
 	return EncryptPrivateKey(rng, privateKey, newPassphrase, params)
 }
 
-func validatePrivateKeyEncryptionInputs(privateKey, passphrase []byte, params PrivateKeyEncryptionParams) error {
-	if len(privateKey) != fndsa512.PrivateKeySize {
-		return fndsa512.ErrInvalidPrivateKey
-	}
+func validatePrivateKeyPassphrase(passphrase []byte) error {
 	if len(passphrase) == 0 {
 		return ErrInvalidPassphrase
+	}
+	if len(passphrase) < privateKeyMinPassphraseSize {
+		return ErrWeakPassphrase
+	}
+	return nil
+}
+
+func validatePrivateKeyEncryptionInputs(privateKey []byte, params PrivateKeyEncryptionParams) error {
+	if len(privateKey) != fndsa512.PrivateKeySize {
+		return fndsa512.ErrInvalidPrivateKey
 	}
 	if params.Time == 0 || params.MemoryKiB == 0 || params.Threads == 0 {
 		return ErrInvalidKeyObject
@@ -207,7 +221,7 @@ func privateKeyEncryptionParamsFromObject(encrypted map[string]any) (PrivateKeyE
 		Salt:      salt,
 		Nonce:     nonce,
 	}
-	if err := validatePrivateKeyEncryptionInputs(make([]byte, fndsa512.PrivateKeySize), passphraseSentinel, params); err != nil {
+	if err := validatePrivateKeyEncryptionInputs(make([]byte, fndsa512.PrivateKeySize), params); err != nil {
 		return PrivateKeyEncryptionParams{}, err
 	}
 	if len(params.Salt) != privateKeySaltSize || len(params.Nonce) != chacha20poly1305.NonceSizeX {
@@ -215,5 +229,3 @@ func privateKeyEncryptionParamsFromObject(encrypted map[string]any) (PrivateKeyE
 	}
 	return params, nil
 }
-
-var passphraseSentinel = []byte{1}
