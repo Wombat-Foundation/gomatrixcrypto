@@ -327,6 +327,22 @@ func TestLogDFSProgress(t *testing.T) {
 	}
 }
 
+func TestCanTraverseDFSNeighbor(t *testing.T) {
+	seenNodes := map[uint64]bool{2: true}
+	if canTraverseDFSNeighbor(1, 1, 1, 4, seenNodes) {
+		t.Fatalf("expected early return to start node to be rejected")
+	}
+	if !canTraverseDFSNeighbor(1, 1, 3, 4, seenNodes) {
+		t.Fatalf("expected final return to start node to be allowed")
+	}
+	if canTraverseDFSNeighbor(2, 1, 1, 4, seenNodes) {
+		t.Fatalf("expected already-seen non-root node to be rejected")
+	}
+	if !canTraverseDFSNeighbor(3, 1, 1, 4, seenNodes) {
+		t.Fatalf("expected unseen non-root node to be allowed")
+	}
+}
+
 func TestFindProofNoSolution(t *testing.T) {
 	if _, err := FindProof(Config{EdgeBits: 8, ProofSize: 4}, testSeed(), 0); !errors.Is(err, ErrNoSolution) {
 		t.Fatalf("expected no solution, got %v", err)

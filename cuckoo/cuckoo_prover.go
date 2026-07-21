@@ -223,7 +223,7 @@ func FindProof(cfg Config, seed []byte, maxNonce uint32, onProgress ...func(stri
 			if nextNode == currentNode {
 				nextNode = next.v
 			}
-			if nextNode != startNode && seenNodes[nextNode] {
+			if !canTraverseDFSNeighbor(nextNode, startNode, depth, cfg.ProofSize, seenNodes) {
 				continue
 			}
 			usedEdges[nextIdx] = true
@@ -248,16 +248,12 @@ func FindProof(cfg Config, seed []byte, maxNonce uint32, onProgress ...func(stri
 		}
 		logDFSProgress(startIdx, len(survivors), startTime, logf)
 		usedEdges[startIdx] = true
-		seenNodes[start.u] = true
-		seenNodes[start.v] = true
 		path = append(path[:0], start.nonce)
 		if proof, ok := dfs(start.u, start.v, 1); ok {
 			logf("cuckoo: found proof after %d starting edges tried (elapsed %s)", startIdx+1, time.Since(startTime).Round(time.Millisecond))
 			return proof, nil
 		}
 		usedEdges[startIdx] = false
-		delete(seenNodes, start.u)
-		delete(seenNodes, start.v)
 	}
 
 	logf("cuckoo: no cycle found among %d survivor edges (elapsed %s)", len(survivors), time.Since(startTime).Round(time.Millisecond))
@@ -308,4 +304,11 @@ func logDFSProgress(startIdx, total int, startTime time.Time, logf func(string, 
 	if startIdx > 0 && startIdx%dfsLogInterval == 0 {
 		logf("cuckoo: dfs: tried %d/%d starting edges (elapsed %s)", startIdx, total, time.Since(startTime).Round(time.Millisecond))
 	}
+}
+
+func canTraverseDFSNeighbor(nextNode, startNode uint64, depth, proofSize int, seenNodes map[uint64]bool) bool {
+	if nextNode == startNode {
+		return depth+1 == proofSize
+	}
+	return !seenNodes[nextNode]
 }

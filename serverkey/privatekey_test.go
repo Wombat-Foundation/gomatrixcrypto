@@ -92,8 +92,9 @@ func TestEncryptPrivateKeyGeneratesSaltAndNonce(t *testing.T) {
 
 func TestEncryptAndDecryptPrivateKeyPropagateAEADErrors(t *testing.T) {
 	oldAEAD := privateKeyAEADFn
+	wantErr := errors.New("boom")
 	privateKeyAEADFn = func([]byte, PrivateKeyEncryptionParams) (cipher.AEAD, error) {
-		return nil, errors.New("boom")
+		return nil, wantErr
 	}
 	t.Cleanup(func() { privateKeyAEADFn = oldAEAD })
 
@@ -102,8 +103,8 @@ func TestEncryptAndDecryptPrivateKeyPropagateAEADErrors(t *testing.T) {
 	params.Nonce = bytes.Repeat([]byte{0x22}, chacha20poly1305.NonceSizeX)
 
 	priv := make([]byte, fndsa512.PrivateKeySize)
-	if _, err := EncryptPrivateKey(nil, priv, []byte("correct horse battery staple"), params); err == nil {
-		t.Fatalf("expected AEAD creation to fail")
+	if _, err := EncryptPrivateKey(nil, priv, []byte("correct horse battery staple"), params); !errors.Is(err, wantErr) {
+		t.Fatalf("expected AEAD creation to fail, got %v", err)
 	}
 
 	encrypted := map[string]any{
@@ -121,8 +122,8 @@ func TestEncryptAndDecryptPrivateKeyPropagateAEADErrors(t *testing.T) {
 		},
 		"ciphertext": base64.RawStdEncoding.EncodeToString([]byte("ciphertext")),
 	}
-	if _, err := DecryptPrivateKey(encrypted, []byte("passphrase")); err == nil {
-		t.Fatalf("expected AEAD creation to fail")
+	if _, err := DecryptPrivateKey(encrypted, []byte("correct horse battery staple")); !errors.Is(err, wantErr) {
+		t.Fatalf("expected AEAD creation to fail, got %v", err)
 	}
 }
 
@@ -180,8 +181,15 @@ func TestReencryptPrivateKeyPropagatesDecryptError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ReencryptPrivateKey(nil, encrypted, []byte("wrong passphrase"), []byte("new horse battery staple"), validPrivateKeyParams()); err == nil {
-		t.Fatalf("expected reencrypt to propagate decrypt error")
+	wantErr := errors.New("boom")
+	oldAEAD := privateKeyAEADFn
+	privateKeyAEADFn = func([]byte, PrivateKeyEncryptionParams) (cipher.AEAD, error) {
+		return nil, wantErr
+	}
+	t.Cleanup(func() { privateKeyAEADFn = oldAEAD })
+
+	if _, err := ReencryptPrivateKey(nil, encrypted, []byte("old horse battery staple"), []byte("new horse battery staple"), validPrivateKeyParams()); !errors.Is(err, wantErr) {
+		t.Fatalf("expected reencrypt to propagate decrypt error, got %v", err)
 	}
 }
 

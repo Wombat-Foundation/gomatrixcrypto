@@ -44,6 +44,7 @@ jobs:
 
           workdir="$(mktemp -d)"
           lib_test_json="$workdir/lib-test.json"
+          all_test_json="$workdir/all-test.json"
           badge_dir="$workdir/badges"
           mkdir -p "$badge_dir"
 
@@ -53,11 +54,15 @@ jobs:
             status=1
           fi
 
-          if ! go test -coverprofile="$workdir/coverage-all.out" "${allpkgs[@]}" >/dev/null; then
+          if ! go test -json -coverprofile="$workdir/coverage-all.out" "${allpkgs[@]}" >"$all_test_json"; then
             status=1
           fi
 
-          if [ -s "$lib_test_json" ]; then
+          if [ -s "$all_test_json" ]; then
+            pass="$(jq -sr '[.[] | select(.Action == "pass" and .Test != null)] | length' "$all_test_json")"
+            skip="$(jq -sr '[.[] | select(.Action == "skip" and .Test != null)] | length' "$all_test_json")"
+            fail="$(jq -sr '[.[] | select(.Action == "fail" and .Test != null)] | length' "$all_test_json")"
+          elif [ -s "$lib_test_json" ]; then
             pass="$(jq -sr '[.[] | select(.Action == "pass" and .Test != null)] | length' "$lib_test_json")"
             skip="$(jq -sr '[.[] | select(.Action == "skip" and .Test != null)] | length' "$lib_test_json")"
             fail="$(jq -sr '[.[] | select(.Action == "fail" and .Test != null)] | length' "$lib_test_json")"
