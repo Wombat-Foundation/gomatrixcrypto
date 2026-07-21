@@ -45,6 +45,41 @@ func TestFindProofAndVerify(t *testing.T) {
 	}
 }
 
+func TestFindProofCallsOnProgress(t *testing.T) {
+	cfg := Config{EdgeBits: 8, ProofSize: 4}
+	seed := testSeed()
+
+	var lines []string
+	proof, err := FindProof(cfg, seed, 1<<12, func(line string) {
+		lines = append(lines, line)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(proof) != cfg.ProofSize {
+		t.Fatalf("unexpected proof size: got %d want %d", len(proof), cfg.ProofSize)
+	}
+	if len(lines) == 0 {
+		t.Fatalf("expected onProgress to be called at least once")
+	}
+}
+
+// A smaller maxNonce than TestFindProofAndVerify's produces a live-edge set
+// with at least one degree-1 node, exercising FindProof's incremental peel
+// (which the larger, denser graph in other tests never needs).
+func TestFindProofExercisesIncrementalPeel(t *testing.T) {
+	cfg := Config{EdgeBits: 8, ProofSize: 4}
+	seed := testSeed()
+
+	proof, err := FindProof(cfg, seed, 1<<10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Verify(cfg, seed, proof); err != nil {
+		t.Fatalf("verify failed: %v", err)
+	}
+}
+
 func TestVerifyRejectsTampering(t *testing.T) {
 	cfg := Config{EdgeBits: 8, ProofSize: 4}
 	seed := testSeed()
