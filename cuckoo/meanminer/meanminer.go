@@ -14,6 +14,7 @@ package meanminer
 import (
 	"encoding/binary"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -23,6 +24,10 @@ import (
 )
 
 const binaryName = "cuckoo_solve_29_42"
+
+type commandRunner func(path string, args ...string) ([]byte, error)
+type binaryPathFunc func() (string, error)
+type statFunc func(string) (fs.FileInfo, error)
 
 // BinaryPath returns the expected path to the compiled solver binary,
 // resolved relative to this package's own source directory so it works
@@ -37,11 +42,15 @@ func BinaryPath() (string, error) {
 
 // Available reports whether the solver binary has been built.
 func Available() bool {
-	bin, err := BinaryPath()
+	return availableWithDeps(BinaryPath, os.Stat)
+}
+
+func availableWithDeps(binaryPath binaryPathFunc, stat statFunc) bool {
+	bin, err := binaryPath()
 	if err != nil {
 		return false
 	}
-	info, err := os.Stat(bin)
+	info, err := stat(bin)
 	return err == nil && !info.IsDir()
 }
 
@@ -52,10 +61,18 @@ func Available() bool {
 // cuckoo.Verify, which requires ascending order), or ok=false if this
 // graph has no 42-cycle.
 func Solve(seed []byte, nthreads int) (proof []uint32, ok bool, err error) {
+	return solveWithDeps(seed, nthreads, BinaryPath, runCommand)
+}
+
+func runCommand(path string, args ...string) ([]byte, error) {
+	return exec.Command(path, args...).Output()
+}
+
+func solveWithDeps(seed []byte, nthreads int, binaryPath binaryPathFunc, run commandRunner) (proof []uint32, ok bool, err error) {
 	if len(seed) != 32 {
 		return nil, false, fmt.Errorf("meanminer: seed must be 32 bytes, got %d", len(seed))
 	}
-	bin, err := BinaryPath()
+	bin, err := binaryPath()
 	if err != nil {
 		return nil, false, err
 	}
@@ -73,7 +90,7 @@ func Solve(seed []byte, nthreads int) (proof []uint32, ok bool, err error) {
 		args = append(args, strconv.Itoa(nthreads))
 	}
 
-	out, err := exec.Command(bin, args...).Output()
+	out, err := run(bin, args...)
 	if err != nil {
 		return nil, false, fmt.Errorf("meanminer: running %s: %w", bin, err)
 	}
