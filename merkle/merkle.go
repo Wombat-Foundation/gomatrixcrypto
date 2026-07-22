@@ -48,14 +48,20 @@ type leaf struct {
 }
 
 // Header contains the MSC4511 event_header_root fields.
+//
+// SenderLocalpart and SenderDomain are committed as independent leaves
+// (rather than a single combined Sender leaf) so that a proof can disclose
+// and verify the sending server's identity without disclosing the sender's
+// localpart.
 type Header struct {
-	RoomID         string
-	Sender         string
-	Type           string
-	StateKey       *string
-	Redacts        *string
-	Depth          int64
-	OriginServerTS int64
+	RoomID          string
+	SenderLocalpart string
+	SenderDomain    string
+	Type            string
+	StateKey        *string
+	Redacts         *string
+	Depth           int64
+	OriginServerTS  int64
 }
 
 // leafHash computes SHA3-256("msc4511:leaf:v1" || field_name || "\x00" ||
@@ -151,8 +157,11 @@ func ComponentHash(fieldName string, value any) (Hash, error) {
 	return leaf.Hash, nil
 }
 
-// HeaderRoot computes event_header_root over room_id, sender, type, state_key,
-// redacts, depth, and origin_server_ts. Missing optional fields are null.
+// HeaderRoot computes event_header_root over room_id, sender_localpart,
+// sender_domain, type, state_key, redacts, depth, and origin_server_ts.
+// Missing optional fields are null. sender_localpart and sender_domain are
+// committed as independent leaves so a proof can disclose the sending
+// server's identity without disclosing the sender's localpart.
 func HeaderRoot(header Header) (Hash, error) {
 	var stateKey any
 	if header.StateKey != nil {
@@ -167,7 +176,8 @@ func HeaderRoot(header Header) (Hash, error) {
 		{Name: "origin_server_ts", Value: header.OriginServerTS},
 		{Name: "redacts", Value: redacts},
 		{Name: "room_id", Value: header.RoomID},
-		{Name: "sender", Value: header.Sender},
+		{Name: "sender_domain", Value: header.SenderDomain},
+		{Name: "sender_localpart", Value: header.SenderLocalpart},
 		{Name: "state_key", Value: stateKey},
 		{Name: "type", Value: header.Type},
 	})

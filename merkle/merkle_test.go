@@ -50,17 +50,18 @@ func TestRootStableVector(t *testing.T) {
 
 func TestHeaderRootUsesNullForMissingOptionalFields(t *testing.T) {
 	root, err := HeaderRoot(Header{
-		RoomID:         "!room:example.org",
-		Sender:         "@alice:example.org",
-		Type:           "m.room.message",
-		Depth:          42,
-		OriginServerTS: 123456789,
+		RoomID:          "!room:example.org",
+		SenderLocalpart: "alice",
+		SenderDomain:    "example.org",
+		Type:            "m.room.message",
+		Depth:           42,
+		OriginServerTS:  123456789,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	got := hex.EncodeToString(root[:])
-	const want = "f4f5f542c8adb6ba354328dfeda66fd069b77981a5514bb86cb22072d5117324"
+	const want = "db91cc8e8d3eb0d13885c32f28dbd4215a111081383e25263749c65d9bf8bc37"
 	if got != want {
 		t.Fatalf("header root mismatch: got %s want %s", got, want)
 	}
@@ -70,23 +71,25 @@ func TestHeaderRootWithStateKeyAndRedacts(t *testing.T) {
 	stateKey := ""
 	redacts := "$a:example.org"
 	withOptional, err := HeaderRoot(Header{
-		RoomID:         "!room:example.org",
-		Sender:         "@alice:example.org",
-		Type:           "m.room.message",
-		StateKey:       &stateKey,
-		Redacts:        &redacts,
-		Depth:          42,
-		OriginServerTS: 123456789,
+		RoomID:          "!room:example.org",
+		SenderLocalpart: "alice",
+		SenderDomain:    "example.org",
+		Type:            "m.room.message",
+		StateKey:        &stateKey,
+		Redacts:         &redacts,
+		Depth:           42,
+		OriginServerTS:  123456789,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	withoutOptional, err := HeaderRoot(Header{
-		RoomID:         "!room:example.org",
-		Sender:         "@alice:example.org",
-		Type:           "m.room.message",
-		Depth:          42,
-		OriginServerTS: 123456789,
+		RoomID:          "!room:example.org",
+		SenderLocalpart: "alice",
+		SenderDomain:    "example.org",
+		Type:            "m.room.message",
+		Depth:           42,
+		OriginServerTS:  123456789,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -106,11 +109,12 @@ func TestEventRootAndIDStableVector(t *testing.T) {
 		t.Fatal(err)
 	}
 	header, err := HeaderRoot(Header{
-		RoomID:         "!room:example.org",
-		Sender:         "@alice:example.org",
-		Type:           "m.room.message",
-		Depth:          42,
-		OriginServerTS: 123456789,
+		RoomID:          "!room:example.org",
+		SenderLocalpart: "alice",
+		SenderDomain:    "example.org",
+		Type:            "m.room.message",
+		Depth:           42,
+		OriginServerTS:  123456789,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -126,11 +130,11 @@ func TestEventRootAndIDStableVector(t *testing.T) {
 
 	root := EventRoot(prev, auth, header, content, other)
 	gotRoot := hex.EncodeToString(root[:])
-	const wantRoot = "734aaf66da440dfbbe445bfe7874014983beafe7682b456f40973f7e8e0a2e4d"
+	const wantRoot = "4ccc880527fe5f97d27a04105bb55e6c6e75d87928e54a6cd2973c224802ce91"
 	if gotRoot != wantRoot {
 		t.Fatalf("event root mismatch: got %s want %s", gotRoot, wantRoot)
 	}
-	const wantEventID = "$c0qvZtpEDfu-RFv-eHQBSYO-r-doK0VvQJc_fo4KLk0"
+	const wantEventID = "$TMyIBSf-X5fSegQQW7VebG512Hko5Ups0pc8IkgCzpE"
 	if got := EventID(root); got != wantEventID {
 		t.Fatalf("event ID mismatch: got %s want %s", got, wantEventID)
 	}
@@ -176,6 +180,15 @@ func TestMerkleRootDoesNotPanicOnEmptyInput(t *testing.T) {
 	// against future misuse, not protocol-defined behavior.
 	if got := merkleRoot(nil); got != (Hash{}) {
 		t.Fatalf("expected zero hash for empty input, got %x", got)
+	}
+}
+
+func TestMerkleRootSingleLeafReturnsLeafHash(t *testing.T) {
+	var leaf Hash
+	leaf[0] = 0x42
+
+	if got := merkleRoot([]Hash{leaf}); got != leaf {
+		t.Fatalf("expected singleton merkle root to equal the leaf hash, got %x want %x", got, leaf)
 	}
 }
 

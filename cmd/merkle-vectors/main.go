@@ -75,10 +75,11 @@ func sampleFields() []merkle.Field {
 
 func sampleHeader() merkle.Header {
 	return merkle.Header{
-		RoomID:         "!room:example.org",
-		Sender:         "@alice:example.org",
-		Type:           "m.room.message",
-		Depth:          42,
-		OriginServerTS: 123456789,
+		RoomID:          "!room:example.org",
+		SenderLocalpart: "alice",
+		SenderDomain:    "example.org",
+		Type:            "m.room.message",
+		Depth:           42,
+		OriginServerTS:  123456789,
 	}
 }
