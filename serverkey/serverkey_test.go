@@ -266,6 +266,22 @@ func TestKeyMetadataAndKeyIDDigests(t *testing.T) {
 	}
 }
 
+func TestShortKeyIDUsesBase64URL(t *testing.T) {
+	var keyID [32]byte
+	for i := range keyID {
+		keyID[i] = byte(i)
+	}
+
+	got, err := ShortKeyID(ProductionProfile, keyID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const want = "AAECAwQFBgcICQoLDA0ODw"
+	if got != want {
+		t.Fatalf("short key ID mismatch: got %q want %q", got, want)
+	}
+}
+
 func TestNewUnsignedFNDSARejectsInvalidInputs(t *testing.T) {
 	if _, _, err := NewUnsignedFNDSA("", make([]byte, fndsa512.PublicKeySize), 1, FNDSAMetadata{}, FNDSAMintingProof{}); !errors.Is(err, ErrInvalidServerName) {
 		t.Fatalf("expected invalid server name, got %v", err)

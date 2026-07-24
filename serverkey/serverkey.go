@@ -4,7 +4,6 @@ package serverkey
 import (
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -187,13 +186,13 @@ func KeyIDBase64(publicKey []byte, serverName string, proof FNDSAMintingProof) (
 	return base64.RawURLEncoding.EncodeToString(keyID[:]), nil
 }
 
-// ShortKeyID returns the profile-defined lowercase-hex key-name suffix.
+// ShortKeyID returns the profile-defined unpadded base64url key-name suffix.
 func ShortKeyID(profileName string, keyID [32]byte) (string, error) {
 	p, ok := profiles[profileName]
 	if !ok {
 		return "", ErrUnknownProfile
 	}
-	return hex.EncodeToString(keyID[:p.shortBytes]), nil
+	return base64.RawURLEncoding.EncodeToString(keyID[:p.shortBytes]), nil
 }
 
 func validateProof(publicKey []byte, serverName, profileName string, proof FNDSAMintingProof) error {
