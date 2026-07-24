@@ -22,6 +22,12 @@ func TestUint32FromAnyRejectsOversizeNonce(t *testing.T) {
 	}
 }
 
+func TestKeyIDBase64PropagatesCanonicalError(t *testing.T) {
+	if _, err := KeyIDBase64(make([]byte, fndsa512.PublicKeySize), string([]byte{0xff}), FNDSAMintingProof{}); !errors.Is(err, matrixjson.ErrInvalidString) {
+		t.Fatalf("expected invalid string error, got %v", err)
+	}
+}
+
 func TestSignFNDSAPropagatesSigningBytesError(t *testing.T) {
 	obj := map[string]any{"server_name": "example.com", "bad": 1.5}
 	if err := SignFNDSA(nil, obj, "example.com", FNDSAAlgorithm+":abc", []byte("short")); !errors.Is(err, matrixjson.ErrUnsupportedType) {
@@ -30,18 +36,18 @@ func TestSignFNDSAPropagatesSigningBytesError(t *testing.T) {
 }
 
 func TestSignFNDSAAddsSecondKeyForExistingServer(t *testing.T) {
-	priv1, pub1, err := fndsa512.GenerateKey(testRNG("serverkey-second-key-1"))
+	priv1, pub1, err := fndsa512.GenerateKey(testRNG("serverkey-keygen"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	priv2, pub2, err := fndsa512.GenerateKey(testRNG("serverkey-second-key-2"))
+	priv2, pub2, err := fndsa512.GenerateKey(testRNG("serverkey-digest-keygen"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	proof1 := testMintingProof(t, "example.com", pub1)
 	proof2 := testMintingProof(t, "example.com", pub2)
 
-	obj, keyName1, err := NewSignedFNDSA(testRNG("serverkey-second-key-sign-1"), "example.com", priv1, pub1, 1, FNDSAMetadata{}, proof1)
+	obj, keyName1, err := NewSignedFNDSA(testRNG("serverkey-sign"), "example.com", priv1, pub1, 1, FNDSAMetadata{}, proof1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +56,7 @@ func TestSignFNDSAAddsSecondKeyForExistingServer(t *testing.T) {
 		t.Fatal(err)
 	}
 	keyName2 := FNDSAAlgorithm + ":" + ShortKeyID(keyID2)
-	if err := SignFNDSA(testRNG("serverkey-second-key-sign-2"), obj, "example.com", keyName2, priv2); err != nil {
+	if err := SignFNDSA(testRNG("serverkey-sign"), obj, "example.com", keyName2, priv2); err != nil {
 		t.Fatal(err)
 	}
 
@@ -102,6 +108,12 @@ func TestVerifyFNDSASelfSignaturePropagatesMintingProofError(t *testing.T) {
 	}
 	if _, err := VerifyMintedFNDSAServerKey(obj, "example.com"); !errors.Is(err, ErrInvalidKeyObject) {
 		t.Fatalf("expected invalid key object for missing pow, got %v", err)
+	}
+}
+
+func TestMintingProofFromObjectRejectsMissingPow(t *testing.T) {
+	if _, _, err := mintingProofFromObject(map[string]any{"profile": ProductionProfile}); !errors.Is(err, ErrInvalidKeyObject) {
+		t.Fatalf("expected missing-pow rejection, got %v", err)
 	}
 }
 

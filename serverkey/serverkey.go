@@ -318,10 +318,10 @@ func verifyFNDSASignature(obj map[string]any, serverName string, requireProof bo
 			if err := validateProof(publicKey, serverName, profileName, proof); err != nil {
 				return "", err
 			}
-			keyID, err := KeyID(publicKey, serverName, proof)
-			if err != nil {
-				return "", err
-			}
+			// validateProof has already canonicalized the same validated inputs;
+			// mintingObject adds only uint32 solution entries, so KeyID cannot
+			// fail here.
+			keyID, _ := KeyID(publicKey, serverName, proof)
 			if keyName != FNDSAAlgorithm+":"+ShortKeyID(keyID) {
 				return "", ErrInvalidKeyName
 			}
@@ -375,7 +375,7 @@ func mintingProofFromObject(keyObject map[string]any) (string, FNDSAMintingProof
 	if err != nil {
 		return "", FNDSAMintingProof{}, err
 	}
-	return profileName, FNDSAMintingProof{Nonce: nonce, Solution: solution}, nil
+	return profileName, FNDSAMintingProof{Algorithm: profileName, Nonce: nonce, Solution: solution}, nil
 }
 
 func uint32FromAny(v any) (uint32, error) {

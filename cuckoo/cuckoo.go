@@ -138,7 +138,6 @@ func Verify(cfg Config, seed []byte, nonces []uint32) error {
 	}
 
 	uvs := make([]uint64, 2*len(nonces))
-	xor := uint64(0)
 	for i, nonce := range nonces {
 		if i > 0 && nonce == nonces[i-1] {
 			return ErrInvalidProof
@@ -152,8 +151,16 @@ func Verify(cfg Config, seed []byte, nonces []uint32) error {
 		}
 		uvs[2*i] = edge.U << 1
 		uvs[2*i+1] = (edge.V << 1) | 1
-		xor ^= uvs[2*i]
-		xor ^= uvs[2*i+1]
+	}
+	return verifyCycle(uvs)
+}
+
+// verifyCycle checks that tagged endpoints form exactly one cycle. Its input
+// is internal and has already been range-checked by Verify.
+func verifyCycle(uvs []uint64) error {
+	xor := uint64(0)
+	for _, endpoint := range uvs {
+		xor ^= endpoint
 	}
 	if xor != 0 {
 		return ErrInvalidProof
@@ -196,7 +203,7 @@ func Verify(cfg Config, seed []byte, nonces []uint32) error {
 			break
 		}
 	}
-	if n != len(nonces) {
+	if n != len(uvs)/2 {
 		return ErrInvalidProof
 	}
 	return nil

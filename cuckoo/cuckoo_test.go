@@ -72,13 +72,20 @@ func TestFindProofCallsOnProgress(t *testing.T) {
 	}
 }
 
-// FindProof only enters its bulk-trim loop once the live edge count exceeds
-// survivorTarget (1<<22). EdgeBits=16 keeps the node space small relative to
-// that many edges, so the very first trim round removes nothing and the
-// loop exits via its diminishing-returns break rather than the outer
-// round-count/target condition, covering both paths in about two seconds.
 func TestFindProofEntersBulkTrimLoop(t *testing.T) {
-	t.Skip("not a unit test: it allocates and searches millions of edges")
+	oldTarget := bulkTrimSurvivorTarget
+	bulkTrimSurvivorTarget = 0
+	t.Cleanup(func() { bulkTrimSurvivorTarget = oldTarget })
+
+	cfg := Config{EdgeBits: 12, ProofSize: 4}
+	seed := testSeed()
+	proof, err := FindProof(cfg, seed, 1<<12)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Verify(cfg, seed, proof); err != nil {
+		t.Fatalf("verify failed: %v", err)
+	}
 }
 
 // A smaller maxNonce than TestFindProofAndVerify's produces a live-edge set
@@ -341,6 +348,31 @@ func TestVerifyRejectsEdgeNonceOutsideProfileRange(t *testing.T) {
 	proof[len(proof)-1] = 1 << 12
 	if err := Verify(cfg, testSeed(), proof); !errors.Is(err, ErrInvalidProof) {
 		t.Fatalf("expected out-of-range edge nonce rejection, got %v", err)
+	}
+}
+
+func TestVerifyCycleRejectsMalformedCycles(t *testing.T) {
+	valid := []uint64{0, 1, 0, 3, 2, 3, 2, 1}
+	if err := verifyCycle(valid); err != nil {
+		t.Fatalf("valid cycle rejected: %v", err)
+	}
+	cases := []struct {
+		name string
+		uvs  []uint64
+	}{
+		{"nonzero xor", []uint64{0, 1, 2, 3}},
+		{"missing u partner", []uint64{0, 0, 2, 2}},
+		{"duplicate u partner", []uint64{0, 1, 0, 3, 0, 5, 2, 3, 2, 5, 0, 1}},
+		{"missing v partner", []uint64{0, 1, 0, 2, 2, 1}},
+		{"duplicate v partner", []uint64{0, 1, 0, 3, 2, 3, 2, 3, 1, 3}},
+		{"multiple cycles", []uint64{0, 1, 0, 3, 2, 3, 2, 1, 4, 5, 4, 5}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := verifyCycle(tc.uvs); !errors.Is(err, ErrInvalidProof) {
+				t.Fatalf("expected invalid proof, got %v", err)
+			}
+		})
 	}
 }
 
