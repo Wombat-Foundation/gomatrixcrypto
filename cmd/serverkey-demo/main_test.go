@@ -112,6 +112,24 @@ func TestConfigurePoWProfileRejectsInvalidInputs(t *testing.T) {
 	}
 }
 
+func TestValidateServerKeyProfile(t *testing.T) {
+	production, err := configurePoWProfile("production", 0, 0, "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateServerKeyProfile(production); err != nil {
+		t.Fatalf("production profile rejected: %v", err)
+	}
+
+	demo, err := configurePoWProfile("demo", 8, 4, "", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateServerKeyProfile(demo); err == nil {
+		t.Fatal("expected unregistered demo profile rejection")
+	}
+}
+
 // TestValidateMintingNonceRange checks the exclusive graph-nonce range.
 func TestValidateMintingNonceRange(t *testing.T) {
 	for _, tc := range []struct {

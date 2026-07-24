@@ -53,6 +53,9 @@ func main() {
 	if err != nil {
 		fatal(err)
 	}
+	if err := validateServerKeyProfile(profile); err != nil {
+		fatal(err)
+	}
 
 	passphrase, err := privateKeyPassphrase(*privateKeyPassphraseEnv, *privateKeyPassphraseFile)
 	if err != nil {
@@ -201,6 +204,15 @@ func configurePoWProfile(name string, edgeBits uint, proofSize int, algorithm st
 	default:
 		return powProfile{}, fmt.Errorf("unknown -pow-profile %q", name)
 	}
+}
+
+// validateServerKeyProfile rejects profiles outside serverkey's closed registry
+// before generating a key or spending work mining a proof.
+func validateServerKeyProfile(profile powProfile) error {
+	if profile.Algorithm != serverkey.ProductionProfile {
+		return fmt.Errorf("server-key output requires registered profile %q", serverkey.ProductionProfile)
+	}
+	return nil
 }
 
 func solveMintingPoW(serverName string, publicKey []byte, profile powProfile, maxNonce, startMintingNonce, maxMintingNonce uint32) (serverkey.FNDSAMintingProof, string, error) {
