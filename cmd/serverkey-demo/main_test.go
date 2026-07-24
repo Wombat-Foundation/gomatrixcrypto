@@ -112,6 +112,7 @@ func TestConfigurePoWProfileRejectsInvalidInputs(t *testing.T) {
 	}
 }
 
+// TestValidateMintingNonceLimit checks the exclusive graph-nonce bound.
 func TestValidateMintingNonceLimit(t *testing.T) {
 	for _, tc := range []struct {
 		limit uint64

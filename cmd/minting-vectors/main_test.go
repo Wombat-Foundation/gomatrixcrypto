@@ -2,6 +2,7 @@ package main
 
 import "testing"
 
+// TestValidateMintingNonceRange checks inclusive and exclusive uint32 bounds.
 func TestValidateMintingNonceRange(t *testing.T) {
 	for _, tc := range []struct {
 		name        string

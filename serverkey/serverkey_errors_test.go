@@ -22,24 +22,28 @@ func TestUint32FromAnyRejectsOversizeNonce(t *testing.T) {
 	}
 }
 
+// TestShortKeyIDRejectsUnknownProfile requires exact profile registration.
 func TestShortKeyIDRejectsUnknownProfile(t *testing.T) {
 	if _, err := ShortKeyID("unknown.profile", [32]byte{}); !errors.Is(err, ErrUnknownProfile) {
 		t.Fatalf("expected unknown profile rejection, got %v", err)
 	}
 }
 
+// TestNewUnsignedFNDSARejectsUnknownProfile rejects unregistered profiles.
 func TestNewUnsignedFNDSARejectsUnknownProfile(t *testing.T) {
 	if _, _, err := NewUnsignedFNDSA("example.com", make([]byte, fndsa512.PublicKeySize), 1, FNDSAMetadata{}, FNDSAMintingProof{Algorithm: "unknown.profile"}); !errors.Is(err, ErrUnknownProfile) {
 		t.Fatalf("expected unknown profile error, got %v", err)
 	}
 }
 
+// TestGraphSeedAllowsUnknownProfileForDerivation keeps derivation separate from dispatch.
 func TestGraphSeedAllowsUnknownProfileForDerivation(t *testing.T) {
 	if _, err := GraphSeed(make([]byte, fndsa512.PublicKeySize), "example.com", "unknown.profile", 0); err != nil {
 		t.Fatalf("unknown profile derivation failed: %v", err)
 	}
 }
 
+// TestValidateProofPropagatesGraphSeedError preserves canonicalization failures.
 func TestValidateProofPropagatesGraphSeedError(t *testing.T) {
 	if err := validateProof(make([]byte, fndsa512.PublicKeySize), string([]byte{0xff}), ProductionProfile, FNDSAMintingProof{}); !errors.Is(err, matrixjson.ErrInvalidString) {
 		t.Fatalf("expected canonical error, got %v", err)

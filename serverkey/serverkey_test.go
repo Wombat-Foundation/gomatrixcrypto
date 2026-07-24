@@ -154,6 +154,7 @@ func TestVerifyFNDSASelfSignatureRejectsTampering(t *testing.T) {
 	}
 }
 
+// TestVerificationRejectsReSignedMismatchedServerName binds the response identity.
 func TestVerificationRejectsReSignedMismatchedServerName(t *testing.T) {
 	priv, pub := testKeyPair(t, 0)
 	proof := testMintingProof(t, "example.com", pub)
@@ -170,6 +171,7 @@ func TestVerificationRejectsReSignedMismatchedServerName(t *testing.T) {
 	}
 }
 
+// TestVerifyFNDSASelfSignatureDoesNotClaimProtocolValidation separates signature and profile validation.
 func TestVerifyFNDSASelfSignatureDoesNotClaimProtocolValidation(t *testing.T) {
 	priv, pub := testKeyPair(t, 0)
 	proof := testMintingProof(t, "example.com", pub)
@@ -341,6 +343,7 @@ func TestVerifyFNDSASelfSignatureRejectsMalformedObjects(t *testing.T) {
 	}
 }
 
+// TestVerifyFNDSASelfSignatureRejectsObjectsPastServerNameGate covers post-identity failures.
 func TestVerifyFNDSASelfSignatureRejectsObjectsPastServerNameGate(t *testing.T) {
 	base := map[string]any{
 		"server_name": "example.com",
