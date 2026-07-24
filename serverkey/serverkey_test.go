@@ -341,6 +341,31 @@ func TestVerifyFNDSASelfSignatureRejectsMalformedObjects(t *testing.T) {
 	}
 }
 
+func TestVerifyFNDSASelfSignatureRejectsObjectsPastServerNameGate(t *testing.T) {
+	base := map[string]any{
+		"server_name": "example.com",
+		"signatures":  map[string]any{"example.com": map[string]any{}},
+	}
+	if _, err := VerifyFNDSASelfSignature(base, "example.com"); !errors.Is(err, ErrInvalidKeyObject) {
+		t.Fatalf("expected missing verify_keys rejection, got %v", err)
+	}
+	base["verify_keys"] = map[string]any{FNDSAAlgorithm + ":key": "not a map"}
+	if _, err := VerifyFNDSASelfSignature(base, "example.com"); !errors.Is(err, ErrInvalidKeyObject) {
+		t.Fatalf("expected non-map verify key rejection, got %v", err)
+	}
+
+	priv, pub := testKeyPair(t, 0)
+	proof := testMintingProof(t, "example.com", pub)
+	obj, keyName, err := NewSignedFNDSA(testRNG("serverkey-invalid-signature"), "example.com", priv, pub, 1, FNDSAMetadata{}, proof)
+	if err != nil {
+		t.Fatal(err)
+	}
+	obj["signatures"].(map[string]any)["example.com"].(map[string]any)[keyName] = base64.RawStdEncoding.EncodeToString(make([]byte, fndsa512.SignatureSize))
+	if _, err := VerifyFNDSASelfSignature(obj, "example.com"); !errors.Is(err, ErrInvalidSignature) {
+		t.Fatalf("expected invalid signature, got %v", err)
+	}
+}
+
 func TestVerifyFNDSASelfSignatureRejectsBadKeyAndSignatureEncoding(t *testing.T) {
 	obj := map[string]any{
 		"server_name": "example.com",
