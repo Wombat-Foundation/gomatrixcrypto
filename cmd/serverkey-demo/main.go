@@ -37,14 +37,15 @@ func main() {
 	powAlgorithm := flag.String("pow-algorithm", "", "minting proof algorithm for -pow-profile custom")
 	demoProfile := flag.Bool("pow-demo-profile", true, "mark -pow-profile custom output as demo-only")
 	maxNonce := flag.Uint("pow-max-nonce", 1<<12, "maximum edge nonce to search per minting nonce")
-	maxMintingNonce := flag.Uint64("pow-max-graph-nonce", 256, "maximum minting nonce attempts")
+	startMintingNonce := flag.Uint64("pow-start-graph-nonce", 0, "first graph nonce to try")
+	maxMintingNonce := flag.Uint64("pow-max-graph-nonce", 256, "exclusive graph-nonce limit")
 	privateKeyPassphraseEnv := flag.String("private-key-passphrase-env", "", "environment variable containing a passphrase for encrypted private-key output")
 	privateKeyPassphraseFile := flag.String("private-key-passphrase-file", "", "file containing a passphrase for encrypted private-key output")
 	flag.Parse()
 	if uint64(*maxNonce) > maxProtocolMintingNonce {
 		fatal(fmt.Errorf("pow-max-nonce %d exceeds the uint32 edge-nonce limit", *maxNonce))
 	}
-	if err := validateMintingNonceLimit(*maxMintingNonce); err != nil {
+	if err := validateMintingNonceRange(*startMintingNonce, *maxMintingNonce); err != nil {
 		fatal(err)
 	}
 
@@ -70,7 +71,7 @@ func main() {
 		}
 	}
 
-	proof, keyID, err := solveMintingPoW(*serverName, pub, profile, uint32(*maxNonce), *maxMintingNonce)
+	proof, keyID, err := solveMintingPoW(*serverName, pub, profile, uint32(*maxNonce), uint32(*startMintingNonce), uint32(*maxMintingNonce))
 	if err != nil {
 		fatal(err)
 	}
@@ -139,12 +140,10 @@ func main() {
 	}
 }
 
-// validateMintingNonceLimit validates an exclusive graph-nonce limit. The
-// valid nonce range is uint32, therefore 2^32 attempts (0 through 2^32-1)
-// are valid but a larger limit would wrap.
-func validateMintingNonceLimit(limit uint64) error {
-	if limit > maxProtocolMintingNonce+1 {
-		return fmt.Errorf("pow-max-graph-nonce %d exceeds the exclusive uint32 protocol limit", limit)
+// validateMintingNonceRange validates an exclusive graph-nonce range.
+func validateMintingNonceRange(start, limit uint64) error {
+	if start > maxProtocolMintingNonce || limit > maxProtocolMintingNonce+1 || start > limit {
+		return fmt.Errorf("invalid graph nonce range [%d, %d): require uint32 nonces and start <= limit", start, limit)
 	}
 	return nil
 }
@@ -204,14 +203,11 @@ func configurePoWProfile(name string, edgeBits uint, proofSize int, algorithm st
 	}
 }
 
-func solveMintingPoW(serverName string, publicKey []byte, profile powProfile, maxNonce uint32, maxMintingNonce uint64) (serverkey.FNDSAMintingProof, string, error) {
+func solveMintingPoW(serverName string, publicKey []byte, profile powProfile, maxNonce, startMintingNonce, maxMintingNonce uint32) (serverkey.FNDSAMintingProof, string, error) {
 	useMeanMiner := profile.Config.EdgeBits == 29 && profile.Config.ProofSize == 42 && meanminer.Available()
 
-	for nonce := uint64(0); nonce < maxMintingNonce; nonce++ {
-		if nonce > uint64(^uint32(0)) {
-			return serverkey.FNDSAMintingProof{}, "", fmt.Errorf("minting nonce exceeds uint32 range")
-		}
-		seed, err := serverkey.GraphSeed(publicKey, serverName, profile.Algorithm, uint32(nonce))
+	for nonce := startMintingNonce; nonce < maxMintingNonce; nonce++ {
+		seed, err := serverkey.GraphSeed(publicKey, serverName, profile.Algorithm, nonce)
 		if err != nil {
 			return serverkey.FNDSAMintingProof{}, "", err
 		}
@@ -247,7 +243,7 @@ func solveMintingPoW(serverName string, publicKey []byte, profile powProfile, ma
 
 		mintingProof := serverkey.FNDSAMintingProof{
 			Algorithm: profile.Algorithm,
-			Nonce:     uint32(nonce),
+			Nonce:     nonce,
 			Solution:  proof,
 		}
 		keyID, err := serverkey.KeyIDBase64(publicKey, serverName, mintingProof)
