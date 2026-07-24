@@ -1,0 +1,50 @@
+package serverkey
+
+import (
+	"encoding/base64"
+	"sync"
+)
+
+// These are fixed, non-production FN-DSA-512 keypairs used only by tests.
+// FN-DSA key generation is covered in the fndsa512 package; serverkey tests
+// use these fixtures to exercise real signing and verification quickly.
+const (
+	serverKeyTestPrivateKeyA = "WQhiAwRfAAQQQwvv/OvAAPfOwg/g+PQwfgAABQgA/QvwRPwvQwggAPf/fw/wAwgvfiAwRvff+uQe/gPxQfQ/wAuQ/f/vO/gd+g/gwwgQBPAfhARhwhBPxQPg/QwAAfiOfuQggQ+hAfAxQgBPAPvwg/vgwPwfABvQvRPBhPOeQhQRvvAQuQhfggPRvvu/AxPxfgfAv//RAA/xQyRQ+RQu+fAQOvA/fvAwye//QQfgRgQdvfAfPhwQwfu/gBBBfQRfxv/P/PxPRwgxOhf/evhAfff+CfOgAvhev+wRBBBAfvhvhwBf/whRQ/APwxAwuhABvgwvxuQx/QvhBiBdvg9/ySufugOgvf+hxBgRAfewvxRew/yhu9yASiPuyAfgffBf+QQwP/QgvRvvuvhyAQSfxfwwCPQfwv+OAvw/e/BAgvuvPvAfQgvvuhAvgvOgefwfBvfxQBgQPP/vOQvvuwv/uxCAfQQ/fAQAARQwBBgQQ+euwvvhggvzAffOAwfwABDPQPwQug+hQQBv+ggAfwQPQAACP/AweAPOgfgeghgOe/hAgvPyRwxfQfg/gPQePgxQQ/9wfuP9xevhfwfOwuwSPAwvOxPxegQQ//hAgvhQAPRwB/gQB/hie/fO+Q/uv/gAA+wRgAhPQ+fgPwQAPADPffgRSO/AQPNheSfgQRRBPBQgfgfu//v/wgAA/hQwiBRPwRuBw9+vfwfwwQ/QPvNgQfgO/RwfAwgRCfwCuRv//gOffAQRxw/vwe/wPBOvPxPthAv+wgRAOgAQPABPhRAAPwfgfPv+ORxSgOQwfPwdgv/vvBAexQ9QQwP/efARQvPf+gPBAAhBQBOQvewQ/fAgf9wg/AgxPRwugwAvvQhBCAxwwffwfhux+vRshwQR/Ouw/BhABQBPBOP+/AAwuvPAguhROgAfvvt/ggvfvwhfeQg/BvhOxPBPgRiAPAgxQfxfe9/AfQe/gQ//yBPvgx/hBPgQOQPQQQOwgxw/AQPwwvuBvBQwd/PfBPxev/hQOgA/fPrSHREaC/H95t0CKejYBsoK9xn38z0I4PYV9wj7MN3dH+QvFAfv697rpwQF5djH8w4GBv/tSA7iCBcRDPjg9hMI/BYQB/gYGtL40vLrARTv/QIUAyAx6xz7LOn5I9rvGPz7vs4VDxX62irLGBr77QwIBSPvGOLqCwvn7gYU9gnrC9P/BRz1QfbW7wb5A97u9wPr6P/gD/PO9wr47Rjs8+n2DhrrEQEZCd3hDQAC//8UA9jiAwUoEAMKCAwjIgIHAhbQIBzN5hvv6QINu8D67ff9Euf73wj3/vYi7QkDCMU77Af2M/7CAA8aABXsAhzx0goY9/P5HBMPDesBCCX01PzgCwrm8vYI9QP8HhgS5CALHxfewvr66+z69wL5Ew7f+wXqEArrHejyCzYBAPHy+wX8DBL5J/E/8/rQEPATCh/6FfHx/g767c0CJu33IhXp7fne8/b8xi8bBvbfBfgLDA8B/SQHKh0GF+Qg+iQT98QsGf73D+HWBS7q8gPsEvvi7usBCvsv9zIG7fHd+OzX9gTv/u/95x3gFtIq79bbCPXn9tvt/h/78yMtCQnZ+ysE2ArgEgXJ9xD5FOTl+u7r6uXtES0VDQrqEwHMA9YRKCfqORMvEd8P4Avy8gnz7xAEA/UG1QXbFB3xAePPJQr/1e8W5hP1HvXxAdUW4w8W1C7q"
+	serverKeyTestPublicKeyA  = "CSwhxsZdnDKl5hmI5il3RXVwZxZCPyVVe/hNV8NygcNjllharUzb958hUUc8WGJWgg6deHDK+KgMYOhCRTdCMh0B4CTt52qtncppJMjoZVLqm1PtCg4C6WsPmm6S8A4obsmUXtrDqL+MPa7ma3lE5f5D/bz7/0mTIeZgNautP08UDcnRJt1NoEXYMyvGWamJaSpMyoJZh4mYIQwCGn+r4+Rruunw9sknG6iZqAPJqFktxG02QePaKBUdExDdmXs1t0OYwq1E6Oo5/Y8BBJjPGnJuEVfGWlb4jraOoi3gdRUDjA4kNL3nyzZh4XmL6lZ4vpWE9cLhZsz+lRSpvm3MJsv0poyA6IHhM47/UKw9B19towM92JiOkXUClqmGzS1Il75kgw2CCKqyGgZVqv809YfnaA0ci8oGMgcJVaMgG4vVpVwEzrVkas/RdcQjmTqddBz5mmXIVieLtigRuA1iFiTXM5rMtaD9HtPMIiWsqSUw79OpLAx6lnmC/jGIt5rDrAG4YTUJFINIDkLMOqHabq7x6BUmQPUlvEQzTw7QfdU/Y3CiAy8wE+UuoXG/RuimG1nISWGrZ2KR4oTip4N4DBCaAlVxckkYBfkWI8yOR6IiKfd5A1WsbDPAqOg5WGzBpY/bhqTWOWUgCDaWEg12uocmBHTb+uTXshnpYRVO46iiQQEqiysUbyIc6w2im2wapsHC4owUHpCyktT8tcaPYy7dhASclPhGIvKKlT+Ec+cKkibm8apuzWGac2URbuknIr05TBZFeBbcVq5tvQPAy3MRpiwTEBY2vQ1Fgu6WhInLfU0J/fhNUBZXBcjJc83qJt0EuT9BSXnS9AsTbOyLCk+3ouLneGTWd9Tpr26ISDVw3OJ52HjwA63irJkDKhEnmEIWqniCScKNPTK7TU/3bK46eMlPoZM+RsaPWX13JNoWlGhFV1QANyzAvhSNWwoXFbQaFdpoTRvYd6TsocLq0KACT7JtQHKsbS8zopGqeo1j2GPYIqlBpaSKpQ2geDLZhmVLWKG61KqUzqM6upOXCmqb4QM5K2X9dDItOJVMFyCO3nAxH/FiqJGhsEOlogiSijzoT0A4JMtk7GOILTiVkAw4ODA/KxktZntNq+cfF/VMYHe41o4uNOYP4zAlCT2WuYM3WiV9hI2J7hNtl8hg4iTN927hFROGwSEp5IWFZiHR"
+	serverKeyTestPrivateKeyB = "WRP/vwevS/wvevPAxgvQ/gQQghwAAgAAPfxARg/gAfQvvxR//fygOQewf/AfwQhghfuiPu/e/fgvOxu/gfQ/fwfOvvQvg+QwxwugevhQwwgAAvgg/Qeuugf9/+vxfRRwggxQBSBwuhev/gQ+uAgOPu/hAgvP/e/B/RgfPwghBhR9wfhN+wBARvugRQgP+wQvxPvf+/AxugBf//uQAwe+OAgx/e9xBRggPAgPfwBAO/P/wRuwAQAewgtgw//xfPBP/wgPfxfB++g/iAg/f/QPPxvfPvQwgQBfP+POhBAvhdgPOxQ+OSAPwQfe/OgAPwuQfuvwwQOPgw/QAvwxAABAf/QQ+v/hRQAvAvBPxfSegR/APuvA+vw/vg/gPewe/wwAN+RPA/d/+PABgAvvx9ut9wv/t//gP/g/wfffxNxwfgwwBAh+gP+vwhvPfwRBuSRAARAhR/PAQwAOwfwP/BvgBffhB/ARAf/gBfyP+wPwQRSAfwPQBBPedRQevPfu+AgQgegAvQ+QQwRBOwwSBfv/egAgPwAAA++gPgPe+eCAQ9+g/wAQwRNhPPhgfRBQQRgPugCAvgAAPQg+AQwvAwCPQQuwegOQw/QPu/QAwgwxggQAQRRu/AwgRfghxgAACPg+wRBAPAxP/h/PRwB/gBPOg/PfwQQPevPROwwBQgwQvQwgwBAPgRgvPgiQxQBe/+g+vvuwACPPQgAfQCBgQ+gfOww/exBvvggewOAfQSQPgwg/gguggvR/xQwwAAAwggxPfOvgvP9/iPyAwAgfPgOPAAhAwefeR+vuxeQxvvwxwQAvOxQPvwxPf/v+vgAQvugv+wyA+/gAOB//wgxPfOfQBgugB/cAevg/hAQydwQefvgQAwA/yQvwAAxhx/vQAB//QRQPghvwwBO/gA/RPyAff/O/wwRfhBAPvuxPAOvQegPiPPwgPwhwgRPvgQQ/wiCABf/+w+9wAQf+ewRQfO/QQfggvgAQAPfgAw/fhgx+xffewhBOwgAQfwgAf+gwgv/AASsgAwXv3BMmH+YU0BUyFCok6hwIHRIE8hPp/g4VzwoRGPrw+PkmDwfTCAL75Q0MGAQq6xMEBgkK3RP8Dg/5IfHvBhMpMgz/0Ov/M+5ADPHbA/YdBxIA3/4o+PQh4e0L6NQa+gz5HAMT++wGz/Ia5/3uDAUA+hH2AfkL+hLqEfHdPPIN+O/rC9QYFw4BA/ngE+8NLOD5DbkL3QAjJgTiARf1IwMX1vIQ6hsD8gPn9vczE+P8y/oh7RTv5wX0//4nBTkM9PkEDgfg7vH5ACELB/30/+cFCgwCLO/9NfQJGfT9vv/j9g0R0//n7uMM6xkJCdrl+RT8C/kbEuUH8drcBNr58Ar08vgdFgcKtMUKByH2CBoC3RQKCQDvCdgY4tv3vd8Y9w3DBvASFwXY3w/lCyIQIA8QITA4FiPO4cbm6fL16vAO8A0OCgHUJxbkM+XfOvbl8/bkEe39Awff9egIAz/t1+DeEOwJ+ucdBflHBSro5/Qc+Pj199jw5Rv9Kxbt6/7WEvrxB9Hf9vsO9u8NEPn7VfT7G97bHdcNG+3vGv7Z8er+CvMCvvQAxAMC4e3W/AMQ+88w1AEC7P/v9xDzFOUa9+73AP3ZFPzSFA0NAdYcBf81Ev36BcPaIw8m/ujkLxIMA9LOCPjYAAXm7/Tq/wIq+hPmECP84wkRIes0+A4f"
+	serverKeyTestPublicKeyB  = "CYoEU3Z20zgatK4IX6ZeEaYQNCKoTaWacsqs0l8CNb/a1FP2L540GEFhb4Z5h6uAhgV54MgpY6bqCaahWXzrgEd+uHlAnSGB9YwGdxmeIg1JtCMLXr9UU/L8Ys40vDpgF6P1qURB05ap/mYamdcpBI6/JYt2fFhCfTZykd9Qgi9Z6MuxCAgUMhko+agoo7nxVdzWD0VirIbZpaO52rQEdJIFDRJkZ/9lJWO9jEElyl8ZmRvAmWQ6Cine0FGq9DsBIBBbB1JcwSYUnBQ9ZFCzOAYnSDzYkSSAFwuIoHMEqSMMK6LbuDXIFy4dy3leQ/Ucud2SQCNjoqmhg6ndnoxsv0QwFEa6dGS7+iS2JCpEwlCHl79J9OhyxNh7AK/yTgoaBfGRqUslmaF5SpRbDAuISMHizt9PA0Am2ghvLxsGVycoLJ5ktG21UaHQnlB2BoGb+33SdRA17+V87qq2Y5ggg9HgVGFaswj+1VEaKptTeRoKNQgwTLH7lixtDwY8ogYRn900ihcbse4jJA6PeGgDdVt9d4VFH5B+mS3QyZsBTNlbYojSjDrkVdIjVT1kbDHTvlCHhcE8ReqOCZ71m2g9kXgAvOh73WGVMVrFyInvNh76TzDJX0x0Meb496aUCP7PQmbmixCYynZCEtaWnBrGtUB0PGXO8yrki6N8YiHSEBWrbAIXP6bHcMX8IwnF8kRUOaYm662fOMJpbIxid6VnclBB6DH1xSd4I6GhEmEDZppkk/n60AigKxtU1+PQaB1J1IcbWw2aCzh8egOEl4/xldfv07IMNmTHdUTNRnYXsRQAPalY0Qp3aLcOhKR1vaOeMLiFx5LKzC0o1RoYmtF3lStLf0LyIPYCeCDvIR5tEWdx1pF69qnQuWVElQDX0+YaIARUAeoE7f1nVgDAzht5S5DW87DP8HHNQwGAkvkXuMUSoFDhUZ0QYjtjXZlm06dc4mBZNBtk6J71H/LCpfKGmpTY65Gfbv42hH/6vJWPXfZlC8dYZSBJ3ZVSVb6OYMh23CFOS0FcNXrfrxg+iDBDRipc+JOHJO8cZV0cgdauAS8wxjJqmKOOyXYgu2/lvFLlBN+g6muUDaBDFnOLcNdnGQenpVSTO23BDrjK8uLZ4DAULkJoDFVxKd0x9B2sOHX9x7AhwVFVsaZCxZrFSqCwNm9q4kGKNeLsQfezgeriPFo1"
+)
+
+var serverKeyTestPairs struct {
+	sync.Once
+	pairs [2]struct{ private, public []byte }
+	err   error
+}
+
+func testKeyPair(t testingT, index int) (private, public []byte) {
+	t.Helper()
+	serverKeyTestPairs.Do(func() {
+		serverKeyTestPairs.pairs[0].private, serverKeyTestPairs.err = base64.RawStdEncoding.DecodeString(serverKeyTestPrivateKeyA)
+		if serverKeyTestPairs.err != nil {
+			return
+		}
+		serverKeyTestPairs.pairs[0].public, serverKeyTestPairs.err = base64.RawStdEncoding.DecodeString(serverKeyTestPublicKeyA)
+		if serverKeyTestPairs.err != nil {
+			return
+		}
+		serverKeyTestPairs.pairs[1].private, serverKeyTestPairs.err = base64.RawStdEncoding.DecodeString(serverKeyTestPrivateKeyB)
+		if serverKeyTestPairs.err != nil {
+			return
+		}
+		serverKeyTestPairs.pairs[1].public, serverKeyTestPairs.err = base64.RawStdEncoding.DecodeString(serverKeyTestPublicKeyB)
+	})
+	if serverKeyTestPairs.err != nil {
+		t.Fatal(serverKeyTestPairs.err)
+	}
+	return serverKeyTestPairs.pairs[index].private, serverKeyTestPairs.pairs[index].public
+}
+
+type testingT interface {
+	Helper()
+	Fatal(args ...any)
+}

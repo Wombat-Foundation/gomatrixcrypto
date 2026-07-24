@@ -36,14 +36,8 @@ func TestSignFNDSAPropagatesSigningBytesError(t *testing.T) {
 }
 
 func TestSignFNDSAAddsSecondKeyForExistingServer(t *testing.T) {
-	priv1, pub1, err := fndsa512.GenerateKey(testRNG("serverkey-keygen"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	priv2, pub2, err := fndsa512.GenerateKey(testRNG("serverkey-digest-keygen"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	priv1, pub1 := testKeyPair(t, 0)
+	priv2, pub2 := testKeyPair(t, 1)
 	proof1 := testMintingProof(t, "example.com", pub1)
 	proof2 := testMintingProof(t, "example.com", pub2)
 

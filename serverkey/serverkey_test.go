@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"io"
+	"sync"
 	"testing"
 
 	"github.com/Wombat-Foundation/gomatrixcrypto/cuckoo"
@@ -20,8 +21,16 @@ func testRNG(seed string) io.Reader {
 	return h
 }
 
+var testMintingProofs sync.Map
+
 func testMintingProof(t *testing.T, serverName string, pub []byte) FNDSAMintingProof {
 	t.Helper()
+	cacheKey := serverName + "\x00" + string(pub)
+	if cached, ok := testMintingProofs.Load(cacheKey); ok {
+		proof := cached.(FNDSAMintingProof)
+		proof.Solution = append([]uint32(nil), proof.Solution...)
+		return proof
+	}
 	cfg := cuckoo.Config{EdgeBits: 8, ProofSize: 4}
 	for nonce := uint32(0); nonce < 64; nonce++ {
 		seed, err := GraphSeed(pub, serverName, "test.cuckoo-cycle-4-8-sha3-256-cogen", uint32(nonce))
@@ -35,11 +44,13 @@ func testMintingProof(t *testing.T, serverName string, pub []byte) FNDSAMintingP
 		if err != nil {
 			t.Fatal(err)
 		}
-		return FNDSAMintingProof{
+		result := FNDSAMintingProof{
 			Algorithm: "test.cuckoo-cycle-4-8-sha3-256-cogen",
 			Nonce:     nonce,
 			Solution:  proof,
 		}
+		testMintingProofs.Store(cacheKey, result)
+		return result
 	}
 	t.Fatal("no test minting proof found")
 	return FNDSAMintingProof{}
@@ -75,10 +86,7 @@ func testRegisteredMintingProof(t *testing.T, serverName string, pub []byte) (st
 }
 
 func TestNewSignedFNDSAAndVerify(t *testing.T) {
-	priv, pub, err := fndsa512.GenerateKey(testRNG("serverkey-keygen"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	priv, pub := testKeyPair(t, 0)
 
 	proof := testMintingProof(t, "example.com", pub)
 	obj, keyName, err := NewSignedFNDSA(testRNG("serverkey-sign"), "example.com", priv, pub, 1798848000000, FNDSAMetadata{}, proof)
@@ -112,10 +120,7 @@ func TestNewSignedFNDSAAndVerify(t *testing.T) {
 }
 
 func TestVerifyFNDSASelfSignatureRejectsTampering(t *testing.T) {
-	priv, pub, err := fndsa512.GenerateKey(testRNG("serverkey-keygen"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	priv, pub := testKeyPair(t, 0)
 	proof := testMintingProof(t, "example.com", pub)
 	obj, _, err := NewSignedFNDSA(testRNG("serverkey-sign"), "example.com", priv, pub, 1798848000000, FNDSAMetadata{}, proof)
 	if err != nil {
@@ -129,10 +134,7 @@ func TestVerifyFNDSASelfSignatureRejectsTampering(t *testing.T) {
 }
 
 func TestVerifyFNDSASelfSignatureDoesNotClaimProtocolValidation(t *testing.T) {
-	priv, pub, err := fndsa512.GenerateKey(testRNG("serverkey-keygen"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	priv, pub := testKeyPair(t, 0)
 	proof := testMintingProof(t, "example.com", pub)
 	obj, keyName, err := NewSignedFNDSA(testRNG("serverkey-sign"), "example.com", priv, pub, 1798848000000, FNDSAMetadata{}, proof)
 	if err != nil {
@@ -145,10 +147,7 @@ func TestVerifyFNDSASelfSignatureDoesNotClaimProtocolValidation(t *testing.T) {
 }
 
 func TestVerifyMintedFNDSAServerKeyBindsProfileProofAndKeyName(t *testing.T) {
-	priv, pub, err := fndsa512.GenerateKey(testRNG("serverkey-minted-keygen"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	priv, pub := testKeyPair(t, 0)
 	_, proof := testRegisteredMintingProof(t, "example.com", pub)
 	obj, keyName, err := NewSignedFNDSA(testRNG("serverkey-minted-sign"), "example.com", priv, pub, 1, FNDSAMetadata{}, proof)
 	if err != nil {
@@ -194,10 +193,7 @@ func TestSigningBytesIgnoreSignaturesAndUnsigned(t *testing.T) {
 }
 
 func TestKeyMetadataAndKeyIDDigests(t *testing.T) {
-	_, pub, err := fndsa512.GenerateKey(testRNG("serverkey-digest-keygen"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	_, pub := testKeyPair(t, 1)
 	proof := testMintingProof(t, "example.com", pub)
 	keyObject := FNDSAKeyObject(pub, FNDSAMetadata{FIPS206Revision: DefaultFIPSRevision}, proof)
 
@@ -240,10 +236,7 @@ func TestNewSignedFNDSARejectsInvalidInputs(t *testing.T) {
 		t.Fatalf("expected invalid server name, got %v", err)
 	}
 
-	_, pub, err := fndsa512.GenerateKey(testRNG("serverkey-invalid-sign-keygen"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	_, pub := testKeyPair(t, 0)
 	proof := testMintingProof(t, "example.com", pub)
 	if _, _, err := NewSignedFNDSA(nil, "example.com", []byte("short"), pub, 1, FNDSAMetadata{}, proof); !errors.Is(err, fndsa512.ErrInvalidPrivateKey) {
 		t.Fatalf("expected invalid private key, got %v", err)
@@ -265,10 +258,7 @@ func TestSignFNDSARejectsInvalidInputs(t *testing.T) {
 }
 
 func TestSignFNDSARejectsMalformedExistingSignatures(t *testing.T) {
-	priv, pub, err := fndsa512.GenerateKey(testRNG("serverkey-keygen"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	priv, pub := testKeyPair(t, 0)
 	proof := testMintingProof(t, "example.com", pub)
 	obj, keyName, err := NewUnsignedFNDSA("example.com", pub, 1, FNDSAMetadata{}, proof)
 	if err != nil {
@@ -324,10 +314,7 @@ func TestVerifyFNDSASelfSignatureRejectsBadKeyAndSignatureEncoding(t *testing.T)
 }
 
 func TestVerifyFNDSASelfSignatureRejectsMissingAndBadSignature(t *testing.T) {
-	priv, pub, err := fndsa512.GenerateKey(testRNG("serverkey-badsig-keygen"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	priv, pub := testKeyPair(t, 0)
 	proof := testMintingProof(t, "example.com", pub)
 	obj, keyName, err := NewSignedFNDSA(testRNG("serverkey-badsig-sign"), "example.com", priv, pub, 1, FNDSAMetadata{}, proof)
 	if err != nil {
@@ -353,10 +340,7 @@ func TestKeyMetadataSHA256RejectsUnsupportedObject(t *testing.T) {
 }
 
 func TestEncryptPrivateKeyRoundTrip(t *testing.T) {
-	priv, _, err := fndsa512.GenerateKey(testRNG("serverkey-encryption-keygen"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	priv, _ := testKeyPair(t, 0)
 	defaultParams := DefaultPrivateKeyEncryptionParams()
 	if defaultParams.Time == 0 || defaultParams.MemoryKiB == 0 || defaultParams.Threads == 0 {
 		t.Fatalf("invalid default encryption params: %#v", defaultParams)
@@ -389,10 +373,7 @@ func TestEncryptPrivateKeyRoundTrip(t *testing.T) {
 }
 
 func TestReencryptPrivateKeyChangesPassphrase(t *testing.T) {
-	priv, _, err := fndsa512.GenerateKey(testRNG("serverkey-reencrypt-keygen"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	priv, _ := testKeyPair(t, 0)
 	oldParams := PrivateKeyEncryptionParams{
 		Time:      1,
 		MemoryKiB: 8 * 1024,
