@@ -1,0 +1,281 @@
+{
+  "schema": "msc00e4-sha3-256-cogen-42-29-v1",
+  "server_name": "nutra.tk",
+  "public_key_base64": "CXRW8Qp4hV28xjXqQw8xcooFcf7iADZ+5ApLjc+fUtWWJ8ZRd/UBdG3CjWKATnGvgv69oHTXku8qvPngJlGO+FWOpunOCB5mJLNkQlS7KS3ZKZ5AsqbK/qraJ5wvbe7QPSSlZ2VBydaS0Yzx+OiozmiSZoBh41Rdg5YfoAFugrquWvu/QF5Ikcfk0yK5YGXHFyig+SWAn4YL1xqdfKpmKJfILzwk9cIoN5b477PH5gMQ6Iqx8+YCVTgg0BBi4Hd98wcYqh2kMHbEM9HQXdC3x1HG3VgatzQNaxdjQsxC72azo46R5cnXPrSujFPdU+1JjryALKHdES3Z1hDAaKJydZOxIxKJkGhGadYFD+ygiAWh4jNonxm40XOVvvBEJFgdQSJwlE4c1HqB6RQUzfVtXMtabKU+VQG2J3OaiKHd1LQOkE0GFYl7hZtcT1ah2C1peHhgD8LwGbxGeoFXQk0WmZo+BEIBGmIQqJaWCE52zI/WAxp9nDD+pkGF5ATlAEkCzA8XWvNTX5p0uMweakqveBwMMhuX7GMOldHZp650o7UP6/blP3AB4QL75VJiFqUUzUYch+zr57NJC3jGs5OpEtYwpaEyWJpfpz3Ze9gImhjEUduRzBdS3HvW3Y1eTgBpYqdtuWhmrBFMorsGZY8K9ZtCQZiiUU2A0CyCW9SOHyijoWxisVVgYdF2MCgVPyrSw8AU7ZVCdYpytenTqKEKJB8CJmQ+MBsOgKGKFnryZyHrk2XpGMGPbr4hTFkxEBErPqio1BEvBAhsehKmbidsjnXBpCBHBJWShZJ0DE1iIYNnfw6i2QOlKQA31o2VOgyOteGyV84PEYJC/mjKHb5pqRpaxhJjKirs5vlCVRdV/wpXnYxjXbsEBhUJFsYfty7BnIjI+pjeFDhUaaKoCo3vSoIIIdCUSJVopFVcBScEKSh6sWynLaIh1w8t77UIwifNpSF9NJsKVGcQIwwbAP/cVDIuZDbbxKyGomowMkWVYcoM9ktbwaAkdhpniqyI/Pl0R1UxqNwiaMUTWAZmstIDD0JKigOjj8zoZeSW1ScXFYNdPtoMx0he9Gk0lVbwN+D6m8wCITvhsYE7hlJaaGwzk9wSQZVCV7/S/wDdmjUXIfhMYJKnEsgzePFhuH9D7hmWPWMaRBNBlBRrJmLgjeiSRhyRegTiAzvwwqEH1G5TUCcH",
+  "pow": {
+    "algorithm": "tk.nutra.msc45xx.pow.cuckoo-cycle-42-29-sha3-256-cogen",
+    "nonce": 38,
+    "solution": [
+      68046,
+      2391613,
+      9377116,
+      10611185,
+      11442242,
+      18448625,
+      22652386,
+      56953388,
+      77720998,
+      85409770,
+      110367440,
+      117248741,
+      133959719,
+      138294712,
+      148531254,
+      157618478,
+      172524369,
+      179986709,
+      182850889,
+      187563308,
+      207389264,
+      225602796,
+      231784180,
+      233566892,
+      245805234,
+      248752872,
+      273828517,
+      274611850,
+      278222371,
+      294474426,
+      294619825,
+      295279535,
+      305329778,
+      306327832,
+      328554308,
+      355020877,
+      383709596,
+      393892908,
+      402042887,
+      417694234,
+      452567990,
+      470826501
+    ]
+  },
+  "graph_seed_hex": "781c66db825c3b64c516bf8c9dc86cc6af4b1dc1353c044442b58c51fdabeb07",
+  "key_id": "vmmytdYr_1jtmDUU8engbYY4fGgLFkjJAk1sK5b-p_s",
+  "noncanonical_diagnostics": {
+    "notice": "Derived diagnostic and reproduction data; not part of the protocol object or any canonical hash input.",
+    "reproduction": {
+      "keygen_seed_ascii": "msc00e4-sha3-256-key-minting-vector-keygen-v1",
+      "edge_bits": 29,
+      "proof_size": 42
+    },
+    "graph_seed_words_uint64_le_hex": [
+      "643b5c82db661c78",
+      "c66cc89d8cbf16c5",
+      "44043c35c11d4baf",
+      "07ebabfd518cb542"
+    ],
+    "edges": [
+      {
+        "nonce": 68046,
+        "u": 446002213,
+        "v": 83343438
+      },
+      {
+        "nonce": 2391613,
+        "u": 489385386,
+        "v": 332180051
+      },
+      {
+        "nonce": 9377116,
+        "u": 339642324,
+        "v": 129227150
+      },
+      {
+        "nonce": 10611185,
+        "u": 225352459,
+        "v": 36207882
+      },
+      {
+        "nonce": 11442242,
+        "u": 11042197,
+        "v": 332180051
+      },
+      {
+        "nonce": 18448625,
+        "u": 446002213,
+        "v": 8524344
+      },
+      {
+        "nonce": 22652386,
+        "u": 253996809,
+        "v": 510512262
+      },
+      {
+        "nonce": 56953388,
+        "u": 524309635,
+        "v": 19447165
+      },
+      {
+        "nonce": 77720998,
+        "u": 438760469,
+        "v": 126383010
+      },
+      {
+        "nonce": 85409770,
+        "u": 336099268,
+        "v": 265529006
+      },
+      {
+        "nonce": 110367440,
+        "u": 442091919,
+        "v": 138699079
+      },
+      {
+        "nonce": 117248741,
+        "u": 444369073,
+        "v": 12590200
+      },
+      {
+        "nonce": 133959719,
+        "u": 335275439,
+        "v": 431286023
+      },
+      {
+        "nonce": 138294712,
+        "u": 508067811,
+        "v": 228469096
+      },
+      {
+        "nonce": 148531254,
+        "u": 489385386,
+        "v": 486016192
+      },
+      {
+        "nonce": 157618478,
+        "u": 249739192,
+        "v": 56686677
+      },
+      {
+        "nonce": 172524369,
+        "u": 18506222,
+        "v": 56686677
+      },
+      {
+        "nonce": 179986709,
+        "u": 249739192,
+        "v": 19447165
+      },
+      {
+        "nonce": 182850889,
+        "u": 322118063,
+        "v": 486016192
+      },
+      {
+        "nonce": 187563308,
+        "u": 508067811,
+        "v": 105404295
+      },
+      {
+        "nonce": 207389264,
+        "u": 516556248,
+        "v": 129227150
+      },
+      {
+        "nonce": 225602796,
+        "u": 253996809,
+        "v": 147625336
+      },
+      {
+        "nonce": 231784180,
+        "u": 18506222,
+        "v": 70675936
+      },
+      {
+        "nonce": 233566892,
+        "u": 322118063,
+        "v": 265529006
+      },
+      {
+        "nonce": 245805234,
+        "u": 441000440,
+        "v": 228469096
+      },
+      {
+        "nonce": 248752872,
+        "u": 444369073,
+        "v": 126383010
+      },
+      {
+        "nonce": 273828517,
+        "u": 335275439,
+        "v": 74867347
+      },
+      {
+        "nonce": 274611850,
+        "u": 442091919,
+        "v": 262334341
+      },
+      {
+        "nonce": 278222371,
+        "u": 234437562,
+        "v": 74867347
+      },
+      {
+        "nonce": 294474426,
+        "u": 339642324,
+        "v": 83343438
+      },
+      {
+        "nonce": 294619825,
+        "u": 234437562,
+        "v": 8524344
+      },
+      {
+        "nonce": 295279535,
+        "u": 11042197,
+        "v": 218330319
+      },
+      {
+        "nonce": 305329778,
+        "u": 225352459,
+        "v": 70675936
+      },
+      {
+        "nonce": 306327832,
+        "u": 516556248,
+        "v": 218330319
+      },
+      {
+        "nonce": 328554308,
+        "u": 336099268,
+        "v": 36207882
+      },
+      {
+        "nonce": 355020877,
+        "u": 469834977,
+        "v": 431286023
+      },
+      {
+        "nonce": 383709596,
+        "u": 469834977,
+        "v": 105404295
+      },
+      {
+        "nonce": 393892908,
+        "u": 165180439,
+        "v": 12590200
+      },
+      {
+        "nonce": 402042887,
+        "u": 438760469,
+        "v": 510512262
+      },
+      {
+        "nonce": 417694234,
+        "u": 165180439,
+        "v": 138699079
+      },
+      {
+        "nonce": 452567990,
+        "u": 441000440,
+        "v": 262334341
+      },
+      {
+        "nonce": 470826501,
+        "u": 524309635,
+        "v": 147625336
+      }
+    ]
+  }
+}

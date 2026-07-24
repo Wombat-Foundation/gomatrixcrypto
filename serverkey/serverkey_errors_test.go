@@ -135,7 +135,7 @@ func TestVerifyFNDSASelfSignaturePropagatesKeyIDError(t *testing.T) {
 	// signing bytes, so any malformed value embedded there trips line
 	// 246-249 before the loop ever reaches KeyID). Passing it only as the
 	// serverName argument means it reaches matrixjson.Canonical solely via
-	// MintingObject's "server_name" field inside KeyID.
+	// mintingObject's "server_name" field inside KeyID.
 	serverName := string([]byte{0xff})
 	obj := map[string]any{
 		"verify_keys": map[string]any{

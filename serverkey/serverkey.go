@@ -102,8 +102,7 @@ func FNDSAKeyObject(publicKey []byte, metadata FNDSAMetadata, proof FNDSAMinting
 	return keyObject
 }
 
-// CogenStamp returns the canonical stamp object for a key-graph proof.
-func CogenStamp(publicKey []byte, serverName string) map[string]any {
+func graphObject(publicKey []byte, serverName string) map[string]any {
 	return map[string]any{
 		"action":      "fn-dsa-key-graph",
 		"public_key":  base64.RawStdEncoding.EncodeToString(publicKey),
@@ -111,8 +110,7 @@ func CogenStamp(publicKey []byte, serverName string) map[string]any {
 	}
 }
 
-// MintingObject returns the canonical minting object used for key attestation.
-func MintingObject(publicKey []byte, serverName string, proof FNDSAMintingProof) map[string]any {
+func mintingObject(publicKey []byte, serverName string, proof FNDSAMintingProof) map[string]any {
 	return map[string]any{
 		"action":      "fn-dsa-minting-object",
 		"algorithm":   proof.Algorithm,
@@ -126,7 +124,7 @@ func MintingObject(publicKey []byte, serverName string, proof FNDSAMintingProof)
 // GraphSeed returns the key-graph seed used to derive the minting proof.
 func GraphSeed(publicKey []byte, serverName string, nonce uint64) ([32]byte, error) {
 	var out [32]byte
-	canonical, err := matrixjson.Canonical(CogenStamp(publicKey, serverName))
+	canonical, err := matrixjson.Canonical(graphObject(publicKey, serverName))
 	if err != nil {
 		return out, err
 	}
@@ -143,7 +141,7 @@ func GraphSeed(publicKey []byte, serverName string, nonce uint64) ([32]byte, err
 // KeyID returns the canonical SHA3-256 digest for a minted server key.
 func KeyID(publicKey []byte, serverName string, proof FNDSAMintingProof) ([32]byte, error) {
 	var out [32]byte
-	canonical, err := matrixjson.Canonical(MintingObject(publicKey, serverName, proof))
+	canonical, err := matrixjson.Canonical(mintingObject(publicKey, serverName, proof))
 	if err != nil {
 		return out, err
 	}
