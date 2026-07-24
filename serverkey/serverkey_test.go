@@ -49,7 +49,7 @@ func testMintingProof(t *testing.T, serverName string, pub []byte) FNDSAMintingP
 	}
 	cfg := cuckoo.Config{EdgeBits: 8, ProofSize: 4}
 	for nonce := uint32(0); nonce < 64; nonce++ {
-		seed, err := GraphSeed(pub, serverName, testSignatureProfile, uint32(nonce))
+		seed, err := GraphSeed(pub, serverName, testSignatureProfile, nonce)
 		if err != nil {
 			t.Fatal(err)
 		}

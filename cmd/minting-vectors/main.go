@@ -156,6 +156,9 @@ func generate(serverName string, startNonce, maxNonce uint64, threads int) (vect
 // validateMintingNonceRange validates an exclusive nonce range. The final
 // valid nonce is 2^32-1, so an exclusive upper bound of 2^32 is permitted.
 func validateMintingNonceRange(startNonce, maxNonce uint64) error {
+	if startNonce > maxNonce {
+		return fmt.Errorf("start nonce %d exceeds exclusive max nonce %d", startNonce, maxNonce)
+	}
 	if startNonce > maxProtocolMintingNonce {
 		return fmt.Errorf("start nonce %d exceeds the uint32 protocol limit", startNonce)
 	}
