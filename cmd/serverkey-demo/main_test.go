@@ -6,9 +6,9 @@ import (
 	"os"
 	"testing"
 
-	"gomatrixlib/cuckoo"
-	"gomatrixlib/fndsa512"
-	"gomatrixlib/serverkey"
+	"github.com/Wombat-Foundation/gomatrixcrypto/cuckoo"
+	"github.com/Wombat-Foundation/gomatrixcrypto/fndsa512"
+	"github.com/Wombat-Foundation/gomatrixcrypto/serverkey"
 
 	"golang.org/x/crypto/sha3"
 )

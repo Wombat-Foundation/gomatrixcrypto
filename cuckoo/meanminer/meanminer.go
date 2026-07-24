@@ -6,7 +6,7 @@
 //
 // The binary is built separately (run `make` in this directory) rather
 // than compiled in by `go build`, so this package is plain Go: no cgo, no
-// C++ toolchain required to build gomatrixlib itself. Callers should
+// C++ toolchain required to build gomatrixcrypto itself. Callers should
 // check Available() and fall back to cuckoo.FindProof when the binary
 // hasn't been built.
 package meanminer

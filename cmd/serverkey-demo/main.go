@@ -11,10 +11,10 @@ import (
 	"strings"
 	"time"
 
-	"gomatrixlib/cuckoo"
-	"gomatrixlib/cuckoo/meanminer"
-	"gomatrixlib/fndsa512"
-	"gomatrixlib/serverkey"
+	"github.com/Wombat-Foundation/gomatrixcrypto/cuckoo"
+	"github.com/Wombat-Foundation/gomatrixcrypto/cuckoo/meanminer"
+	"github.com/Wombat-Foundation/gomatrixcrypto/fndsa512"
+	"github.com/Wombat-Foundation/gomatrixcrypto/serverkey"
 )
 
 const demoPoWProfileNote = "demo-only low-difficulty Cuckoo profile; not valid for production key minting"

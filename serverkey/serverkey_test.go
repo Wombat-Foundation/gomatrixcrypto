@@ -7,9 +7,9 @@ import (
 	"io"
 	"testing"
 
-	"gomatrixlib/cuckoo"
-	"gomatrixlib/fndsa512"
-	"gomatrixlib/matrixjson"
+	"github.com/Wombat-Foundation/gomatrixcrypto/cuckoo"
+	"github.com/Wombat-Foundation/gomatrixcrypto/fndsa512"
+	"github.com/Wombat-Foundation/gomatrixcrypto/matrixjson"
 
 	"golang.org/x/crypto/sha3"
 )

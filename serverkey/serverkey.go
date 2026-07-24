@@ -10,9 +10,9 @@ import (
 	"io"
 	"strings"
 
-	"gomatrixlib/fndsa512"
-	"gomatrixlib/keyid"
-	"gomatrixlib/matrixjson"
+	"github.com/Wombat-Foundation/gomatrixcrypto/fndsa512"
+	"github.com/Wombat-Foundation/gomatrixcrypto/keyid"
+	"github.com/Wombat-Foundation/gomatrixcrypto/matrixjson"
 
 	"golang.org/x/crypto/sha3"
 )

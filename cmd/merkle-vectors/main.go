@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	"gomatrixlib/merkle"
+	"github.com/Wombat-Foundation/gomatrixcrypto/merkle"
 )
 
 func main() {

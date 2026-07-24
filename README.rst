@@ -1,5 +1,5 @@
-gomatrixlib
-===========
+gomatrixcrypto
+==============
 
 Small Go library for Matrix-adjacent cryptographic primitives.
 

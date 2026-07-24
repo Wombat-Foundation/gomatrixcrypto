@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"gomatrixlib/fndsa512"
-	"gomatrixlib/matrixjson"
+	"github.com/Wombat-Foundation/gomatrixcrypto/fndsa512"
+	"github.com/Wombat-Foundation/gomatrixcrypto/matrixjson"
 )
 
 // hugeNonceProof is a syntactically valid proof whose Nonce exceeds
