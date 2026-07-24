@@ -23,8 +23,24 @@ func testRNG(seed string) io.Reader {
 
 var testMintingProofs sync.Map
 
+const testSignatureProfile = "test.cuckoo-cycle-4-8-sha3-256-cogen"
+
+var registerTestSignatureProfile sync.Once
+
+func ensureTestSignatureProfile() {
+	registerTestSignatureProfile.Do(func() {
+		profiles[testSignatureProfile] = profile{
+			config:     cuckoo.Config{EdgeBits: 8, ProofSize: 4},
+			graphTag:   testSignatureProfile + ".graph",
+			keyIDTag:   testSignatureProfile + ".keyid",
+			shortBytes: 16,
+		}
+	})
+}
+
 func testMintingProof(t *testing.T, serverName string, pub []byte) FNDSAMintingProof {
 	t.Helper()
+	ensureTestSignatureProfile()
 	cacheKey := serverName + "\x00" + string(pub)
 	if cached, ok := testMintingProofs.Load(cacheKey); ok {
 		proof := cached.(FNDSAMintingProof)
@@ -33,7 +49,7 @@ func testMintingProof(t *testing.T, serverName string, pub []byte) FNDSAMintingP
 	}
 	cfg := cuckoo.Config{EdgeBits: 8, ProofSize: 4}
 	for nonce := uint32(0); nonce < 64; nonce++ {
-		seed, err := GraphSeed(pub, serverName, "test.cuckoo-cycle-4-8-sha3-256-cogen", uint32(nonce))
+		seed, err := GraphSeed(pub, serverName, testSignatureProfile, uint32(nonce))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -45,7 +61,7 @@ func testMintingProof(t *testing.T, serverName string, pub []byte) FNDSAMintingP
 			t.Fatal(err)
 		}
 		result := FNDSAMintingProof{
-			Algorithm: "test.cuckoo-cycle-4-8-sha3-256-cogen",
+			Algorithm: testSignatureProfile,
 			Nonce:     nonce,
 			Solution:  append([]uint32(nil), proof...),
 		}
@@ -99,7 +115,11 @@ func TestNewSignedFNDSAAndVerify(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantKeyName := FNDSAAlgorithm + ":" + ShortKeyID(keyID)
+	shortKeyID, err := ShortKeyID(proof.Algorithm, keyID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantKeyName := FNDSAAlgorithm + ":" + shortKeyID
 	if keyName != wantKeyName {
 		t.Fatalf("key name mismatch: got %s want %s", keyName, wantKeyName)
 	}
@@ -129,8 +149,24 @@ func TestVerifyFNDSASelfSignatureRejectsTampering(t *testing.T) {
 	}
 
 	obj["server_name"] = "evil.example"
-	if _, err := VerifyFNDSASelfSignature(obj, "example.com"); !errors.Is(err, ErrInvalidSignature) {
-		t.Fatalf("expected invalid signature, got %v", err)
+	if _, err := VerifyFNDSASelfSignature(obj, "example.com"); !errors.Is(err, ErrInvalidServerName) {
+		t.Fatalf("expected invalid server name, got %v", err)
+	}
+}
+
+func TestVerificationRejectsReSignedMismatchedServerName(t *testing.T) {
+	priv, pub := testKeyPair(t, 0)
+	proof := testMintingProof(t, "example.com", pub)
+	obj, keyName, err := NewSignedFNDSA(testRNG("serverkey-sign"), "example.com", priv, pub, 1, FNDSAMetadata{}, proof)
+	if err != nil {
+		t.Fatal(err)
+	}
+	obj["server_name"] = "evil.example"
+	if err := SignFNDSA(testRNG("serverkey-resign"), obj, "example.com", keyName, priv); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := VerifyMintedFNDSAServerKey(obj, "example.com"); !errors.Is(err, ErrInvalidServerName) {
+		t.Fatalf("expected mismatched server name rejection, got %v", err)
 	}
 }
 
@@ -141,9 +177,17 @@ func TestVerifyFNDSASelfSignatureDoesNotClaimProtocolValidation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	keyObject := obj["verify_keys"].(map[string]any)[keyName].(map[string]any)
+	keyObject["profile"] = "unknown.profile"
+	if err := SignFNDSA(testRNG("serverkey-sign-unknown-profile"), obj, "example.com", keyName, priv); err != nil {
+		t.Fatal(err)
+	}
 
 	if got, err := VerifyFNDSASelfSignature(obj, "example.com"); err != nil || got != keyName {
 		t.Fatalf("signature-only verification failed: key=%s err=%v", got, err)
+	}
+	if _, err := VerifyMintedFNDSAServerKey(obj, "example.com"); !errors.Is(err, ErrUnknownProfile) {
+		t.Fatalf("minted-key verification accepted unknown profile: %v", err)
 	}
 }
 
@@ -276,17 +320,20 @@ func TestVerifyFNDSASelfSignatureRejectsMalformedObjects(t *testing.T) {
 		t.Fatalf("expected invalid key object, got %v", err)
 	}
 	if _, err := VerifyFNDSASelfSignature(map[string]any{
+		"server_name": "example.com",
 		"verify_keys": map[string]any{},
 	}, "example.com"); !errors.Is(err, ErrInvalidKeyObject) {
 		t.Fatalf("expected invalid key object, got %v", err)
 	}
 	if _, err := VerifyFNDSASelfSignature(map[string]any{
+		"server_name": "example.com",
 		"verify_keys": map[string]any{},
 		"signatures":  map[string]any{},
 	}, "example.com"); !errors.Is(err, ErrInvalidKeyObject) {
 		t.Fatalf("expected invalid key object, got %v", err)
 	}
 	if _, err := VerifyFNDSASelfSignature(map[string]any{
+		"server_name": "example.com",
 		"verify_keys": map[string]any{"ed25519:auto": map[string]any{}},
 		"signatures":  map[string]any{"example.com": map[string]any{}},
 	}, "example.com"); !errors.Is(err, ErrInvalidKeyName) {

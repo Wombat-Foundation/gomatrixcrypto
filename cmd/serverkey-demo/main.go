@@ -19,6 +19,8 @@ import (
 
 const demoPoWProfileNote = "demo-only low-difficulty Cuckoo profile; not valid for production key minting"
 
+const maxProtocolMintingNonce = uint64(1<<32 - 1)
+
 type powProfile struct {
 	Algorithm string
 	Config    cuckoo.Config
@@ -39,6 +41,12 @@ func main() {
 	privateKeyPassphraseEnv := flag.String("private-key-passphrase-env", "", "environment variable containing a passphrase for encrypted private-key output")
 	privateKeyPassphraseFile := flag.String("private-key-passphrase-file", "", "file containing a passphrase for encrypted private-key output")
 	flag.Parse()
+	if uint64(*maxNonce) > maxProtocolMintingNonce {
+		fatal(fmt.Errorf("pow-max-nonce %d exceeds the uint32 edge-nonce limit", *maxNonce))
+	}
+	if err := validateMintingNonceLimit(*maxMintingNonce); err != nil {
+		fatal(err)
+	}
 
 	profile, err := configurePoWProfile(*profileName, *edgeBits, *proofSize, *powAlgorithm, *demoProfile)
 	if err != nil {
@@ -129,6 +137,16 @@ func main() {
 	if err := enc.Encode(bundle); err != nil {
 		fatal(err)
 	}
+}
+
+// validateMintingNonceLimit validates an exclusive graph-nonce limit. The
+// valid nonce range is uint32, therefore 2^32 attempts (0 through 2^32-1)
+// are valid but a larger limit would wrap.
+func validateMintingNonceLimit(limit uint64) error {
+	if limit > maxProtocolMintingNonce+1 {
+		return fmt.Errorf("pow-max-graph-nonce %d exceeds the exclusive uint32 protocol limit", limit)
+	}
+	return nil
 }
 
 func privateKeyPassphrase(envName, fileName string) ([]byte, error) {

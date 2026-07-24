@@ -91,7 +91,11 @@ func NewUnsignedFNDSA(serverName string, publicKey []byte, validUntilTS int64, _
 	if err != nil {
 		return nil, "", err
 	}
-	keyName := FNDSAAlgorithm + ":" + ShortKeyID(keyID)
+	shortKeyID, err := ShortKeyID(proof.Algorithm, keyID)
+	if err != nil {
+		return nil, "", err
+	}
+	keyName := FNDSAAlgorithm + ":" + shortKeyID
 	keyObject := FNDSAKeyObject(publicKey, FNDSAMetadata{}, proof)
 
 	return map[string]any{
@@ -183,9 +187,13 @@ func KeyIDBase64(publicKey []byte, serverName string, proof FNDSAMintingProof) (
 	return base64.RawURLEncoding.EncodeToString(keyID[:]), nil
 }
 
-// ShortKeyID returns the 128-bit lowercase-hex key-name suffix.
-func ShortKeyID(keyID [32]byte) string {
-	return hex.EncodeToString(keyID[:profiles[ProductionProfile].shortBytes])
+// ShortKeyID returns the profile-defined lowercase-hex key-name suffix.
+func ShortKeyID(profileName string, keyID [32]byte) (string, error) {
+	p, ok := profiles[profileName]
+	if !ok {
+		return "", ErrUnknownProfile
+	}
+	return hex.EncodeToString(keyID[:p.shortBytes]), nil
 }
 
 func validateProof(publicKey []byte, serverName, profileName string, proof FNDSAMintingProof) error {
@@ -280,6 +288,13 @@ func VerifyMintedFNDSAServerKey(obj map[string]any, serverName string) (string, 
 }
 
 func verifyFNDSASignature(obj map[string]any, serverName string, requireProof bool) (string, error) {
+	objectServerName, ok := obj["server_name"].(string)
+	if !ok {
+		return "", ErrInvalidKeyObject
+	}
+	if objectServerName != serverName {
+		return "", ErrInvalidServerName
+	}
 	verifyKeys, ok := obj["verify_keys"].(map[string]any)
 	if !ok {
 		return "", ErrInvalidKeyObject
@@ -322,7 +337,8 @@ func verifyFNDSASignature(obj map[string]any, serverName string, requireProof bo
 			// mintingObject adds only uint32 solution entries, so KeyID cannot
 			// fail here.
 			keyID, _ := KeyID(publicKey, serverName, proof)
-			if keyName != FNDSAAlgorithm+":"+ShortKeyID(keyID) {
+			shortKeyID, _ := ShortKeyID(profileName, keyID)
+			if keyName != FNDSAAlgorithm+":"+shortKeyID {
 				return "", ErrInvalidKeyName
 			}
 		}

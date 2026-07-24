@@ -20,7 +20,8 @@ import (
 )
 
 const (
-	keygenSeed = "msc00e4-sha3-256-key-minting-vector-keygen-v1"
+	keygenSeed              = "msc00e4-sha3-256-key-minting-vector-keygen-v1"
+	maxProtocolMintingNonce = uint64(1<<32 - 1)
 )
 
 type shakeReader struct {
@@ -73,6 +74,9 @@ type vector struct {
 }
 
 func generate(serverName string, startNonce, maxNonce uint64, threads int) (vector, error) {
+	if err := validateMintingNonceRange(startNonce, maxNonce); err != nil {
+		return vector{}, err
+	}
 	if !meanminer.Available() {
 		return vector{}, fmt.Errorf("production miner is unavailable; build cuckoo/meanminer/csrc")
 	}
@@ -147,6 +151,18 @@ func generate(serverName string, startNonce, maxNonce uint64, threads int) (vect
 		}, nil
 	}
 	return vector{}, cuckoo.ErrNoSolution
+}
+
+// validateMintingNonceRange validates an exclusive nonce range. The final
+// valid nonce is 2^32-1, so an exclusive upper bound of 2^32 is permitted.
+func validateMintingNonceRange(startNonce, maxNonce uint64) error {
+	if startNonce > maxProtocolMintingNonce {
+		return fmt.Errorf("start nonce %d exceeds the uint32 protocol limit", startNonce)
+	}
+	if maxNonce > maxProtocolMintingNonce+1 {
+		return fmt.Errorf("max nonce %d exceeds the exclusive uint32 protocol limit", maxNonce)
+	}
+	return nil
 }
 
 func main() {

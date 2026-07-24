@@ -112,6 +112,22 @@ func TestConfigurePoWProfileRejectsInvalidInputs(t *testing.T) {
 	}
 }
 
+func TestValidateMintingNonceLimit(t *testing.T) {
+	for _, tc := range []struct {
+		limit uint64
+		valid bool
+	}{
+		{limit: 0, valid: true},
+		{limit: maxProtocolMintingNonce + 1, valid: true},
+		{limit: maxProtocolMintingNonce + 2, valid: false},
+	} {
+		err := validateMintingNonceLimit(tc.limit)
+		if (err == nil) != tc.valid {
+			t.Fatalf("validateMintingNonceLimit(%d) error = %v, valid = %v", tc.limit, err, tc.valid)
+		}
+	}
+}
+
 func TestServerKeyPackageSHA256(t *testing.T) {
 	got, err := serverKeyPackageSHA256(map[string]any{
 		"server_name": "example.com",

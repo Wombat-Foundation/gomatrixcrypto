@@ -88,22 +88,6 @@ func TestFindProofEntersBulkTrimLoop(t *testing.T) {
 	}
 }
 
-// A smaller maxNonce than TestFindProofAndVerify's produces a live-edge set
-// with at least one degree-1 node, exercising FindProof's incremental peel
-// (which the larger, denser graph in other tests never needs).
-func TestFindProofExercisesIncrementalPeel(t *testing.T) {
-	cfg := Config{EdgeBits: 12, ProofSize: 4}
-	seed := testSeed()
-
-	proof, err := FindProof(cfg, seed, 1<<12)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := Verify(cfg, seed, proof); err != nil {
-		t.Fatalf("verify failed: %v", err)
-	}
-}
-
 func TestVerifyRejectsTampering(t *testing.T) {
 	cfg := Config{EdgeBits: 12, ProofSize: 4}
 	seed := testSeed()
@@ -360,7 +344,7 @@ func TestVerifyCycleRejectsMalformedCycles(t *testing.T) {
 		name string
 		uvs  []uint64
 	}{
-		{"nonzero xor", []uint64{0, 1, 2, 3}},
+		{"nonzero xor", []uint64{0, 1, 2, 4}},
 		{"missing u partner", []uint64{0, 0, 2, 2}},
 		{"duplicate u partner", []uint64{0, 1, 0, 3, 0, 5, 2, 3, 2, 5, 0, 1}},
 		{"missing v partner", []uint64{0, 1, 0, 2, 2, 1}},

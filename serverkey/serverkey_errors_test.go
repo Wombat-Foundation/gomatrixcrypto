@@ -22,6 +22,30 @@ func TestUint32FromAnyRejectsOversizeNonce(t *testing.T) {
 	}
 }
 
+func TestShortKeyIDRejectsUnknownProfile(t *testing.T) {
+	if _, err := ShortKeyID("unknown.profile", [32]byte{}); !errors.Is(err, ErrUnknownProfile) {
+		t.Fatalf("expected unknown profile rejection, got %v", err)
+	}
+}
+
+func TestNewUnsignedFNDSARejectsUnknownProfile(t *testing.T) {
+	if _, _, err := NewUnsignedFNDSA("example.com", make([]byte, fndsa512.PublicKeySize), 1, FNDSAMetadata{}, FNDSAMintingProof{Algorithm: "unknown.profile"}); !errors.Is(err, ErrUnknownProfile) {
+		t.Fatalf("expected unknown profile error, got %v", err)
+	}
+}
+
+func TestGraphSeedAllowsUnknownProfileForDerivation(t *testing.T) {
+	if _, err := GraphSeed(make([]byte, fndsa512.PublicKeySize), "example.com", "unknown.profile", 0); err != nil {
+		t.Fatalf("unknown profile derivation failed: %v", err)
+	}
+}
+
+func TestValidateProofPropagatesGraphSeedError(t *testing.T) {
+	if err := validateProof(make([]byte, fndsa512.PublicKeySize), string([]byte{0xff}), ProductionProfile, FNDSAMintingProof{}); !errors.Is(err, matrixjson.ErrInvalidString) {
+		t.Fatalf("expected canonical error, got %v", err)
+	}
+}
+
 func TestKeyIDBase64PropagatesCanonicalError(t *testing.T) {
 	if _, err := KeyIDBase64(make([]byte, fndsa512.PublicKeySize), string([]byte{0xff}), FNDSAMintingProof{}); !errors.Is(err, matrixjson.ErrInvalidString) {
 		t.Fatalf("expected invalid string error, got %v", err)
@@ -49,7 +73,11 @@ func TestSignFNDSAAddsSecondKeyForExistingServer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	keyName2 := FNDSAAlgorithm + ":" + ShortKeyID(keyID2)
+	shortKeyID, err := ShortKeyID(proof2.Algorithm, keyID2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyName2 := FNDSAAlgorithm + ":" + shortKeyID
 	if err := SignFNDSA(testRNG("serverkey-sign"), obj, "example.com", keyName2, priv2); err != nil {
 		t.Fatal(err)
 	}
@@ -72,6 +100,7 @@ func TestSignFNDSAAddsSecondKeyForExistingServer(t *testing.T) {
 
 func TestVerifyFNDSASelfSignaturePropagatesSigningBytesError(t *testing.T) {
 	obj := map[string]any{
+		"server_name": "example.com",
 		"verify_keys": map[string]any{},
 		"signatures":  map[string]any{"example.com": map[string]any{}},
 		"bad":         1.5,
@@ -93,6 +122,7 @@ func TestVerifyFNDSASelfSignatureRejectsNonMapVerifyKeyEntry(t *testing.T) {
 
 func TestVerifyFNDSASelfSignaturePropagatesMintingProofError(t *testing.T) {
 	obj := map[string]any{
+		"server_name": "example.com",
 		"verify_keys": map[string]any{
 			FNDSAAlgorithm + ":AAAAAAAAAAAAAAAA": map[string]any{
 				"key": base64.RawStdEncoding.EncodeToString(make([]byte, fndsa512.PublicKeySize)),
@@ -120,6 +150,7 @@ func TestVerifyFNDSASelfSignaturePropagatesKeyIDError(t *testing.T) {
 	// mintingObject's "server_name" field inside KeyID.
 	serverName := string([]byte{0xff})
 	obj := map[string]any{
+		"server_name": serverName,
 		"verify_keys": map[string]any{
 			FNDSAAlgorithm + ":AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA": map[string]any{
 				"key":     base64.RawStdEncoding.EncodeToString(make([]byte, fndsa512.PublicKeySize)),
