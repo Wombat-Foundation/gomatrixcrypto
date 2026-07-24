@@ -8,7 +8,7 @@ import (
 	"io"
 	"os"
 
-	"gomatrixlib/cuckoo/meanminer"
+	"github.com/Wombat-Foundation/gomatrixcrypto/cuckoo/meanminer"
 )
 
 func main() {

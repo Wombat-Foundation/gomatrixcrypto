@@ -7,7 +7,7 @@ import (
 	"errors"
 	"io"
 
-	"gomatrixlib/fndsa512"
+	"github.com/Wombat-Foundation/gomatrixcrypto/fndsa512"
 
 	"golang.org/x/crypto/argon2"
 	"golang.org/x/crypto/chacha20poly1305"

@@ -9,7 +9,7 @@
 // EDGEBITS/PROOFSIZE/NSIPHASH are compile-time constants in the vendored
 // C++ (see cuckoo.h), fixed via -D flags at build time to the one profile
 // this is for: EdgeBits=29, ProofSize=42
-// (tk.nutra.msc45xx.pow.cuckoo-cycle-42-29-sha256).
+// (tk.nutra.msc45xx.pow.cuckoo-cycle-42-29-sha3-256-cogen).
 //
 // We bypass the reference code's own key derivation (setheadernonce,
 // which hashes a header with blake2b) entirely: our graph_seed is

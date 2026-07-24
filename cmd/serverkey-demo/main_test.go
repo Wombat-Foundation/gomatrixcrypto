@@ -6,9 +6,9 @@ import (
 	"os"
 	"testing"
 
-	"gomatrixlib/cuckoo"
-	"gomatrixlib/fndsa512"
-	"gomatrixlib/serverkey"
+	"github.com/Wombat-Foundation/gomatrixcrypto/cuckoo"
+	"github.com/Wombat-Foundation/gomatrixcrypto/fndsa512"
+	"github.com/Wombat-Foundation/gomatrixcrypto/serverkey"
 
 	"golang.org/x/crypto/sha3"
 )
@@ -112,6 +112,24 @@ func TestConfigurePoWProfileRejectsInvalidInputs(t *testing.T) {
 	}
 }
 
+// TestValidateMintingNonceRange checks the exclusive graph-nonce range.
+func TestValidateMintingNonceRange(t *testing.T) {
+	for _, tc := range []struct {
+		start, limit uint64
+		valid        bool
+	}{
+		{start: 0, limit: 0, valid: true},
+		{start: maxProtocolMintingNonce, limit: maxProtocolMintingNonce + 1, valid: true},
+		{start: maxProtocolMintingNonce + 1, limit: maxProtocolMintingNonce + 1, valid: false},
+		{start: 2, limit: 1, valid: false},
+	} {
+		err := validateMintingNonceRange(tc.start, tc.limit)
+		if (err == nil) != tc.valid {
+			t.Fatalf("validateMintingNonceRange(%d, %d) error = %v, valid = %v", tc.start, tc.limit, err, tc.valid)
+		}
+	}
+}
+
 func TestServerKeyPackageSHA256(t *testing.T) {
 	got, err := serverKeyPackageSHA256(map[string]any{
 		"server_name": "example.com",
@@ -138,7 +156,7 @@ func TestSolveMintingPoW(t *testing.T) {
 		Config:    cuckoo.Config{EdgeBits: 8, ProofSize: 4},
 		Demo:      true,
 	}
-	proof, keyID, err := solveMintingPoW("example.com", pub, profile, 1<<12, 64)
+	proof, keyID, err := solveMintingPoW("example.com", pub, profile, 1<<12, 0, 64)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,7 +164,7 @@ func TestSolveMintingPoW(t *testing.T) {
 		t.Fatalf("unexpected proof result: proof=%#v keyID=%q", proof, keyID)
 	}
 
-	seed, err := serverkey.GraphSeed(pub, "example.com", proof.Nonce)
+	seed, err := serverkey.GraphSeed(pub, "example.com", profile.Algorithm, proof.Nonce)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,7 +183,7 @@ func TestSolveMintingPoWPropagatesGraphSeedError(t *testing.T) {
 		Config:    cuckoo.Config{EdgeBits: 8, ProofSize: 4},
 		Demo:      true,
 	}
-	if _, _, err := solveMintingPoW(string([]byte{0xff}), pub, profile, 1<<12, 64); err == nil {
+	if _, _, err := solveMintingPoW(string([]byte{0xff}), pub, profile, 1<<12, 0, 64); err == nil {
 		t.Fatalf("expected invalid server name to fail")
 	}
 }
@@ -180,7 +198,7 @@ func TestSolveMintingPoWPropagatesFindProofError(t *testing.T) {
 		Config:    cuckoo.Config{EdgeBits: 1, ProofSize: 4},
 		Demo:      true,
 	}
-	if _, _, err := solveMintingPoW("example.com", pub, profile, 1<<12, 64); !errors.Is(err, cuckoo.ErrInvalidEdgeBits) {
+	if _, _, err := solveMintingPoW("example.com", pub, profile, 1<<12, 0, 64); !errors.Is(err, cuckoo.ErrInvalidEdgeBits) {
 		t.Fatalf("expected invalid edge bits, got %v", err)
 	}
 }
@@ -195,7 +213,7 @@ func TestSolveMintingPoWPropagatesKeyIDError(t *testing.T) {
 		Config:    cuckoo.Config{EdgeBits: 8, ProofSize: 4},
 		Demo:      true,
 	}
-	if _, _, err := solveMintingPoW("example.com", pub, profile, 1<<12, 64); err == nil {
+	if _, _, err := solveMintingPoW("example.com", pub, profile, 1<<12, 0, 64); err == nil {
 		t.Fatalf("expected invalid algorithm string to fail key ID computation")
 	}
 }
@@ -210,7 +228,7 @@ func TestSolveMintingPoWNoSolution(t *testing.T) {
 		Config:    cuckoo.Config{EdgeBits: 8, ProofSize: 4},
 		Demo:      true,
 	}
-	if _, _, err := solveMintingPoW("example.com", pub, profile, 1, 1); err != cuckoo.ErrNoSolution {
+	if _, _, err := solveMintingPoW("example.com", pub, profile, 1, 0, 1); err != cuckoo.ErrNoSolution {
 		t.Fatalf("expected no solution, got %v", err)
 	}
 }

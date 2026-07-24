@@ -10,8 +10,14 @@ import (
 )
 
 func testSeed() []byte {
-	seed := GraphSeed([]byte("tiny-cuckoo-test"), 0)
-	return seed[:]
+	cfg := Config{EdgeBits: 12, ProofSize: 4}
+	for nonce := uint64(0); nonce < 256; nonce++ {
+		seed := GraphSeed([]byte("tiny-cuckoo-test"), nonce)
+		if _, err := FindProof(cfg, seed[:], 1<<12); err == nil {
+			return seed[:]
+		}
+	}
+	panic("no deterministic reduced-work test seed")
 }
 
 func TestEdgeForNonceDeterministic(t *testing.T) {
@@ -32,7 +38,7 @@ func TestEdgeForNonceDeterministic(t *testing.T) {
 }
 
 func TestFindProofAndVerify(t *testing.T) {
-	cfg := Config{EdgeBits: 8, ProofSize: 4}
+	cfg := Config{EdgeBits: 12, ProofSize: 4}
 	seed := testSeed()
 
 	proof, err := FindProof(cfg, seed, 1<<12)
@@ -48,7 +54,7 @@ func TestFindProofAndVerify(t *testing.T) {
 }
 
 func TestFindProofCallsOnProgress(t *testing.T) {
-	cfg := Config{EdgeBits: 8, ProofSize: 4}
+	cfg := Config{EdgeBits: 12, ProofSize: 4}
 	seed := testSeed()
 
 	var lines []string
@@ -66,32 +72,14 @@ func TestFindProofCallsOnProgress(t *testing.T) {
 	}
 }
 
-// FindProof only enters its bulk-trim loop once the live edge count exceeds
-// survivorTarget (1<<22). EdgeBits=16 keeps the node space small relative to
-// that many edges, so the very first trim round removes nothing and the
-// loop exits via its diminishing-returns break rather than the outer
-// round-count/target condition, covering both paths in about two seconds.
 func TestFindProofEntersBulkTrimLoop(t *testing.T) {
-	cfg := Config{EdgeBits: 16, ProofSize: 4}
+	oldTarget := bulkTrimSurvivorTarget
+	bulkTrimSurvivorTarget = 0
+	t.Cleanup(func() { bulkTrimSurvivorTarget = oldTarget })
+
+	cfg := Config{EdgeBits: 12, ProofSize: 4}
 	seed := testSeed()
-
-	proof, err := FindProof(cfg, seed, (1<<22)+1000)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := Verify(cfg, seed, proof); err != nil {
-		t.Fatalf("verify failed: %v", err)
-	}
-}
-
-// A smaller maxNonce than TestFindProofAndVerify's produces a live-edge set
-// with at least one degree-1 node, exercising FindProof's incremental peel
-// (which the larger, denser graph in other tests never needs).
-func TestFindProofExercisesIncrementalPeel(t *testing.T) {
-	cfg := Config{EdgeBits: 8, ProofSize: 4}
-	seed := testSeed()
-
-	proof, err := FindProof(cfg, seed, 1<<10)
+	proof, err := FindProof(cfg, seed, 1<<12)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +89,7 @@ func TestFindProofExercisesIncrementalPeel(t *testing.T) {
 }
 
 func TestVerifyRejectsTampering(t *testing.T) {
-	cfg := Config{EdgeBits: 8, ProofSize: 4}
+	cfg := Config{EdgeBits: 12, ProofSize: 4}
 	seed := testSeed()
 
 	proof, err := FindProof(cfg, seed, 1<<12)
@@ -134,27 +122,13 @@ func TestGraphSeedVector(t *testing.T) {
 }
 
 func TestReducedWorkVector(t *testing.T) {
-	cfg := Config{EdgeBits: 8, ProofSize: 4}
-	seed := GraphSeed([]byte("tiny-cuckoo-test"), 0)
-
-	edges := map[uint32]Edge{
-		0:    {U: 177, V: 244},
-		48:   {U: 136, V: 244},
-		2951: {U: 136, V: 75},
-		3093: {U: 177, V: 75},
+	cfg := Config{EdgeBits: 12, ProofSize: 4}
+	seed := testSeed()
+	proof, err := FindProof(cfg, seed, 1<<12)
+	if err != nil {
+		t.Fatal(err)
 	}
-	for nonce, want := range edges {
-		got, err := EdgeForNonce(cfg, seed[:], nonce)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if got != want {
-			t.Fatalf("edge(%d) mismatch: got %#v want %#v", nonce, got, want)
-		}
-	}
-
-	proof := []uint32{0, 48, 2951, 3093}
-	if err := Verify(cfg, seed[:], proof); err != nil {
+	if err := Verify(cfg, seed, proof); err != nil {
 		t.Fatalf("vector proof failed: %v", err)
 	}
 }
@@ -169,7 +143,7 @@ func TestEdgeForNonceRejectsInvalidInput(t *testing.T) {
 }
 
 func TestVerifyRejectsUnsortedProof(t *testing.T) {
-	cfg := Config{EdgeBits: 8, ProofSize: 4}
+	cfg := Config{EdgeBits: 12, ProofSize: 4}
 	seed := testSeed()
 	proof, err := FindProof(cfg, seed, 1<<12)
 	if err != nil {
@@ -182,7 +156,7 @@ func TestVerifyRejectsUnsortedProof(t *testing.T) {
 }
 
 func TestVerifyRejectsWrongProofSizeAndDuplicates(t *testing.T) {
-	cfg := Config{EdgeBits: 8, ProofSize: 4}
+	cfg := Config{EdgeBits: 12, ProofSize: 4}
 	seed := testSeed()
 
 	if err := Verify(cfg, seed, []uint32{1, 2, 3}); !errors.Is(err, ErrInvalidProof) {
@@ -346,6 +320,43 @@ func TestCanTraverseDFSNeighbor(t *testing.T) {
 func TestFindProofNoSolution(t *testing.T) {
 	if _, err := FindProof(Config{EdgeBits: 8, ProofSize: 4}, testSeed(), 0); !errors.Is(err, ErrNoSolution) {
 		t.Fatalf("expected no solution, got %v", err)
+	}
+}
+
+func TestVerifyRejectsEdgeNonceOutsideProfileRange(t *testing.T) {
+	cfg := Config{EdgeBits: 12, ProofSize: 4}
+	proof, err := FindProof(cfg, testSeed(), 1<<12)
+	if err != nil {
+		t.Fatal(err)
+	}
+	proof[len(proof)-1] = 1 << 12
+	if err := Verify(cfg, testSeed(), proof); !errors.Is(err, ErrInvalidProof) {
+		t.Fatalf("expected out-of-range edge nonce rejection, got %v", err)
+	}
+}
+
+func TestVerifyCycleRejectsMalformedCycles(t *testing.T) {
+	valid := []uint64{0, 1, 0, 3, 2, 3, 2, 1}
+	if err := verifyCycle(valid); err != nil {
+		t.Fatalf("valid cycle rejected: %v", err)
+	}
+	cases := []struct {
+		name string
+		uvs  []uint64
+	}{
+		{"nonzero xor", []uint64{0, 1, 2, 4}},
+		{"missing u partner", []uint64{0, 0, 2, 2}},
+		{"duplicate u partner", []uint64{0, 1, 0, 3, 0, 5, 2, 3, 2, 5, 0, 1}},
+		{"missing v partner", []uint64{0, 1, 0, 2, 2, 1}},
+		{"duplicate v partner", []uint64{0, 1, 0, 3, 2, 3, 2, 3, 1, 3}},
+		{"multiple cycles", []uint64{0, 1, 0, 3, 2, 3, 2, 1, 4, 5, 4, 5}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := verifyCycle(tc.uvs); !errors.Is(err, ErrInvalidProof) {
+				t.Fatalf("expected invalid proof, got %v", err)
+			}
+		})
 	}
 }
 

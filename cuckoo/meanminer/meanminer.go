@@ -2,11 +2,11 @@
 // reference "mean" (bucket-sort) Cuckoo Cycle solver — see solve_main.cpp
 // and external/cuckoo (vendored submodule) — for the one profile where a
 // pure-Go solver is too slow to be practical: EdgeBits=29, ProofSize=42
-// (tk.nutra.msc45xx.pow.cuckoo-cycle-42-29-sha256).
+// (tk.nutra.msc45xx.pow.cuckoo-cycle-42-29-sha3-256-cogen).
 //
 // The binary is built separately (run `make` in this directory) rather
 // than compiled in by `go build`, so this package is plain Go: no cgo, no
-// C++ toolchain required to build gomatrixlib itself. Callers should
+// C++ toolchain required to build gomatrixcrypto itself. Callers should
 // check Available() and fall back to cuckoo.FindProof when the binary
 // hasn't been built.
 package meanminer

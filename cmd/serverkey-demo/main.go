@@ -11,13 +11,15 @@ import (
 	"strings"
 	"time"
 
-	"gomatrixlib/cuckoo"
-	"gomatrixlib/cuckoo/meanminer"
-	"gomatrixlib/fndsa512"
-	"gomatrixlib/serverkey"
+	"github.com/Wombat-Foundation/gomatrixcrypto/cuckoo"
+	"github.com/Wombat-Foundation/gomatrixcrypto/cuckoo/meanminer"
+	"github.com/Wombat-Foundation/gomatrixcrypto/fndsa512"
+	"github.com/Wombat-Foundation/gomatrixcrypto/serverkey"
 )
 
 const demoPoWProfileNote = "demo-only low-difficulty Cuckoo profile; not valid for production key minting"
+
+const maxProtocolMintingNonce = uint64(1<<32 - 1)
 
 type powProfile struct {
 	Algorithm string
@@ -35,10 +37,17 @@ func main() {
 	powAlgorithm := flag.String("pow-algorithm", "", "minting proof algorithm for -pow-profile custom")
 	demoProfile := flag.Bool("pow-demo-profile", true, "mark -pow-profile custom output as demo-only")
 	maxNonce := flag.Uint("pow-max-nonce", 1<<12, "maximum edge nonce to search per minting nonce")
-	maxMintingNonce := flag.Uint64("pow-max-graph-nonce", 256, "maximum minting nonce attempts")
+	startMintingNonce := flag.Uint64("pow-start-graph-nonce", 0, "first graph nonce to try")
+	maxMintingNonce := flag.Uint64("pow-max-graph-nonce", 256, "exclusive graph-nonce limit")
 	privateKeyPassphraseEnv := flag.String("private-key-passphrase-env", "", "environment variable containing a passphrase for encrypted private-key output")
 	privateKeyPassphraseFile := flag.String("private-key-passphrase-file", "", "file containing a passphrase for encrypted private-key output")
 	flag.Parse()
+	if uint64(*maxNonce) > maxProtocolMintingNonce {
+		fatal(fmt.Errorf("pow-max-nonce %d exceeds the uint32 edge-nonce limit", *maxNonce))
+	}
+	if err := validateMintingNonceRange(*startMintingNonce, *maxMintingNonce); err != nil {
+		fatal(err)
+	}
 
 	profile, err := configurePoWProfile(*profileName, *edgeBits, *proofSize, *powAlgorithm, *demoProfile)
 	if err != nil {
@@ -62,7 +71,7 @@ func main() {
 		}
 	}
 
-	proof, keyID, err := solveMintingPoW(*serverName, pub, profile, uint32(*maxNonce), *maxMintingNonce)
+	proof, keyID, err := solveMintingPoW(*serverName, pub, profile, uint32(*maxNonce), uint32(*startMintingNonce), uint32(*maxMintingNonce))
 	if err != nil {
 		fatal(err)
 	}
@@ -112,7 +121,7 @@ func main() {
 	fmt.Printf("key_id: %s\n", keyID)
 	fmt.Printf("key_metadata_sha256: %s\n", metadataDigest)
 	fmt.Printf("server_key_package_sha256: %s\n", serverKeyPackageDigest)
-	fmt.Printf("pow_algorithm: %s\n", proof.Algorithm)
+	fmt.Printf("profile: %s\n", proof.Algorithm)
 	if profile.Note != "" {
 		fmt.Printf("pow_profile_note: %s\n", profile.Note)
 	}
@@ -129,6 +138,14 @@ func main() {
 	if err := enc.Encode(bundle); err != nil {
 		fatal(err)
 	}
+}
+
+// validateMintingNonceRange validates an exclusive graph-nonce range.
+func validateMintingNonceRange(start, limit uint64) error {
+	if start > maxProtocolMintingNonce || limit > maxProtocolMintingNonce+1 || start > limit {
+		return fmt.Errorf("invalid graph nonce range [%d, %d): require uint32 nonces and start <= limit", start, limit)
+	}
+	return nil
 }
 
 func privateKeyPassphrase(envName, fileName string) ([]byte, error) {
@@ -186,11 +203,11 @@ func configurePoWProfile(name string, edgeBits uint, proofSize int, algorithm st
 	}
 }
 
-func solveMintingPoW(serverName string, publicKey []byte, profile powProfile, maxNonce uint32, maxMintingNonce uint64) (serverkey.FNDSAMintingProof, string, error) {
+func solveMintingPoW(serverName string, publicKey []byte, profile powProfile, maxNonce, startMintingNonce, maxMintingNonce uint32) (serverkey.FNDSAMintingProof, string, error) {
 	useMeanMiner := profile.Config.EdgeBits == 29 && profile.Config.ProofSize == 42 && meanminer.Available()
 
-	for nonce := uint64(0); nonce < maxMintingNonce; nonce++ {
-		seed, err := serverkey.GraphSeed(publicKey, serverName, nonce)
+	for nonce := startMintingNonce; nonce < maxMintingNonce; nonce++ {
+		seed, err := serverkey.GraphSeed(publicKey, serverName, profile.Algorithm, nonce)
 		if err != nil {
 			return serverkey.FNDSAMintingProof{}, "", err
 		}

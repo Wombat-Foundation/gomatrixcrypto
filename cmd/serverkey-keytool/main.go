@@ -9,7 +9,7 @@ import (
 	"os"
 	"strings"
 
-	"gomatrixlib/serverkey"
+	"github.com/Wombat-Foundation/gomatrixcrypto/serverkey"
 )
 
 func main() {

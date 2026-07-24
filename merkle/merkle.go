@@ -11,7 +11,7 @@ import (
 
 	"golang.org/x/crypto/sha3"
 
-	"gomatrixlib/matrixjson"
+	"github.com/Wombat-Foundation/gomatrixcrypto/matrixjson"
 )
 
 // HashSize is the byte length of every MSC4511 digest in this package.

@@ -53,7 +53,10 @@ func isLeafCounter(lo, hi bitset, node uint64) bool {
 	return lo.get(node) && !hi.get(node)
 }
 
-var dfsLogInterval = 200000
+var (
+	dfsLogInterval                = 200000
+	bulkTrimSurvivorTarget uint64 = 1 << 22
+)
 
 // FindProof performs a bounded search for a valid cycle.
 //
@@ -128,9 +131,8 @@ func FindProof(cfg Config, seed []byte, maxNonce uint32, onProgress ...func(stri
 	// Once the live set is this small, the map-based incremental peel below
 	// finishes cheaply, so further bulk rounds aren't worth their O(maxNonce)
 	// scan cost.
-	survivorTarget := uint64(1) << 22
 	const maxTrimRounds = 64
-	for round := 0; round < maxTrimRounds && aliveCount > survivorTarget; round++ {
+	for round := 0; round < maxTrimRounds && aliveCount > bulkTrimSurvivorTarget; round++ {
 		removedThisRound := trimAliveEdges(alive, lo, hi, maxNonce, edgeEndpoints)
 		aliveCount -= removedThisRound
 		logf("cuckoo: trim round %d: -%d edges, %d alive (elapsed %s)", round+1, removedThisRound, aliveCount, time.Since(startTime).Round(time.Millisecond))

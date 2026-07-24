@@ -14,6 +14,15 @@ PKGS := ./...
 LIBPKGS = $(shell $(GO) list ./... | grep -v '/cmd/')
 GOFILES := $(shell find . -type f -name '*.go' -not -path './vendor/*')
 COVERPROFILE ?= coverage.out
+SERVER_NAME ?= nutra.tk
+SERVER ?= $(SERVER_NAME)
+NONCE ?= $(MINTING_START_NONCE)
+SERVERKEY_VALID_DAYS ?= 365
+MINTING_THREADS ?= 4
+MINTING_START_NONCE ?= 0
+MINTING_MAX_NONCE ?= 1024
+MINTING_VECTOR_OUTPUT ?= serverkey/testdata/msc00e4-nutra.tk-sha3-256-cogen-42-29-v1.json
+GIT_DESCRIBE := $(shell git describe --tags --always --dirty 2>/dev/null || printf unknown)
 
 .PHONY: help
 help: ## Show available targets
@@ -54,6 +63,20 @@ lint:	## Run lint checks
 build: ## Compile all packages
 	$(GO) build $(PKGS)
 
+.PHONY: meanminer
+meanminer: ## Build the reference Cuckoo mean-miner
+	$(MAKE) -C cuckoo/meanminer/csrc
+
+.PHONY: production-serverkey-response
+production-serverkey-response: meanminer ## Print response (SERVER, NONCE, MINTING_MAX_NONCE configurable)
+	@printf 'build: %s\n' '$(GIT_DESCRIBE)'
+	$(GO) run ./cmd/serverkey-demo -server $(SERVER) -valid-days $(SERVERKEY_VALID_DAYS) -pow-profile production -pow-start-graph-nonce $(NONCE) -pow-max-graph-nonce $(MINTING_MAX_NONCE)
+
+.PHONY: production-minting-vector
+production-minting-vector: meanminer ## Regenerate vector (SERVER, NONCE, MINTING_MAX_NONCE configurable)
+	@printf 'build: %s\n' '$(GIT_DESCRIBE)'
+	$(GO) run ./cmd/minting-vectors -server-name $(SERVER) -threads $(MINTING_THREADS) -start-nonce $(NONCE) -max-nonce $(MINTING_MAX_NONCE) -output $(MINTING_VECTOR_OUTPUT)
+
 .PHONY: tidy
 tidy: ## Tidy module dependencies
 	$(GO) mod tidy
@@ -62,3 +85,5 @@ tidy: ## Tidy module dependencies
 clean: ## Remove generated coverage and bin artifacts
 	rm -f coverage.out cover.out
 	rm -rf bin
+	$(GO) clean -testcache
+	# $(GO) clean -cache
