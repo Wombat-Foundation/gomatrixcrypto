@@ -62,5 +62,5 @@ tidy: ## Tidy module dependencies
 clean: ## Remove generated coverage and bin artifacts
 	rm -f coverage.out cover.out
 	rm -rf bin
-	go clean -testcache
-	# go clean -cache
+	$(GO) clean -testcache
+	# $(GO) clean -cache

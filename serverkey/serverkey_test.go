@@ -47,9 +47,10 @@ func testMintingProof(t *testing.T, serverName string, pub []byte) FNDSAMintingP
 		result := FNDSAMintingProof{
 			Algorithm: "test.cuckoo-cycle-4-8-sha3-256-cogen",
 			Nonce:     nonce,
-			Solution:  proof,
+			Solution:  append([]uint32(nil), proof...),
 		}
 		testMintingProofs.Store(cacheKey, result)
+		result.Solution = append([]uint32(nil), result.Solution...)
 		return result
 	}
 	t.Fatal("no test minting proof found")

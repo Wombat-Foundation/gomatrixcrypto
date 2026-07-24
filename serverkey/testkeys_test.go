@@ -41,7 +41,8 @@ func testKeyPair(t testingT, index int) (private, public []byte) {
 	if serverKeyTestPairs.err != nil {
 		t.Fatal(serverKeyTestPairs.err)
 	}
-	return serverKeyTestPairs.pairs[index].private, serverKeyTestPairs.pairs[index].public
+	pair := serverKeyTestPairs.pairs[index]
+	return append([]byte(nil), pair.private...), append([]byte(nil), pair.public...)
 }
 
 type testingT interface {

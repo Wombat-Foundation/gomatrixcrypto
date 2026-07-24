@@ -190,6 +190,9 @@ func solveMintingPoW(serverName string, publicKey []byte, profile powProfile, ma
 	useMeanMiner := profile.Config.EdgeBits == 29 && profile.Config.ProofSize == 42 && meanminer.Available()
 
 	for nonce := uint64(0); nonce < maxMintingNonce; nonce++ {
+		if nonce > uint64(^uint32(0)) {
+			return serverkey.FNDSAMintingProof{}, "", fmt.Errorf("minting nonce exceeds uint32 range")
+		}
 		seed, err := serverkey.GraphSeed(publicKey, serverName, profile.Algorithm, uint32(nonce))
 		if err != nil {
 			return serverkey.FNDSAMintingProof{}, "", err
