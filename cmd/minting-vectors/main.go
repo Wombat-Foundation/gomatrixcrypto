@@ -50,9 +50,8 @@ type vectorReproduction struct {
 }
 
 type vectorPoW struct {
-	Algorithm string   `json:"algorithm"`
-	Nonce     uint64   `json:"nonce"`
-	Solution  []uint32 `json:"solution"`
+	Nonce    uint32   `json:"nonce"`
+	Solution []uint32 `json:"solution"`
 }
 
 type vectorDiagnostics struct {
@@ -66,6 +65,7 @@ type vector struct {
 	Schema                  string            `json:"schema"`
 	ServerName              string            `json:"server_name"`
 	PublicKeyBase64         string            `json:"public_key_base64"`
+	Profile                 string            `json:"profile"`
 	PoW                     vectorPoW         `json:"pow"`
 	GraphSeedHex            string            `json:"graph_seed_hex"`
 	KeyID                   string            `json:"key_id"`
@@ -84,7 +84,7 @@ func generate(serverName string, startNonce, maxNonce uint64, threads int) (vect
 	cfg := cuckoo.Config{EdgeBits: 29, ProofSize: 42}
 	for nonce := startNonce; nonce < maxNonce; nonce++ {
 		fmt.Fprintf(os.Stderr, "mining nonce %d\n", nonce)
-		seed, err := serverkey.GraphSeed(publicKey, serverName, nonce)
+		seed, err := serverkey.GraphSeed(publicKey, serverName, serverkey.ProductionProfile, uint32(nonce))
 		if err != nil {
 			return vector{}, err
 		}
@@ -102,7 +102,7 @@ func generate(serverName string, startNonce, maxNonce uint64, threads int) (vect
 
 		proof := serverkey.FNDSAMintingProof{
 			Algorithm: serverkey.ProductionPoW,
-			Nonce:     nonce,
+			Nonce:     uint32(nonce),
 			Solution:  solution,
 		}
 		keyID, err := serverkey.KeyID(publicKey, serverName, proof)
@@ -127,10 +127,10 @@ func generate(serverName string, startNonce, maxNonce uint64, threads int) (vect
 			Schema:          "msc00e4-sha3-256-cogen-42-29-v1",
 			ServerName:      serverName,
 			PublicKeyBase64: base64.RawStdEncoding.EncodeToString(publicKey),
+			Profile:         serverkey.ProductionProfile,
 			PoW: vectorPoW{
-				Algorithm: serverkey.ProductionPoW,
-				Nonce:     nonce,
-				Solution:  solution,
+				Nonce:    uint32(nonce),
+				Solution: solution,
 			},
 			GraphSeedHex: hex.EncodeToString(seed[:]),
 			KeyID:        base64.RawURLEncoding.EncodeToString(keyID[:]),

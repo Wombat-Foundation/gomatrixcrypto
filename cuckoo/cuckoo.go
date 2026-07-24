@@ -143,6 +143,9 @@ func Verify(cfg Config, seed []byte, nonces []uint32) error {
 		if i > 0 && nonce == nonces[i-1] {
 			return ErrInvalidProof
 		}
+		if uint64(nonce) > cfg.edgeMask() {
+			return ErrInvalidProof
+		}
 		edge, err := EdgeForNonce(cfg, seed, nonce)
 		if err != nil {
 			return err

@@ -23,8 +23,8 @@ func testRNG(seed string) io.Reader {
 func testMintingProof(t *testing.T, serverName string, pub []byte) FNDSAMintingProof {
 	t.Helper()
 	cfg := cuckoo.Config{EdgeBits: 8, ProofSize: 4}
-	for nonce := uint64(0); nonce < 64; nonce++ {
-		seed, err := GraphSeed(pub, serverName, nonce)
+	for nonce := uint32(0); nonce < 64; nonce++ {
+		seed, err := GraphSeed(pub, serverName, "test.cuckoo-cycle-4-8-sha3-256-cogen", uint32(nonce))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -51,12 +51,8 @@ func TestNewSignedFNDSAAndVerify(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	metadata := FNDSAMetadata{
-		FIPS206Revision: DefaultFIPSRevision,
-		Claims:          []string{"constant-time-keygen", "constant-time-signing"},
-	}
 	proof := testMintingProof(t, "example.com", pub)
-	obj, keyName, err := NewSignedFNDSA(testRNG("serverkey-sign"), "example.com", priv, pub, 1798848000000, metadata, proof)
+	obj, keyName, err := NewSignedFNDSA(testRNG("serverkey-sign"), "example.com", priv, pub, 1798848000000, FNDSAMetadata{}, proof)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,14 +74,11 @@ func TestNewSignedFNDSAAndVerify(t *testing.T) {
 	if got := keyObject["key"]; got != base64.RawStdEncoding.EncodeToString(pub) {
 		t.Fatalf("public key encoding mismatch")
 	}
-	if got := keyObject["fips_206_revision"]; got != DefaultFIPSRevision {
-		t.Fatalf("fips revision mismatch: got %v", got)
-	}
 	if _, ok := keyObject["pow"].(map[string]any); !ok {
 		t.Fatalf("missing pow object")
 	}
-	if trustedNotaryKeys, ok := obj["trusted_notary_keys"].([]any); !ok || len(trustedNotaryKeys) != 0 {
-		t.Fatalf("trusted_notary_keys should default to an empty array")
+	if _, ok := obj["old_verify_keys"]; ok {
+		t.Fatalf("empty optional old_verify_keys must be omitted")
 	}
 }
 
@@ -106,7 +99,7 @@ func TestVerifyFNDSASelfSignatureRejectsTampering(t *testing.T) {
 	}
 }
 
-func TestVerifyFNDSASelfSignatureRejectsWrongShortID(t *testing.T) {
+func TestVerifyFNDSASelfSignatureDoesNotClaimProtocolValidation(t *testing.T) {
 	priv, pub, err := fndsa512.GenerateKey(testRNG("serverkey-shortid-keygen"))
 	if err != nil {
 		t.Fatal(err)
@@ -117,11 +110,8 @@ func TestVerifyFNDSASelfSignatureRejectsWrongShortID(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	verifyKeys := obj["verify_keys"].(map[string]any)
-	verifyKeys[FNDSAAlgorithm+":AAAAAAAAAAAAAAAAAAAA"] = verifyKeys[keyName]
-	delete(verifyKeys, keyName)
-	if _, err := VerifyFNDSASelfSignature(obj, "example.com"); !errors.Is(err, ErrInvalidKeyName) {
-		t.Fatalf("expected invalid key name, got %v", err)
+	if got, err := VerifyFNDSASelfSignature(obj, "example.com"); err != nil || got != keyName {
+		t.Fatalf("signature-only verification failed: key=%s err=%v", got, err)
 	}
 }
 
@@ -481,13 +471,13 @@ func TestDecryptPrivateKeyRejectsMalformedObjects(t *testing.T) {
 func TestMintingProofFromObjectRejectsMalformedProofs(t *testing.T) {
 	cases := []map[string]any{
 		{},
-		{"pow": map[string]any{"algorithm": "", "nonce": uint64(0), "solution": []any{uint64(1)}}},
-		{"pow": map[string]any{"algorithm": "test", "nonce": int64(-1), "solution": []any{uint64(1)}}},
-		{"pow": map[string]any{"algorithm": "test", "nonce": uint64(0), "solution": "bad"}},
-		{"pow": map[string]any{"algorithm": "test", "nonce": uint64(0), "solution": []any{uint64(^uint32(0)) + 1}}},
+		{"profile": "", "pow": map[string]any{"nonce": uint64(0), "solution": []any{uint64(1)}}},
+		{"profile": "test", "pow": map[string]any{"nonce": int64(-1), "solution": []any{uint64(1)}}},
+		{"profile": "test", "pow": map[string]any{"nonce": uint64(0), "solution": "bad"}},
+		{"profile": "test", "pow": map[string]any{"nonce": uint64(0), "solution": []any{uint64(^uint32(0)) + 1}}},
 	}
 	for i, keyObject := range cases {
-		if _, err := mintingProofFromObject(keyObject); err == nil {
+		if _, _, err := mintingProofFromObject(keyObject); err == nil {
 			t.Fatalf("case %d: expected invalid proof to fail", i)
 		}
 	}

@@ -112,7 +112,7 @@ func main() {
 	fmt.Printf("key_id: %s\n", keyID)
 	fmt.Printf("key_metadata_sha256: %s\n", metadataDigest)
 	fmt.Printf("server_key_package_sha256: %s\n", serverKeyPackageDigest)
-	fmt.Printf("pow_algorithm: %s\n", proof.Algorithm)
+	fmt.Printf("profile: %s\n", proof.Algorithm)
 	if profile.Note != "" {
 		fmt.Printf("pow_profile_note: %s\n", profile.Note)
 	}
@@ -190,7 +190,7 @@ func solveMintingPoW(serverName string, publicKey []byte, profile powProfile, ma
 	useMeanMiner := profile.Config.EdgeBits == 29 && profile.Config.ProofSize == 42 && meanminer.Available()
 
 	for nonce := uint64(0); nonce < maxMintingNonce; nonce++ {
-		seed, err := serverkey.GraphSeed(publicKey, serverName, nonce)
+		seed, err := serverkey.GraphSeed(publicKey, serverName, profile.Algorithm, uint32(nonce))
 		if err != nil {
 			return serverkey.FNDSAMintingProof{}, "", err
 		}
@@ -226,7 +226,7 @@ func solveMintingPoW(serverName string, publicKey []byte, profile powProfile, ma
 
 		mintingProof := serverkey.FNDSAMintingProof{
 			Algorithm: profile.Algorithm,
-			Nonce:     nonce,
+			Nonce:     uint32(nonce),
 			Solution:  proof,
 		}
 		keyID, err := serverkey.KeyIDBase64(publicKey, serverName, mintingProof)

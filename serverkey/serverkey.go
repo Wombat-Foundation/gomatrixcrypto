@@ -4,12 +4,13 @@ package serverkey
 import (
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"strings"
 
+	"github.com/Wombat-Foundation/gomatrixcrypto/cuckoo"
 	"github.com/Wombat-Foundation/gomatrixcrypto/fndsa512"
 	"github.com/Wombat-Foundation/gomatrixcrypto/keyid"
 	"github.com/Wombat-Foundation/gomatrixcrypto/matrixjson"
@@ -18,9 +19,12 @@ import (
 )
 
 const (
-	FNDSAAlgorithm      = "fn-dsa-512"
+	FNDSAAlgorithm      = "fndsa512"
+	ProductionProfile   = "tk.nutra.msc45xx.serverkey.v1"
+	ProductionPoW       = ProductionProfile
 	DefaultFIPSRevision = "ipd-2025-08"
-	ProductionPoW       = "tk.nutra.msc45xx.pow.cuckoo-cycle-42-29-sha3-256-cogen"
+	productionGraphTag  = "tk.nutra.msc45xx.serverkey.v1.graph"
+	productionKeyIDTag  = "tk.nutra.msc45xx.serverkey.v1.keyid"
 )
 
 var (
@@ -28,18 +32,36 @@ var (
 	ErrInvalidKeyName    = errors.New("invalid key name")
 	ErrInvalidKeyObject  = errors.New("invalid server key object")
 	ErrInvalidSignature  = errors.New("invalid server key signature")
+	ErrUnknownProfile    = errors.New("unknown server-key profile")
 )
 
-// FNDSAMetadata carries optional metadata fields for the published key object.
+type profile struct {
+	config     cuckoo.Config
+	graphTag   string
+	keyIDTag   string
+	shortBytes int
+}
+
+// FNDSAMetadata is retained for source compatibility. Profile metadata is
+// authoritative; callers must not rely on these self-asserted fields.
 type FNDSAMetadata struct {
 	FIPS206Revision string
 	Claims          []string
 }
 
-// FNDSAMintingProof records the proof data that binds a key to its graph seed.
+var profiles = map[string]profile{
+	ProductionProfile: {
+		config:     cuckoo.Config{EdgeBits: 29, ProofSize: 42},
+		graphTag:   productionGraphTag,
+		keyIDTag:   productionKeyIDTag,
+		shortBytes: 16,
+	},
+}
+
+// FNDSAMintingProof records the proof data bound to a profile-selected graph.
 type FNDSAMintingProof struct {
 	Algorithm string
-	Nonce     uint64
+	Nonce     uint32
 	Solution  []uint32
 }
 
@@ -57,7 +79,7 @@ func NewSignedFNDSA(rng io.Reader, serverName string, privateKey, publicKey []by
 }
 
 // NewUnsignedFNDSA builds the key object before signatures are attached.
-func NewUnsignedFNDSA(serverName string, publicKey []byte, validUntilTS int64, metadata FNDSAMetadata, proof FNDSAMintingProof) (map[string]any, string, error) {
+func NewUnsignedFNDSA(serverName string, publicKey []byte, validUntilTS int64, _ FNDSAMetadata, proof FNDSAMintingProof) (map[string]any, string, error) {
 	if serverName == "" {
 		return nil, "", ErrInvalidServerName
 	}
@@ -70,51 +92,56 @@ func NewUnsignedFNDSA(serverName string, publicKey []byte, validUntilTS int64, m
 		return nil, "", err
 	}
 	keyName := FNDSAAlgorithm + ":" + ShortKeyID(keyID)
-	keyObject := FNDSAKeyObject(publicKey, metadata, proof)
+	keyObject := FNDSAKeyObject(publicKey, FNDSAMetadata{}, proof)
 
 	return map[string]any{
-		"server_name":         serverName,
-		"verify_keys":         map[string]any{keyName: keyObject},
-		"old_verify_keys":     map[string]any{},
-		"trusted_notary_keys": []any{},
-		"valid_until_ts":      validUntilTS,
+		"server_name":    serverName,
+		"verify_keys":    map[string]any{keyName: keyObject},
+		"valid_until_ts": validUntilTS,
 	}, keyName, nil
 }
 
 // FNDSAKeyObject returns the verify_keys entry for an FN-DSA public key.
-func FNDSAKeyObject(publicKey []byte, metadata FNDSAMetadata, proof FNDSAMintingProof) map[string]any {
-	keyObject := map[string]any{
-		"key": base64.RawStdEncoding.EncodeToString(publicKey),
+func FNDSAKeyObject(publicKey []byte, _ FNDSAMetadata, proof FNDSAMintingProof) map[string]any {
+	return map[string]any{
+		"key":     base64.RawStdEncoding.EncodeToString(publicKey),
+		"profile": proof.Algorithm,
 		"pow": map[string]any{
-			"algorithm": proof.Algorithm,
-			"nonce":     proof.Nonce,
-			"solution":  uint32sToAny(proof.Solution),
+			"nonce":    proof.Nonce,
+			"solution": uint32sToAny(proof.Solution),
 		},
 	}
-	if metadata.FIPS206Revision != "" {
-		keyObject["fips_206_revision"] = metadata.FIPS206Revision
-	}
-	if len(metadata.Claims) > 0 {
-		claims := make([]string, len(metadata.Claims))
-		copy(claims, metadata.Claims)
-		keyObject["claims"] = claims
-	}
-	return keyObject
 }
 
-func graphObject(publicKey []byte, serverName string) map[string]any {
+func graphObject(publicKey []byte, serverName, profileName string, nonce uint32) map[string]any {
 	return map[string]any{
-		"action":      "fn-dsa-key-graph",
+		"action":      graphTag(profileName),
+		"nonce":       nonce,
+		"profile":     profileName,
 		"public_key":  base64.RawStdEncoding.EncodeToString(publicKey),
 		"server_name": serverName,
 	}
 }
 
-func mintingObject(publicKey []byte, serverName string, proof FNDSAMintingProof) map[string]any {
+func graphTag(profileName string) string {
+	if p, ok := profiles[profileName]; ok {
+		return p.graphTag
+	}
+	return profileName + ".graph"
+}
+
+func keyIDTag(profileName string) string {
+	if p, ok := profiles[profileName]; ok {
+		return p.keyIDTag
+	}
+	return profileName + ".keyid"
+}
+
+func mintingObject(publicKey []byte, serverName, profileName string, proof FNDSAMintingProof) map[string]any {
 	return map[string]any{
-		"action":      "fn-dsa-minting-object",
-		"algorithm":   proof.Algorithm,
+		"action":      keyIDTag(profileName),
 		"nonce":       proof.Nonce,
+		"profile":     profileName,
 		"public_key":  base64.RawStdEncoding.EncodeToString(publicKey),
 		"server_name": serverName,
 		"solution":    uint32sToAny(proof.Solution),
@@ -122,26 +149,21 @@ func mintingObject(publicKey []byte, serverName string, proof FNDSAMintingProof)
 }
 
 // GraphSeed returns the key-graph seed used to derive the minting proof.
-func GraphSeed(publicKey []byte, serverName string, nonce uint64) ([32]byte, error) {
+func GraphSeed(publicKey []byte, serverName, profileName string, nonce uint32) ([32]byte, error) {
 	var out [32]byte
-	canonical, err := matrixjson.Canonical(graphObject(publicKey, serverName))
+	canonical, err := matrixjson.Canonical(graphObject(publicKey, serverName, profileName, nonce))
 	if err != nil {
 		return out, err
 	}
-	var nonceBytes [8]byte
-	binary.LittleEndian.PutUint64(nonceBytes[:], nonce)
-
-	h := sha3.New256()
-	_, _ = h.Write(canonical)
-	_, _ = h.Write(nonceBytes[:])
-	copy(out[:], h.Sum(nil))
+	sum := sha3.Sum256(canonical)
+	copy(out[:], sum[:])
 	return out, nil
 }
 
 // KeyID returns the canonical SHA3-256 digest for a minted server key.
 func KeyID(publicKey []byte, serverName string, proof FNDSAMintingProof) ([32]byte, error) {
 	var out [32]byte
-	canonical, err := matrixjson.Canonical(mintingObject(publicKey, serverName, proof))
+	canonical, err := matrixjson.Canonical(mintingObject(publicKey, serverName, proof.Algorithm, proof))
 	if err != nil {
 		return out, err
 	}
@@ -161,9 +183,21 @@ func KeyIDBase64(publicKey []byte, serverName string, proof FNDSAMintingProof) (
 	return base64.RawURLEncoding.EncodeToString(keyID[:]), nil
 }
 
-// ShortKeyID returns the truncated base64url fingerprint used in key names.
+// ShortKeyID returns the 128-bit lowercase-hex key-name suffix.
 func ShortKeyID(keyID [32]byte) string {
-	return base64.RawURLEncoding.EncodeToString(keyID[:])[:20]
+	return hex.EncodeToString(keyID[:profiles[ProductionProfile].shortBytes])
+}
+
+func validateProof(publicKey []byte, serverName, profileName string, proof FNDSAMintingProof) error {
+	p, ok := profiles[profileName]
+	if !ok {
+		return ErrUnknownProfile
+	}
+	seed, err := GraphSeed(publicKey, serverName, profileName, proof.Nonce)
+	if err != nil {
+		return err
+	}
+	return cuckoo.Verify(p.config, seed[:], proof.Solution)
 }
 
 // SignFNDSA signs obj as a Matrix server-key object and stores the signature in
@@ -233,9 +267,19 @@ func KeyIDSHA256(publicKey []byte) string {
 	return base64.RawURLEncoding.EncodeToString(sum[:])
 }
 
-// VerifyFNDSASelfSignature verifies the self-signature for serverName and
-// returns the verified key name.
+// VerifyFNDSASelfSignature verifies an FN-DSA signature only. Call
+// VerifyMintedFNDSAServerKey to accept a key for protocol use.
 func VerifyFNDSASelfSignature(obj map[string]any, serverName string) (string, error) {
+	return verifyFNDSASignature(obj, serverName, false)
+}
+
+// VerifyMintedFNDSAServerKey verifies the closed profile registry, Cuckoo
+// proof, content-addressed key name, and FN-DSA self-signature.
+func VerifyMintedFNDSAServerKey(obj map[string]any, serverName string) (string, error) {
+	return verifyFNDSASignature(obj, serverName, true)
+}
+
+func verifyFNDSASignature(obj map[string]any, serverName string, requireProof bool) (string, error) {
 	verifyKeys, ok := obj["verify_keys"].(map[string]any)
 	if !ok {
 		return "", ErrInvalidKeyObject
@@ -266,16 +310,21 @@ func VerifyFNDSASelfSignature(obj map[string]any, serverName string) (string, er
 		if err != nil {
 			return "", err
 		}
-		proof, err := mintingProofFromObject(keyObject)
-		if err != nil {
-			return "", err
-		}
-		keyID, err := KeyID(publicKey, serverName, proof)
-		if err != nil {
-			return "", err
-		}
-		if keyName != FNDSAAlgorithm+":"+ShortKeyID(keyID) {
-			return "", ErrInvalidKeyName
+		if requireProof {
+			profileName, proof, err := mintingProofFromObject(keyObject)
+			if err != nil {
+				return "", err
+			}
+			if err := validateProof(publicKey, serverName, profileName, proof); err != nil {
+				return "", err
+			}
+			keyID, err := KeyID(publicKey, serverName, proof)
+			if err != nil {
+				return "", err
+			}
+			if keyName != FNDSAAlgorithm+":"+ShortKeyID(keyID) {
+				return "", ErrInvalidKeyName
+			}
 		}
 		rawSig, ok := serverSigs[keyName].(string)
 		if !ok {
@@ -309,24 +358,32 @@ func publicKeyFromObject(keyObject map[string]any) ([]byte, error) {
 	return publicKey, nil
 }
 
-func mintingProofFromObject(keyObject map[string]any) (FNDSAMintingProof, error) {
+func mintingProofFromObject(keyObject map[string]any) (string, FNDSAMintingProof, error) {
+	profileName, ok := keyObject["profile"].(string)
+	if !ok || profileName == "" {
+		return "", FNDSAMintingProof{}, ErrInvalidKeyObject
+	}
 	rawPow, ok := keyObject["pow"].(map[string]any)
 	if !ok {
-		return FNDSAMintingProof{}, ErrInvalidKeyObject
+		return "", FNDSAMintingProof{}, ErrInvalidKeyObject
 	}
-	algorithm, ok := rawPow["algorithm"].(string)
-	if !ok || algorithm == "" {
-		return FNDSAMintingProof{}, ErrInvalidKeyObject
-	}
-	nonce, err := uint64FromAny(rawPow["nonce"])
+	nonce, err := uint32FromAny(rawPow["nonce"])
 	if err != nil {
-		return FNDSAMintingProof{}, err
+		return "", FNDSAMintingProof{}, err
 	}
 	solution, err := uint32sFromAny(rawPow["solution"])
 	if err != nil {
-		return FNDSAMintingProof{}, err
+		return "", FNDSAMintingProof{}, err
 	}
-	return FNDSAMintingProof{Algorithm: algorithm, Nonce: nonce, Solution: solution}, nil
+	return profileName, FNDSAMintingProof{Nonce: nonce, Solution: solution}, nil
+}
+
+func uint32FromAny(v any) (uint32, error) {
+	n, err := uint64FromAny(v)
+	if err != nil || n > uint64(^uint32(0)) {
+		return 0, ErrInvalidKeyObject
+	}
+	return uint32(n), nil
 }
 
 func uint64FromAny(v any) (uint64, error) {

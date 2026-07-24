@@ -146,7 +146,7 @@ func TestSolveMintingPoW(t *testing.T) {
 		t.Fatalf("unexpected proof result: proof=%#v keyID=%q", proof, keyID)
 	}
 
-	seed, err := serverkey.GraphSeed(pub, "example.com", proof.Nonce)
+	seed, err := serverkey.GraphSeed(pub, "example.com", profile.Algorithm, proof.Nonce)
 	if err != nil {
 		t.Fatal(err)
 	}

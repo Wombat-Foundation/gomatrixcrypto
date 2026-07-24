@@ -9,40 +9,16 @@ import (
 	"github.com/Wombat-Foundation/gomatrixcrypto/matrixjson"
 )
 
-// hugeNonceProof is a syntactically valid proof whose Nonce exceeds
-// matrixjson's canonical-integer range, forcing KeyID's Canonical call to
-// fail. This is the only realistic way to make KeyID/GraphSeed's canonical
-// encoding step return an error, since every other field is a bounded
-// string or uint32.
-func hugeNonceProof() FNDSAMintingProof {
-	return FNDSAMintingProof{Algorithm: "test", Nonce: 1 << 63, Solution: []uint32{1, 2}}
-}
-
-func TestNewUnsignedFNDSAPropagatesKeyIDError(t *testing.T) {
-	pub := make([]byte, fndsa512.PublicKeySize)
-	if _, _, err := NewUnsignedFNDSA("example.com", pub, 1, FNDSAMetadata{}, hugeNonceProof()); !errors.Is(err, matrixjson.ErrIntegerRange) {
-		t.Fatalf("expected integer range error, got %v", err)
-	}
-}
-
 func TestGraphSeedPropagatesCanonicalError(t *testing.T) {
 	pub := make([]byte, fndsa512.PublicKeySize)
-	if _, err := GraphSeed(pub, string([]byte{0xff}), 0); !errors.Is(err, matrixjson.ErrInvalidString) {
+	if _, err := GraphSeed(pub, string([]byte{0xff}), ProductionProfile, 0); !errors.Is(err, matrixjson.ErrInvalidString) {
 		t.Fatalf("expected invalid string error, got %v", err)
 	}
 }
 
-func TestKeyIDPropagatesCanonicalError(t *testing.T) {
-	pub := make([]byte, fndsa512.PublicKeySize)
-	if _, err := KeyID(pub, "example.com", hugeNonceProof()); !errors.Is(err, matrixjson.ErrIntegerRange) {
-		t.Fatalf("expected integer range error, got %v", err)
-	}
-}
-
-func TestKeyIDBase64PropagatesKeyIDError(t *testing.T) {
-	pub := make([]byte, fndsa512.PublicKeySize)
-	if _, err := KeyIDBase64(pub, "example.com", hugeNonceProof()); !errors.Is(err, matrixjson.ErrIntegerRange) {
-		t.Fatalf("expected integer range error, got %v", err)
+func TestUint32FromAnyRejectsOversizeNonce(t *testing.T) {
+	if _, err := uint32FromAny(uint64(^uint32(0)) + 1); !errors.Is(err, ErrInvalidKeyObject) {
+		t.Fatalf("expected oversized nonce rejection, got %v", err)
 	}
 }
 
@@ -110,7 +86,7 @@ func TestVerifyFNDSASelfSignatureRejectsNonMapVerifyKeyEntry(t *testing.T) {
 		"verify_keys": map[string]any{FNDSAAlgorithm + ":AAAAAAAAAAAAAAAA": "not a map"},
 		"signatures":  map[string]any{"example.com": map[string]any{}},
 	}
-	if _, err := VerifyFNDSASelfSignature(obj, "example.com"); !errors.Is(err, ErrInvalidKeyObject) {
+	if _, err := VerifyMintedFNDSAServerKey(obj, "example.com"); !errors.Is(err, ErrInvalidKeyObject) {
 		t.Fatalf("expected invalid key object, got %v", err)
 	}
 }
@@ -124,7 +100,7 @@ func TestVerifyFNDSASelfSignaturePropagatesMintingProofError(t *testing.T) {
 		},
 		"signatures": map[string]any{"example.com": map[string]any{}},
 	}
-	if _, err := VerifyFNDSASelfSignature(obj, "example.com"); !errors.Is(err, ErrInvalidKeyObject) {
+	if _, err := VerifyMintedFNDSAServerKey(obj, "example.com"); !errors.Is(err, ErrInvalidKeyObject) {
 		t.Fatalf("expected invalid key object for missing pow, got %v", err)
 	}
 }
@@ -139,18 +115,18 @@ func TestVerifyFNDSASelfSignaturePropagatesKeyIDError(t *testing.T) {
 	serverName := string([]byte{0xff})
 	obj := map[string]any{
 		"verify_keys": map[string]any{
-			FNDSAAlgorithm + ":AAAAAAAAAAAAAAAA": map[string]any{
-				"key": base64.RawStdEncoding.EncodeToString(make([]byte, fndsa512.PublicKeySize)),
+			FNDSAAlgorithm + ":AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA": map[string]any{
+				"key":     base64.RawStdEncoding.EncodeToString(make([]byte, fndsa512.PublicKeySize)),
+				"profile": ProductionProfile,
 				"pow": map[string]any{
-					"algorithm": "test",
-					"nonce":     uint64(0),
-					"solution":  []any{uint64(1)},
+					"nonce":    uint64(0),
+					"solution": []any{uint64(1)},
 				},
 			},
 		},
 		"signatures": map[string]any{serverName: map[string]any{}},
 	}
-	if _, err := VerifyFNDSASelfSignature(obj, serverName); !errors.Is(err, matrixjson.ErrInvalidString) {
+	if _, err := VerifyMintedFNDSAServerKey(obj, serverName); !errors.Is(err, matrixjson.ErrInvalidString) {
 		t.Fatalf("expected invalid string error, got %v", err)
 	}
 }
