@@ -39,8 +39,8 @@ applicable (server-to-server API).
 
 ```json
 {
-    "algorithm": "ml-kem-768",
-    "encapsulation_key": "<unpadded-base64-ml-kem-768-ek>"
+  "algorithm": "ml-kem-768",
+  "encapsulation_key": "<unpadded-base64-ml-kem-768-ek>"
 }
 ```
 
@@ -54,9 +54,9 @@ before encapsulating, rejecting invalid keys with `400 M_INVALID_PARAM`.
 
 ```json
 {
-    "session_id": "<opaque-string>",
-    "ciphertext": "<unpadded-base64-ml-kem-768-ciphertext>",
-    "expires_ts": 1798848000000
+  "session_id": "<opaque-string>",
+  "ciphertext": "<unpadded-base64-ml-kem-768-ciphertext>",
+  "expires_ts": 1798848000000
 }
 ```
 
