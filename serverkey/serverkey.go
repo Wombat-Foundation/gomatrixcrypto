@@ -63,12 +63,18 @@ var (
 
 // RegisterProfile registers a profile algorithm for key minting and verification.
 func RegisterProfile(name string, cfg cuckoo.Config, shortBytes int) {
+	gt := name + ".graph"
+	kt := name + ".keyid"
+	if name == ProductionProfile {
+		gt = productionGraphTag
+		kt = productionKeyIDTag
+	}
 	profilesMu.Lock()
 	defer profilesMu.Unlock()
 	profiles[name] = profile{
 		config:     cfg,
-		graphTag:   graphTagLocked(name),
-		keyIDTag:   keyIDTagLocked(name),
+		graphTag:   gt,
+		keyIDTag:   kt,
 		shortBytes: shortBytes,
 	}
 }
@@ -149,25 +155,11 @@ func graphObject(publicKey []byte, serverName, profileName string, nonce uint32)
 	}
 }
 
-func graphTagLocked(profileName string) string {
-	if p, ok := profiles[profileName]; ok {
-		return p.graphTag
-	}
-	return profileName + ".graph"
-}
-
 func graphTag(profileName string) string {
 	if p, ok := getProfile(profileName); ok {
 		return p.graphTag
 	}
 	return profileName + ".graph"
-}
-
-func keyIDTagLocked(profileName string) string {
-	if p, ok := profiles[profileName]; ok {
-		return p.keyIDTag
-	}
-	return profileName + ".keyid"
 }
 
 func keyIDTag(profileName string) string {

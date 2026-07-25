@@ -76,13 +76,12 @@ func testMintingProof(t *testing.T, serverName string, pub []byte) FNDSAMintingP
 func testRegisteredMintingProof(t *testing.T, serverName string, pub []byte) (string, FNDSAMintingProof) {
 	t.Helper()
 	const profileName = "test.serverkey.profile"
-	profiles[profileName] = profile{
-		config:     cuckoo.Config{EdgeBits: 12, ProofSize: 4},
-		graphTag:   "test.serverkey.graph",
-		keyIDTag:   "test.serverkey.keyid",
-		shortBytes: 16,
-	}
-	t.Cleanup(func() { delete(profiles, profileName) })
+	RegisterProfile(profileName, cuckoo.Config{EdgeBits: 12, ProofSize: 4}, 16)
+	t.Cleanup(func() {
+		profilesMu.Lock()
+		delete(profiles, profileName)
+		profilesMu.Unlock()
+	})
 
 	for nonce := uint32(0); nonce < 256; nonce++ {
 		seed, err := GraphSeed(pub, serverName, profileName, nonce)
@@ -285,6 +284,26 @@ func TestShortKeyIDUsesBase64URL(t *testing.T) {
 	const want = "--__--__BgcICQoLDA0ODw"
 	if got != want {
 		t.Fatalf("short key ID mismatch: got %q want %q", got, want)
+	}
+}
+
+func TestRegisterProfile(t *testing.T) {
+	RegisterProfile(ProductionProfile, cuckoo.Config{EdgeBits: 29, ProofSize: 42}, 16)
+	p, ok := getProfile(ProductionProfile)
+	if !ok || p.graphTag != productionGraphTag || p.keyIDTag != productionKeyIDTag {
+		t.Fatalf("unexpected production profile registration: %#v", p)
+	}
+
+	const customName = "test.custom.register"
+	RegisterProfile(customName, cuckoo.Config{EdgeBits: 8, ProofSize: 4}, 16)
+	t.Cleanup(func() {
+		profilesMu.Lock()
+		delete(profiles, customName)
+		profilesMu.Unlock()
+	})
+	p, ok = getProfile(customName)
+	if !ok || p.graphTag != customName+".graph" || p.keyIDTag != customName+".keyid" {
+		t.Fatalf("unexpected custom profile registration: %#v", p)
 	}
 }
 
