@@ -94,6 +94,12 @@ func getProfile(name string) (profile, bool) {
 	return p, ok
 }
 
+// IsRegisteredProfile reports whether profileName is registered for minting/verification.
+func IsRegisteredProfile(profileName string) bool {
+	_, ok := getProfile(profileName)
+	return ok
+}
+
 // FNDSAMintingProof records the proof data bound to a profile-selected graph.
 type FNDSAMintingProof struct {
 	Algorithm string

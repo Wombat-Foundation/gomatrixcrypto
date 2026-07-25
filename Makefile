@@ -18,11 +18,11 @@ SERVER_NAME ?= nutra.tk
 SERVER ?= $(SERVER_NAME)
 NONCE ?= $(MINTING_START_NONCE)
 SERVERKEY_VALID_DAYS ?= 365
-SERVERKEY_VALID_UNTIL_TS ?= 1815632341240
+SERVERKEY_VALID_UNTIL_TS ?= 0
 MINTING_THREADS ?= 4
 MINTING_START_NONCE ?= 0
 MINTING_MAX_NONCE ?= 1024
-MINTING_VECTOR_OUTPUT ?= serverkey/testdata/msc00e4-nutra.tk-sha3-256-cogen-42-29-v1.json
+MINTING_VECTOR_OUTPUT ?= serverkey/testdata/msc00e4-$(SERVER)-sha3-256-cogen-42-29-v1.json
 GIT_DESCRIBE := $(shell git describe --tags --always --dirty 2>/dev/null || printf unknown)
 
 .PHONY: help

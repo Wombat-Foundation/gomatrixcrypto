@@ -251,6 +251,9 @@ func validateServerKeyProfile(profile powProfile) error {
 	if profile.Algorithm == "" {
 		return fmt.Errorf("invalid profile: algorithm name cannot be empty")
 	}
+	if !serverkey.IsRegisteredProfile(profile.Algorithm) {
+		return fmt.Errorf("unregistered server-key profile %q", profile.Algorithm)
+	}
 	return nil
 }
 

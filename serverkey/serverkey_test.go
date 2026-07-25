@@ -319,6 +319,15 @@ func TestRegisterProfile(t *testing.T) {
 	}
 }
 
+func TestIsRegisteredProfile(t *testing.T) {
+	if !IsRegisteredProfile(ProductionProfile) {
+		t.Fatalf("expected production profile to be registered")
+	}
+	if IsRegisteredProfile("unregistered.profile") {
+		t.Fatalf("expected unregistered profile to return false")
+	}
+}
+
 func TestNewUnsignedFNDSARejectsInvalidInputs(t *testing.T) {
 	if _, _, err := NewUnsignedFNDSA("", make([]byte, fndsa512.PublicKeySize), 1, FNDSAMetadata{}, FNDSAMintingProof{}); !errors.Is(err, ErrInvalidServerName) {
 		t.Fatalf("expected invalid server name, got %v", err)

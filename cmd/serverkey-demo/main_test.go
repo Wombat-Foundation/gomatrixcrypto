@@ -112,6 +112,24 @@ func TestConfigurePoWProfileRejectsInvalidInputs(t *testing.T) {
 	}
 }
 
+func TestDefaultServerKeyDemoConfiguration(t *testing.T) {
+	prof, err := configurePoWProfile("demo", 8, 4, "", true)
+	if err != nil {
+		t.Fatalf("failed to configure default demo profile: %v", err)
+	}
+	if err := validateServerKeyProfile(prof); err != nil {
+		t.Fatalf("default demo profile failed validation: %v", err)
+	}
+	if prof.Algorithm == "" || !prof.Demo || prof.Note == "" {
+		t.Fatalf("unexpected default profile configuration: %#v", prof)
+	}
+
+	unregistered := powProfile{Algorithm: "unregistered.cuckoo.profile"}
+	if err := validateServerKeyProfile(unregistered); err == nil {
+		t.Fatal("expected unregistered profile rejection")
+	}
+}
+
 func TestValidateServerKeyProfile(t *testing.T) {
 	production, err := configurePoWProfile("production", 0, 0, "", false)
 	if err != nil {
