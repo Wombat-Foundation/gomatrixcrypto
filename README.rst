@@ -154,7 +154,7 @@ FN-DSA verify key object:
 
 .. code-block:: bash
 
-   go run ./cmd/serverkey-demo -server example.com -valid-days 7
+   go run ./cmd/serverkey-demo -server example.com -valid-days 7 -pow-profile demo
 
 To encrypt the generated private key before it is printed, provide the
 passphrase through an environment variable or a file:
@@ -175,18 +175,20 @@ can be re-wrapped with a new passphrase:
 Empty passphrases are rejected. Removing encryption from an encrypted private
 key is intentionally not provided by this tool.
 
-The demo uses ``-pow-edge-bits 8 -pow-proof-size 4`` and searches ``1<<12``
-edge nonces per minting nonce by default, so it is intentionally easy: it looks
-for a 4-cycle in a tiny graph. The live production profile described in
-``res/`` is ``42-29`` with a SHA3-256 co-generation seed and is intentionally
-much more expensive.
+``-pow-profile demo`` uses ``-pow-edge-bits 8 -pow-proof-size 4`` and searches
+``1<<12`` edge nonces per minting nonce by default, so it is intentionally
+easy: it looks for a 4-cycle in a tiny graph. ``-pow-profile production`` is
+the ``42-29`` profile described in ``res/`` with a SHA3-256 co-generation seed
+and is intentionally much more expensive; it is also the default, so
+production-scale mining runs unless ``-pow-profile demo`` is passed
+explicitly.
 
 PoW profile examples:
 
 .. code-block:: bash
 
-   # Default fast demo profile.
-   go run ./cmd/serverkey-demo -server example.com
+   # Fast demo profile; must be requested explicitly.
+   go run ./cmd/serverkey-demo -server example.com -pow-profile demo
 
    # Custom profile and algorithm label.
    go run ./cmd/serverkey-demo -pow-profile custom -pow-algorithm local.cuckoo-cycle-6-12-sha3-256-cogen -pow-edge-bits 12 -pow-proof-size 6 -pow-max-nonce 65536

@@ -66,8 +66,8 @@ func main() {
 		fatal(err)
 	}
 
-	if uint64(*maxNonce) > profile.Config.EdgeMask() {
-		fatal(fmt.Errorf("pow-max-nonce %d exceeds the profile's edge-nonce bound %d", *maxNonce, profile.Config.EdgeMask()))
+	if uint64(*maxNonce) > profile.Config.EdgeMask()+1 {
+		fatal(fmt.Errorf("pow-max-nonce %d exceeds the profile's edge-nonce count %d", *maxNonce, profile.Config.EdgeMask()+1))
 	}
 
 	if profile.Algorithm == serverkey.ProductionProfile && !profile.Demo && *keygenSeed != "" {
