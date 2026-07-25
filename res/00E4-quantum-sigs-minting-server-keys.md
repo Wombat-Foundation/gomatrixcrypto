@@ -17,7 +17,7 @@ accepted by implementations of this profile.
 The profile token is the opaque string `tk.nutra.msc45xx.serverkey.v1`.
 Implementations MUST compare it by exact string equality against a closed
 registry. They MUST NOT parse it to recover algorithm parameters. The registry
-entry fixes FN-DSA-512, SHA3-256, Matrix Canonical JSON, Cuckoo
+entry fixes FN-DSA-512, SHA3-256, Matrix Canonical JSON, Cuckatoo
 `edge_bits = 29`, `proof_size = 42`, the short-ID encoding, and the action tags
 below.
 
@@ -53,10 +53,9 @@ be omitted. Every field inside a `verify_keys` entry is either fixed by the
 profile or committed by the key ID preimage; therefore one key name identifies
 one key entry.
 
-The key name uses lowercase hexadecimal and the fixed algorithm token
-`fndsa512`. Its 32-character suffix is the first 128 bits of the recomputed
-SHA3-256 key ID. Base64url and hyphenated algorithm names MUST NOT be used in
-this key-name position.
+The key name uses unpadded base64url encoding and the fixed algorithm token
+`fndsa512`. Its 22-character suffix is the unpadded base64url encoding of the
+first 128 bits (16 bytes) of the recomputed SHA3-256 key ID.
 
 ### Bound preimages
 
@@ -274,11 +273,12 @@ redistribution without special handling.
 
 An origin MAY include a top-level `trusted_notary_keys` array in its
 `/_matrix/key/v2/server` response. Each entry is a full content-addressed FN-DSA
-server-key identifier of the form `fndsa512:<32 lowercase hex>`, where the
-32-character hex string is the registry-defined short form of the 32-byte
-SHA3-256 `key_id` defined in this MSC. The field is part of the Matrix signing
-object and therefore covered by the origin's server-key signatures. If present
-but empty, it explicitly authorizes no notary-supplied historical keys.
+server-key identifier of the form `fndsa512:<short_key_id>`, where
+`<short_key_id>` is the registry-defined 22-character unpadded base64url
+encoding of the first 16 bytes of the SHA3-256 `key_id` defined in this MSC. The
+field is part of the Matrix signing object and therefore covered by the origin's
+server-key signatures. If present but empty, it explicitly authorizes no
+notary-supplied historical keys.
 
 `trusted_notary_keys` lets the origin extend its own signed publication without
 embedding every historical key body in `old_verify_keys`. A listed identifier is
@@ -335,7 +335,7 @@ is unknown until the proof solution is known.
 ```text
 minting_object = {
     "action": "fn-dsa-minting-object",
-    "algorithm": "tk.nutra.msc45xx.pow.cuckoo-cycle-42-29-sha3-256-cogen",
+    "algorithm": "tk.nutra.msc45xx.pow.cuckatoo-42-29-sha3-256-cogen",
     "nonce": nonce,
     "public_key": "<unpadded-base64-fn-dsa-512-pubkey>",
     "server_name": "example.com",
@@ -369,10 +369,10 @@ colliding `short_key_id` candidates.
 
 ```json
 {
-  "fndsa512:<32-lowercase-hex>": {
+  "fndsa512:<short_key_id>": {
     "key": "<unpadded-base64-fn-dsa-512-pubkey>",
     "pow": {
-      "algorithm": "tk.nutra.msc45xx.pow.cuckoo-cycle-42-29-sha3-256-cogen",
+      "algorithm": "tk.nutra.msc45xx.pow.cuckatoo-42-29-sha3-256-cogen",
       "nonce": 8137226,
       "solution": [123, 456, 789, "..."]
     }
@@ -428,14 +428,14 @@ bound. Implementations calibrating a different deployment's expected solve time
 MUST NOT do so by changing `edge_bits` without minting a new, explicitly
 identified algorithm profile (see
 [Compatibility and upgrade classes](#compatibility-and-upgrade-classes)) —
-`tk.nutra.msc45xx.pow.cuckoo-cycle-42-29-sha3-256-cogen` names one fixed
+`tk.nutra.msc45xx.pow.cuckatoo-42-29-sha3-256-cogen` names one fixed
 parameterization so that all conforming implementations impose the same cost.
 
 The proof response is:
 
 ```json
 {
-  "algorithm": "tk.nutra.msc45xx.pow.cuckoo-cycle-42-29-sha3-256-cogen",
+  "algorithm": "tk.nutra.msc45xx.pow.cuckatoo-42-29-sha3-256-cogen",
   "nonce": 8137226,
   "solution": [123, 456, 789, "..."]
 }
@@ -461,7 +461,7 @@ Receivers SHOULD cache successful stamp verification by `key_id`.
 
 The checks above are scattered across the preceding prose as individual MUSTs.
 This section states them as one ordered procedure. Receiving servers and
-notaries MUST validate an advertised `fndsa512:<32-lowercase-hex>` key object in
+notaries MUST validate an advertised `fndsa512:<short_key_id>` key object in
 this order, rejecting the entire key at the first failing step and performing no
 later step once a step has failed:
 
@@ -470,9 +470,9 @@ later step once a step has failed:
    and `pow` (an object containing `algorithm`, `nonce`, and `solution`). A
    missing or structurally malformed field fails validation here.
 2. **Algorithm identifier.** `pow.algorithm` MUST exactly equal
-   `tk.nutra.msc45xx.pow.cuckoo-cycle-42-29-sha3-256-cogen`. Any other value
-   fails validation here as unrecognized; do not fall back to treating it as the
-   old plain-hash construction.
+   `tk.nutra.msc45xx.pow.cuckatoo-42-29-sha3-256-cogen`. Any other value fails
+   validation here as unrecognized; do not fall back to treating it as the old
+   plain-hash construction.
 3. **Solution and nonce shape.** `pow.solution` MUST contain exactly 42 unsigned
    integers, each strictly less than `2^29`, in strictly increasing order, with
    no duplicates. `pow.nonce` MUST be an integer in `[0, 2^64)`. Any violation
@@ -514,7 +514,7 @@ needed for deployment.
 
 ```http
 Authorization: X-Matrix origin="example.com",destination="matrix.org",key="ed25519:auto",sig="<base64-ed25519-signature>"
-X-Matrix-PQC: origin="example.com",destination="matrix.org",key="fndsa512:<32-lowercase-hex>",origin_ts_at="1798847900000",sig="<base64-fn-dsa-signature>"
+X-Matrix-PQC: origin="example.com",destination="matrix.org",key="fndsa512:<short_key_id>",origin_ts_at="1798847900000",sig="<base64-fn-dsa-signature>"
 ```
 
 The FN-DSA signature MUST be computed over the same JSON signing object used for
@@ -862,8 +862,8 @@ Trust and enforcement boundaries:
   fidelity.
 
 FN-DSA keys follow identical validity semantics to Ed25519 keys: a signature
-made by `fndsa512:<32-lowercase-hex>` is valid if the key was valid at the time
-of the signed operation. Retired FN-DSA keys appear in `old_verify_keys` with an
+made by `fndsa512:<short_key_id>` is valid if the key was valid at the time of
+the signed operation. Retired FN-DSA keys appear in `old_verify_keys` with an
 `expired_ts`. The `valid_until_ts` field governs cache lifetime for the entire
 key response, identically to existing behavior.
 
@@ -939,7 +939,7 @@ Field semantics:
   conflicting key bodies. Despite the naming, the pair is unordered for dedup
   purposes (see below); `first` denotes whichever observation this notary
   learned of earlier, per its own `first_observed_ts`.
-- `key_id` in each observation is the canonical `fndsa512:<32 lowercase hex>`
+- `key_id` in each observation is the canonical `fndsa512:<short_key_id>`
   identifier for that key body, derived as specified in
   [profile-bound key minting](#canonical-key-object).
 - `server_key_package_sha256` is the unpadded base64url-encoded SHA-256 digest
