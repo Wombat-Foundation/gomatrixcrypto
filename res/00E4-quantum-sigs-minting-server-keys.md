@@ -82,9 +82,10 @@ SipHash key-initialisation constants are NOT applied (this matches John Tromp's
 256-bit-keyed Cuckatoo SipHash construction).
 
 For edge index `i` (`0 ≤ i < 2^29`), compute 64-bit unsigned integers `2*i` and
-`2*i+1`. Passing `2*i` and `2*i+1` into this 256-bit-state SipHash-2-4 function
-produces the 64-bit outputs; masking each output with `(2^29 - 1)` yields the
-partition endpoints `U` and `V` respectively.
+`2*i+1`. Passing `2*i` and `2*i+1` (each encoded as an 8-byte unsigned
+little-endian integer) into this 256-bit-state SipHash-2-4 function produces the
+64-bit outputs; masking each output with `(2^29 - 1)` yields the partition
+endpoints `U` and `V` respectively.
 
 _Test vector:_ For graph seed
 `G = 000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f` and edge
@@ -125,11 +126,13 @@ order:
    entry less than `2^29`; require `nonce < 2^32`.
 4. Compute `G`, interpret its 32 bytes as four unsigned 64-bit little-endian
    words `(k0, k1, k2, k3)` for SipHash-2-4, derive bipartite graph endpoints
-   $u_j = \operatorname{SipHash-2-4}(2 \cdot e_j) \bmod 2^{29}$ in partition U
-   and $v_j = \operatorname{SipHash-2-4}(2 \cdot e_j + 1) \bmod 2^{29}$ in
-   partition V for each edge index $e_j \in [e_0, \ldots, e_{41}]$, and verify
-   that the 42 edges form a valid closed 42-cycle in the graph with no repeated
-   vertices per partition.
+   $u_j = \operatorname{SipHash-2-4}(2 \cdot e_j) \mathbin{\&} (2^{29} - 1)$ in
+   partition U and
+   $v_j = \operatorname{SipHash-2-4}(2 \cdot e_j + 1) \mathbin{\&} (2^{29} - 1)$
+   in partition V for each edge index $e_j \in [e_0, \ldots, e_{41}]$ (with
+   $2 \cdot e_j$ and $2 \cdot e_j + 1$ encoded as 64-bit unsigned little-endian
+   integers), and verify that the 42 edges form a valid closed 42-cycle in the
+   graph with no repeated vertices per partition.
 5. Compute `I` and require the map key to equal `fndsa512:` followed by the
    registry-defined short form of `I`.
 6. Require the top-level `server_name` to be the name used in the preimages and
@@ -420,8 +423,8 @@ words `k0..k3` forming the SipHash-2-4 key. The bipartite graph has `2^29` edges
 and `2^29` nodes in each partition. Edge `i` (for `0 ≤ i < 2^29`) connects:
 
 ```text
-u(i) = siphash-2-4(k0..k3, 2i)     mod 2^29   (partition U)
-v(i) = siphash-2-4(k0..k3, 2i + 1) mod 2^29   (partition V)
+u(i) = siphash-2-4(k0..k3, 2i)     & (2^29 - 1)   (partition U)
+v(i) = siphash-2-4(k0..k3, 2i + 1) & (2^29 - 1)   (partition V)
 ```
 
 A valid proof is a set of 42 edge indices whose edges form a single cycle of
