@@ -222,6 +222,9 @@ func configurePoWProfile(name string, edgeBits uint, proofSize int, algorithm st
 		if algorithm == "" {
 			return powProfile{}, fmt.Errorf("-pow-algorithm is required with -pow-profile custom")
 		}
+		if algorithm == serverkey.ProductionProfile {
+			return powProfile{}, fmt.Errorf("-pow-algorithm %q is reserved for production profile", serverkey.ProductionProfile)
+		}
 		prof = powProfile{
 			Algorithm: algorithm,
 			Config:    cuckoo.Config{EdgeBits: edgeBits, ProofSize: proofSize},
@@ -234,7 +237,11 @@ func configurePoWProfile(name string, edgeBits uint, proofSize int, algorithm st
 		return powProfile{}, fmt.Errorf("unknown -pow-profile %q", name)
 	}
 
-	serverkey.RegisterProfile(prof.Algorithm, prof.Config, 16)
+	if prof.Algorithm != serverkey.ProductionProfile {
+		if err := serverkey.RegisterProfile(prof.Algorithm, prof.Config, 16); err != nil {
+			return powProfile{}, err
+		}
+	}
 	return prof, nil
 }
 

@@ -76,7 +76,9 @@ func testMintingProof(t *testing.T, serverName string, pub []byte) FNDSAMintingP
 func testRegisteredMintingProof(t *testing.T, serverName string, pub []byte) (string, FNDSAMintingProof) {
 	t.Helper()
 	const profileName = "test.serverkey.profile"
-	RegisterProfile(profileName, cuckoo.Config{EdgeBits: 12, ProofSize: 4}, 16)
+	if err := RegisterProfile(profileName, cuckoo.Config{EdgeBits: 12, ProofSize: 4}, 16); err != nil {
+		t.Fatal(err)
+	}
 	t.Cleanup(func() {
 		profilesMu.Lock()
 		delete(profiles, profileName)
@@ -288,20 +290,30 @@ func TestShortKeyIDUsesBase64URL(t *testing.T) {
 }
 
 func TestRegisterProfile(t *testing.T) {
-	RegisterProfile(ProductionProfile, cuckoo.Config{EdgeBits: 29, ProofSize: 42}, 16)
-	p, ok := getProfile(ProductionProfile)
-	if !ok || p.graphTag != productionGraphTag || p.keyIDTag != productionKeyIDTag {
-		t.Fatalf("unexpected production profile registration: %#v", p)
+	if err := RegisterProfile(ProductionProfile, cuckoo.Config{EdgeBits: 29, ProofSize: 42}, 16); err == nil {
+		t.Fatal("expected production profile override rejection")
+	}
+
+	if err := RegisterProfile("test.invalid.shortbytes", cuckoo.Config{EdgeBits: 8, ProofSize: 4}, 0); err == nil {
+		t.Fatal("expected shortBytes 0 rejection")
+	}
+	if err := RegisterProfile("test.invalid.shortbytes", cuckoo.Config{EdgeBits: 8, ProofSize: 4}, 33); err == nil {
+		t.Fatal("expected shortBytes 33 rejection")
+	}
+	if err := RegisterProfile("", cuckoo.Config{EdgeBits: 8, ProofSize: 4}, 16); err == nil {
+		t.Fatal("expected empty profile name rejection")
 	}
 
 	const customName = "test.custom.register"
-	RegisterProfile(customName, cuckoo.Config{EdgeBits: 8, ProofSize: 4}, 16)
+	if err := RegisterProfile(customName, cuckoo.Config{EdgeBits: 8, ProofSize: 4}, 16); err != nil {
+		t.Fatalf("failed to register custom profile: %v", err)
+	}
 	t.Cleanup(func() {
 		profilesMu.Lock()
 		delete(profiles, customName)
 		profilesMu.Unlock()
 	})
-	p, ok = getProfile(customName)
+	p, ok := getProfile(customName)
 	if !ok || p.graphTag != customName+".graph" || p.keyIDTag != customName+".keyid" {
 		t.Fatalf("unexpected custom profile registration: %#v", p)
 	}
