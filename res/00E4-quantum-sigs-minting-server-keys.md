@@ -76,14 +76,25 @@ G = \operatorname{SHA3\text{-}256}(\operatorname{canonical\_json}({
 $$
 
 The 32 bytes of `G` are interpreted as four little-endian unsigned 64-bit words
-`k0`, `k1`, `k2`, and `k3`, in that order, forming the SipHash-2-4 key. For edge
-index `i`, encoded as an unsigned 64-bit little-endian message, compute endpoint
-messages `2*i` and `2*i+1`, also as unsigned 64-bit little-endian values.
-SipHash-2-4 with `(k0,k1,k2,k3)` produces each 64-bit endpoint; the result is
-reduced modulo `2^29`. The endpoint from `2*i` is in partition U and the
-endpoint from `2*i+1` is in partition V. These action tags, byte orders, widths,
-and the reduction rule are normative; implementations MUST NOT use the legacy
-SHA-256 graph function.
+`k0`, `k1`, `k2`, and `k3`, in that order. These four words are loaded directly
+as the internal SipHash-2-4 state words `v0`, `v1`, `v2`, and `v3`; the standard
+SipHash key-initialisation constants are NOT applied (this matches John Tromp's
+256-bit-keyed Cuckatoo SipHash construction).
+
+For edge index `i` (`0 ≤ i < 2^29`), compute 64-bit unsigned integers `2*i` and
+`2*i+1`. Passing `2*i` and `2*i+1` into this 256-bit-state SipHash-2-4 function
+produces the 64-bit outputs; masking each output with `(2^29 - 1)` yields the
+partition endpoints `U` and `V` respectively.
+
+_Test vector:_ For graph seed
+`G = 000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f` and edge
+index `i = 0`:
+
+- Endpoint `U` (`2*0 = 0`) masked to 29 bits = `6597635` (`0x0064ac03`)
+- Endpoint `V` (`2*0+1 = 1`) masked to 29 bits = `142045839` (`0x0877728f`)
+
+These action tags, widths, and masking rules are normative; implementations MUST
+NOT use the legacy SHA-256 graph function.
 
 The key ID is:
 
@@ -356,18 +367,18 @@ include `short_key_id`, signatures, `valid_until_ts`, `claims`, notary metadata,
 or unknown future extension fields. `key_id` — the identity digest used
 throughout this MSC family to name a specific key body — is the SHA3-256 digest
 of this canonical minting object, not a plain hash of the public key and not the
-pre-solve Cuckoo graph selector. `short_key_id` is the first 20 base64url
-characters of `key_id`, unpadded; it is not a separate digest. `key_id` is a
-SHA3-256 output under this proof class, not a plain SHA-256 output — the two are
-distinct algorithms despite the similar name.
+pre-solve Cuckatoo graph selector. `short_key_id` is the 22-character unpadded
+base64url encoding of the first 16 bytes (128 bits) of `key_id`; it is not a
+separate digest. `key_id` is a SHA3-256 output under this proof class, not a
+plain SHA-256 output — the two are distinct algorithms despite the similar name.
 
-The 20-character `short_key_id` is approximately a 120-bit prefix. This is not
-relied on as a standalone anti-grinding control: an attacker choosing public
-keys and nonces can still search for favorable prefixes, but the prefix is not
-known until a valid 42-cycle solution has been found and committed into
-`key_id`. Receivers rely on the combination of minting cost, full `key_id`
-validation, and MSC4499 First Seen Wins binding rather than trial-verifying
-colliding `short_key_id` candidates.
+The 22-character `short_key_id` is a 128-bit prefix. This is not relied on as a
+standalone anti-grinding control: an attacker choosing public keys and nonces
+can still search for favorable prefixes, but the prefix is not known until a
+valid 42-cycle solution has been found and committed into `key_id`. Receivers
+rely on the combination of minting cost, full `key_id` validation, and MSC4499
+First Seen Wins binding rather than trial-verifying colliding `short_key_id`
+candidates.
 
 ```json
 {
@@ -385,8 +396,8 @@ colliding `short_key_id` candidates.
 The verifier derives the Cuckoo graph from the advertised public key,
 `server_name`, and supplied `nonce`; verifies the Cuckoo Cycle solution against
 that graph; then computes `key_id` from the canonical minting object. The
-enclosing key's advertised `short_key_id` MUST equal the first 20 base64url
-characters of that final `key_id`.
+enclosing key's advertised `short_key_id` MUST equal the 22-character unpadded
+base64url encoding of the first 16 bytes of that final `key_id`.
 
 ### Graph derivation
 
@@ -491,8 +502,8 @@ later step once a step has failed:
    a receiver reject cheaply before reaching it.
 6. **`short_key_id` match.** Compute `key_id` from the canonical minting object,
    then compare the enclosing dictionary key's `short_key_id` (the string
-   following `fn-dsa-512:`) against the first 20 base64url characters of
-   `key_id`. A mismatch fails validation here.
+   following `fndsa512:`) against the 22-character unpadded base64url encoding
+   of the first 16 bytes of that `key_id`. A mismatch fails validation here.
 7. **Self-signature.** Independently of steps 1-6: verify the FN-DSA
    self-signature over the enclosing response, keyed by the same `short_key_id`,
    using the advertised `key` (see the self-signature requirement above). This
