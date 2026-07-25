@@ -2,32 +2,47 @@ package main
 
 import (
 	"encoding/hex"
+	"encoding/json"
+	"flag"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 
 	"github.com/Wombat-Foundation/gomatrixcrypto/merkle"
 )
 
+type MerkleVectors struct {
+	Schema                   string `json:"schema"`
+	FieldRootHex             string `json:"field_root_hex"`
+	EventHeaderRootHex       string `json:"event_header_root_hex"`
+	PrevEventsHashHex        string `json:"prev_events_hash_hex"`
+	AuthEventsHashHex        string `json:"auth_events_hash_hex"`
+	ContentHashHex           string `json:"content_hash_hex"`
+	OtherSignedFieldsHashHex string `json:"other_signed_fields_hash_hex"`
+	EventRootHex             string `json:"event_root_hex"`
+	EventID                  string `json:"event_id"`
+}
+
 func main() {
-	if err := run(); err != nil {
+	output := flag.String("output", "", "optional JSON output file path")
+	flag.Parse()
+
+	if err := run(*output); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func run() error {
-	fmt.Println("[msc4511-merkle]")
-
+func run(outputPath string) error {
 	fieldRoot, err := merkle.Root(sampleFields())
 	if err != nil {
 		return err
 	}
-	fmt.Println("field_root_hex =", hex.EncodeToString(fieldRoot[:]))
 
 	headerRoot, err := merkle.HeaderRoot(sampleHeader())
 	if err != nil {
 		return err
 	}
-	fmt.Println("event_header_root_hex =", hex.EncodeToString(headerRoot[:]))
 
 	prevEventsHash, err := merkle.ComponentHash("prev_events", []any{"$a:example.org"})
 	if err != nil {
@@ -46,11 +61,6 @@ func run() error {
 		return err
 	}
 
-	fmt.Println("prev_events_hash_hex =", hex.EncodeToString(prevEventsHash[:]))
-	fmt.Println("auth_events_hash_hex =", hex.EncodeToString(authEventsHash[:]))
-	fmt.Println("content_hash_hex =", hex.EncodeToString(contentHash[:]))
-	fmt.Println("other_signed_fields_hash_hex =", hex.EncodeToString(otherSignedFieldsHash[:]))
-
 	eventRoot := merkle.EventRoot(
 		prevEventsHash,
 		authEventsHash,
@@ -58,8 +68,43 @@ func run() error {
 		contentHash,
 		otherSignedFieldsHash,
 	)
-	fmt.Println("event_root_hex =", hex.EncodeToString(eventRoot[:]))
-	fmt.Println("event_id =", merkle.EventID(eventRoot))
+
+	vecs := MerkleVectors{
+		Schema:                   "msc4511-merkle-vectors-v1",
+		FieldRootHex:             hex.EncodeToString(fieldRoot[:]),
+		EventHeaderRootHex:       hex.EncodeToString(headerRoot[:]),
+		PrevEventsHashHex:        hex.EncodeToString(prevEventsHash[:]),
+		AuthEventsHashHex:        hex.EncodeToString(authEventsHash[:]),
+		ContentHashHex:           hex.EncodeToString(contentHash[:]),
+		OtherSignedFieldsHashHex: hex.EncodeToString(otherSignedFieldsHash[:]),
+		EventRootHex:             hex.EncodeToString(eventRoot[:]),
+		EventID:                  merkle.EventID(eventRoot),
+	}
+
+	fmt.Println("[msc4511-merkle]")
+	fmt.Println("field_root_hex =", vecs.FieldRootHex)
+	fmt.Println("event_header_root_hex =", vecs.EventHeaderRootHex)
+	fmt.Println("prev_events_hash_hex =", vecs.PrevEventsHashHex)
+	fmt.Println("auth_events_hash_hex =", vecs.AuthEventsHashHex)
+	fmt.Println("content_hash_hex =", vecs.ContentHashHex)
+	fmt.Println("other_signed_fields_hash_hex =", vecs.OtherSignedFieldsHashHex)
+	fmt.Println("event_root_hex =", vecs.EventRootHex)
+	fmt.Println("event_id =", vecs.EventID)
+
+	if outputPath != "" {
+		if err := os.MkdirAll(filepath.Dir(outputPath), 0o755); err != nil {
+			return err
+		}
+		data, err := json.MarshalIndent(vecs, "", "  ")
+		if err != nil {
+			return err
+		}
+		data = append(data, '\n')
+		if err := os.WriteFile(outputPath, data, 0o644); err != nil {
+			return err
+		}
+		fmt.Printf("wrote %s\n", outputPath)
+	}
 
 	return nil
 }
