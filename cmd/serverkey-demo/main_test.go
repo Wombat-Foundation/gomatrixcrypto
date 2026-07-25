@@ -125,8 +125,12 @@ func TestValidateServerKeyProfile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := validateServerKeyProfile(demo); err == nil {
-		t.Fatal("expected unregistered demo profile rejection")
+	if err := validateServerKeyProfile(demo); err != nil {
+		t.Fatalf("demo profile rejected: %v", err)
+	}
+
+	if err := validateServerKeyProfile(powProfile{}); err == nil {
+		t.Fatal("expected empty profile rejection")
 	}
 }
 

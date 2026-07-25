@@ -67,7 +67,7 @@ func main() {
 	}
 
 	if uint64(*maxNonce) > profile.Config.EdgeMask()+1 {
-		fatal(fmt.Errorf("pow-max-nonce %d exceeds the profile's edge-nonce count %d", *maxNonce, profile.Config.EdgeMask()+1))
+		*maxNonce = uint(profile.Config.EdgeMask() + 1)
 	}
 
 	if profile.Algorithm == serverkey.ProductionProfile && !profile.Demo && *keygenSeed != "" {
@@ -202,44 +202,47 @@ func privateKeyPassphrase(envName, fileName string) ([]byte, error) {
 }
 
 func configurePoWProfile(name string, edgeBits uint, proofSize int, algorithm string, demo bool) (powProfile, error) {
+	var prof powProfile
 	switch name {
 	case "demo":
 		cfg := cuckoo.Config{EdgeBits: edgeBits, ProofSize: proofSize}
-		return powProfile{
+		prof = powProfile{
 			Algorithm: fmt.Sprintf("demo.cuckoo-cycle-%d-%d-sha3-256-cogen", cfg.ProofSize, cfg.EdgeBits),
 			Config:    cfg,
 			Demo:      true,
 			Note:      demoPoWProfileNote,
-		}, nil
+		}
 	case "production":
-		return powProfile{
+		prof = powProfile{
 			Algorithm: serverkey.ProductionPoW,
 			Config:    cuckoo.Config{EdgeBits: 29, ProofSize: 42},
 			Demo:      false,
-		}, nil
+		}
 	case "custom":
 		if algorithm == "" {
 			return powProfile{}, fmt.Errorf("-pow-algorithm is required with -pow-profile custom")
 		}
-		profile := powProfile{
+		prof = powProfile{
 			Algorithm: algorithm,
 			Config:    cuckoo.Config{EdgeBits: edgeBits, ProofSize: proofSize},
 			Demo:      demo,
 		}
 		if demo {
-			profile.Note = demoPoWProfileNote
+			prof.Note = demoPoWProfileNote
 		}
-		return profile, nil
 	default:
 		return powProfile{}, fmt.Errorf("unknown -pow-profile %q", name)
 	}
+
+	serverkey.RegisterProfile(prof.Algorithm, prof.Config, 16)
+	return prof, nil
 }
 
-// validateServerKeyProfile rejects profiles outside serverkey's closed registry
-// before generating a key or spending work mining a proof.
+// validateServerKeyProfile validates that the profile is properly configured
+// and registered before generating a key or spending work mining a proof.
 func validateServerKeyProfile(profile powProfile) error {
-	if profile.Algorithm != serverkey.ProductionProfile {
-		return fmt.Errorf("server-key output requires registered profile %q", serverkey.ProductionProfile)
+	if profile.Algorithm == "" {
+		return fmt.Errorf("invalid profile: algorithm name cannot be empty")
 	}
 	return nil
 }

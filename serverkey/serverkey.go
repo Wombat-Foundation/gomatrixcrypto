@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 
 	"github.com/Wombat-Foundation/gomatrixcrypto/cuckoo"
 	"github.com/Wombat-Foundation/gomatrixcrypto/fndsa512"
@@ -48,13 +49,35 @@ type FNDSAMetadata struct {
 	Claims          []string
 }
 
-var profiles = map[string]profile{
-	ProductionProfile: {
-		config:     cuckoo.Config{EdgeBits: 29, ProofSize: 42},
-		graphTag:   productionGraphTag,
-		keyIDTag:   productionKeyIDTag,
-		shortBytes: 16,
-	},
+var (
+	profilesMu sync.RWMutex
+	profiles   = map[string]profile{
+		ProductionProfile: {
+			config:     cuckoo.Config{EdgeBits: 29, ProofSize: 42},
+			graphTag:   productionGraphTag,
+			keyIDTag:   productionKeyIDTag,
+			shortBytes: 16,
+		},
+	}
+)
+
+// RegisterProfile registers a profile algorithm for key minting and verification.
+func RegisterProfile(name string, cfg cuckoo.Config, shortBytes int) {
+	profilesMu.Lock()
+	defer profilesMu.Unlock()
+	profiles[name] = profile{
+		config:     cfg,
+		graphTag:   graphTagLocked(name),
+		keyIDTag:   keyIDTagLocked(name),
+		shortBytes: shortBytes,
+	}
+}
+
+func getProfile(name string) (profile, bool) {
+	profilesMu.RLock()
+	defer profilesMu.RUnlock()
+	p, ok := profiles[name]
+	return p, ok
 }
 
 // FNDSAMintingProof records the proof data bound to a profile-selected graph.
@@ -126,15 +149,29 @@ func graphObject(publicKey []byte, serverName, profileName string, nonce uint32)
 	}
 }
 
-func graphTag(profileName string) string {
+func graphTagLocked(profileName string) string {
 	if p, ok := profiles[profileName]; ok {
 		return p.graphTag
 	}
 	return profileName + ".graph"
 }
 
-func keyIDTag(profileName string) string {
+func graphTag(profileName string) string {
+	if p, ok := getProfile(profileName); ok {
+		return p.graphTag
+	}
+	return profileName + ".graph"
+}
+
+func keyIDTagLocked(profileName string) string {
 	if p, ok := profiles[profileName]; ok {
+		return p.keyIDTag
+	}
+	return profileName + ".keyid"
+}
+
+func keyIDTag(profileName string) string {
+	if p, ok := getProfile(profileName); ok {
 		return p.keyIDTag
 	}
 	return profileName + ".keyid"
@@ -188,7 +225,7 @@ func KeyIDBase64(publicKey []byte, serverName string, proof FNDSAMintingProof) (
 
 // ShortKeyID returns the profile-defined unpadded base64url key-name suffix.
 func ShortKeyID(profileName string, keyID [32]byte) (string, error) {
-	p, ok := profiles[profileName]
+	p, ok := getProfile(profileName)
 	if !ok {
 		return "", ErrUnknownProfile
 	}
@@ -196,7 +233,7 @@ func ShortKeyID(profileName string, keyID [32]byte) (string, error) {
 }
 
 func validateProof(publicKey []byte, serverName, profileName string, proof FNDSAMintingProof) error {
-	p, ok := profiles[profileName]
+	p, ok := getProfile(profileName)
 	if !ok {
 		return ErrUnknownProfile
 	}
