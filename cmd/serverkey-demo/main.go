@@ -41,7 +41,7 @@ func main() {
 	serverName := flag.String("server", "example.com", "Matrix server_name to bind into the self-signed key object")
 	validDays := flag.Int("valid-days", 7, "validity window in days")
 	validUntilTS := flag.Int64("valid-until-ts", 0, "explicit valid_until_ts in milliseconds; 0 derives from valid-days and current time")
-	profileName := flag.String("pow-profile", "production", "PoW profile: production, demo, or custom")
+	profileName := flag.String("pow-profile", "demo", "PoW profile: demo, production, or custom")
 	edgeBits := flag.Uint("pow-edge-bits", 8, "Cuckoo edge bits; ignored by -pow-profile production")
 	proofSize := flag.Int("pow-proof-size", 4, "Cuckoo proof size; ignored by -pow-profile production")
 	powAlgorithm := flag.String("pow-algorithm", "", "minting proof algorithm for -pow-profile custom")

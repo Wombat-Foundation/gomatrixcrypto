@@ -175,19 +175,17 @@ can be re-wrapped with a new passphrase:
 Empty passphrases are rejected. Removing encryption from an encrypted private
 key is intentionally not provided by this tool.
 
-``-pow-profile demo`` uses ``-pow-edge-bits 8 -pow-proof-size 4`` and searches
-``1<<12`` edge nonces per minting nonce by default, so it is intentionally
+``-pow-profile demo`` (the default) uses ``-pow-edge-bits 8 -pow-proof-size 4``
+and searches ``1<<12`` edge nonces per minting nonce, so it is intentionally
 easy: it looks for a 4-cycle in a tiny graph. ``-pow-profile production`` is
 the ``42-29`` profile described in ``res/`` with a SHA3-256 co-generation seed
-and is intentionally much more expensive; it is also the default, so
-production-scale mining runs unless ``-pow-profile demo`` is passed
-explicitly.
+and is intentionally much more expensive; it must be requested explicitly.
 
 PoW profile examples:
 
 .. code-block:: bash
 
-   # Fast demo profile; must be requested explicitly.
+   # Fast demo profile (the default); equivalent to running with no -pow-profile flag.
    go run ./cmd/serverkey-demo -server example.com -pow-profile demo
 
    # Custom profile and algorithm label.
