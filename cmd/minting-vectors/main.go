@@ -120,7 +120,7 @@ func generate(serverName string, startNonce, maxNonce uint64, threads int) (vect
 		}
 
 		return vector{
-			Schema:          "fn-dsa-512-sha3-256-cuckatoo-42-29-cogen-v1",
+			Schema:          "msc00e4-sha3-256-cogen-42-29-v1",
 			ServerName:      serverName,
 			PublicKeyBase64: base64.RawStdEncoding.EncodeToString(publicKey),
 			Profile:         serverkey.ProductionProfile,
