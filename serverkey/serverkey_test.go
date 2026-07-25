@@ -268,7 +268,13 @@ func TestKeyMetadataAndKeyIDDigests(t *testing.T) {
 
 func TestShortKeyIDUsesBase64URL(t *testing.T) {
 	var keyID [32]byte
-	for i := range keyID {
+	keyID[0] = 0xfb
+	keyID[1] = 0xef
+	keyID[2] = 0xff
+	keyID[3] = 0xfb
+	keyID[4] = 0xef
+	keyID[5] = 0xff
+	for i := 6; i < len(keyID); i++ {
 		keyID[i] = byte(i)
 	}
 
@@ -276,7 +282,7 @@ func TestShortKeyIDUsesBase64URL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	const want = "AAECAwQFBgcICQoLDA0ODw"
+	const want = "--__--__BgcICQoLDA0ODw"
 	if got != want {
 		t.Fatalf("short key ID mismatch: got %q want %q", got, want)
 	}

@@ -41,7 +41,7 @@ func main() {
 	serverName := flag.String("server", "example.com", "Matrix server_name to bind into the self-signed key object")
 	validDays := flag.Int("valid-days", 7, "validity window in days")
 	validUntilTS := flag.Int64("valid-until-ts", 0, "explicit valid_until_ts in milliseconds; 0 derives from valid-days and current time")
-	profileName := flag.String("pow-profile", "demo", "PoW profile: demo, production, or custom")
+	profileName := flag.String("pow-profile", "production", "PoW profile: production, demo, or custom")
 	edgeBits := flag.Uint("pow-edge-bits", 8, "Cuckoo edge bits; ignored by -pow-profile production")
 	proofSize := flag.Int("pow-proof-size", 4, "Cuckoo proof size; ignored by -pow-profile production")
 	powAlgorithm := flag.String("pow-algorithm", "", "minting proof algorithm for -pow-profile custom")
@@ -53,9 +53,7 @@ func main() {
 	privateKeyPassphraseFile := flag.String("private-key-passphrase-file", "", "file containing a passphrase for encrypted private-key output")
 	keygenSeed := flag.String("keygen-seed", "", "ASCII seed for deterministic key generation; empty uses crypto/rand")
 	flag.Parse()
-	if uint64(*maxNonce) > maxProtocolMintingNonce {
-		fatal(fmt.Errorf("pow-max-nonce %d exceeds the uint32 edge-nonce limit", *maxNonce))
-	}
+
 	if err := validateMintingNonceRange(*startMintingNonce, *maxMintingNonce); err != nil {
 		fatal(err)
 	}
@@ -66,6 +64,14 @@ func main() {
 	}
 	if err := validateServerKeyProfile(profile); err != nil {
 		fatal(err)
+	}
+
+	if uint64(*maxNonce) > profile.Config.EdgeMask() {
+		fatal(fmt.Errorf("pow-max-nonce %d exceeds the profile's edge-nonce bound %d", *maxNonce, profile.Config.EdgeMask()))
+	}
+
+	if profile.Algorithm == serverkey.ProductionProfile && !profile.Demo && *keygenSeed != "" {
+		fatal(fmt.Errorf("-keygen-seed is restricted to test/demo artifacts; production profile key generation requires cryptographically random system entropy"))
 	}
 
 	passphrase, err := privateKeyPassphrase(*privateKeyPassphraseEnv, *privateKeyPassphraseFile)
@@ -89,7 +95,7 @@ func main() {
 		}
 	}
 
-	proof, keyID, err := solveMintingPoW(*serverName, pub, profile, uint32(*maxNonce), uint32(*startMintingNonce), uint32(*maxMintingNonce))
+	proof, keyID, err := solveMintingPoW(*serverName, pub, profile, uint32(*maxNonce), *startMintingNonce, *maxMintingNonce)
 	if err != nil {
 		fatal(err)
 	}
@@ -238,11 +244,14 @@ func validateServerKeyProfile(profile powProfile) error {
 	return nil
 }
 
-func solveMintingPoW(serverName string, publicKey []byte, profile powProfile, maxNonce, startMintingNonce, maxMintingNonce uint32) (serverkey.FNDSAMintingProof, string, error) {
+func solveMintingPoW(serverName string, publicKey []byte, profile powProfile, maxNonce uint32, startMintingNonce, maxMintingNonce uint64) (serverkey.FNDSAMintingProof, string, error) {
 	useMeanMiner := profile.Config.EdgeBits == 29 && profile.Config.ProofSize == 42 && meanminer.Available()
 
 	for nonce := startMintingNonce; nonce < maxMintingNonce; nonce++ {
-		seed, err := serverkey.GraphSeed(publicKey, serverName, profile.Algorithm, nonce)
+		if nonce > maxProtocolMintingNonce {
+			return serverkey.FNDSAMintingProof{}, "", fmt.Errorf("graph nonce %d exceeds uint32 limit", nonce)
+		}
+		seed, err := serverkey.GraphSeed(publicKey, serverName, profile.Algorithm, uint32(nonce))
 		if err != nil {
 			return serverkey.FNDSAMintingProof{}, "", err
 		}
@@ -278,7 +287,7 @@ func solveMintingPoW(serverName string, publicKey []byte, profile powProfile, ma
 
 		mintingProof := serverkey.FNDSAMintingProof{
 			Algorithm: profile.Algorithm,
-			Nonce:     nonce,
+			Nonce:     uint32(nonce),
 			Solution:  proof,
 		}
 		keyID, err := serverkey.KeyIDBase64(publicKey, serverName, mintingProof)

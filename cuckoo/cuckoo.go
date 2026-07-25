@@ -38,8 +38,12 @@ func (c Config) normalize() (Config, error) {
 	return c, nil
 }
 
-func (c Config) edgeMask() uint64 {
+func (c Config) EdgeMask() uint64 {
 	return (uint64(1) << c.EdgeBits) - 1
+}
+
+func (c Config) edgeMask() uint64 {
+	return c.EdgeMask()
 }
 
 func (c Config) nodeMask() uint64 {

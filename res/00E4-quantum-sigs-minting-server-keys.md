@@ -692,14 +692,14 @@ server-key validation and MUST NOT change acceptance semantics.
           "server_certificate_verify_signature": "<unpadded-base64url-signature>"
         }
       },
-      "key_id": "fndsa512:9f3c1ade47b0c2915e6d8a3f10bb47d2",
+      "key_id": "fndsa512:TijfPlCUWjteG2SVsIeBSA",
       "server_key_package_sha256": "<unpadded-base64url-sha256>",
       "provenance_bundle_sha256": "<unpadded-base64url-sha256>",
       "valid_until_ts": 1798848000000,
       "signatures": {
         "notary.example": {
           "ed25519:auto": "<base64-ed25519-signature>",
-          "fndsa512:9f3c1ade47b0c2915e6d8a3f10bb47d2": "<base64-fn-dsa-signature>"
+          "fndsa512:TijfPlCUWjteG2SVsIeBSA": "<base64-fn-dsa-signature>"
         }
       }
     }
@@ -924,15 +924,15 @@ therefore an attestation by default, with an optional embedded-proof upgrade:
       "record_version": 1,
       "observed_server_name": "example.com",
       "algorithm": "fndsa512",
-      "short_key_id": "9f3c1ade47b0c2915e6d8a3f10bb47d2",
+      "short_key_id": "TijfPlCUWjteG2SVsIeBSA",
       "first": {
-        "key_id": "fndsa512:9f3c1ade47b0c2915e6d8a3f10bb47d2",
+        "key_id": "fndsa512:TijfPlCUWjteG2SVsIeBSA",
         "server_key_package_sha256": "<unpadded-base64url-sha256>",
         "first_observed_ts": 1798848000000,
         "observed_via": "direct"
       },
       "conflicting": {
-        "key_id": "fndsa512:1a4b6c8d9e0f112233445566778899aa",
+        "key_id": "fndsa512:Gg_1a4b6c8d9e0f1122334",
         "server_key_package_sha256": "<unpadded-base64url-sha256>",
         "first_observed_ts": 1798848600000,
         "observed_via": "notary"
@@ -945,7 +945,7 @@ therefore an attestation by default, with an optional embedded-proof upgrade:
       "signatures": {
         "notary.example": {
           "ed25519:auto": "<base64-ed25519-signature>",
-          "fndsa512:9f3c1ade47b0c2915e6d8a3f10bb47d2": "<base64-fn-dsa-signature>"
+          "fndsa512:TijfPlCUWjteG2SVsIeBSA": "<base64-fn-dsa-signature>"
         }
       }
     }
