@@ -34,7 +34,7 @@ The normative shape is:
       "key": "<unpadded-base64-fn-dsa-512-public-key>",
       "profile": "tk.nutra.msc45xx.serverkey.v1",
       "pow": {
-        "nonce": 84,
+        "nonce": 110,
         "solution": [15721871, 27250623, "...", 517987691]
       }
     }
@@ -386,7 +386,7 @@ candidates.
     "key": "<unpadded-base64-fn-dsa-512-pubkey>",
     "pow": {
       "algorithm": "tk.nutra.msc45xx.pow.cuckatoo-42-29-sha3-256-cogen",
-      "nonce": 8137226,
+      "nonce": 110,
       "solution": [123, 456, 789, "..."]
     }
   }
@@ -449,7 +449,7 @@ The proof response is:
 ```json
 {
   "algorithm": "tk.nutra.msc45xx.pow.cuckatoo-42-29-sha3-256-cogen",
-  "nonce": 8137226,
+  "nonce": 110,
   "solution": [123, 456, 789, "..."]
 }
 ```
