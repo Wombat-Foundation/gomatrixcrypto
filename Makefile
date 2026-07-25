@@ -70,7 +70,7 @@ meanminer: ## Build the reference Cuckoo mean-miner
 .PHONY: production-serverkey-response
 production-serverkey-response: meanminer ## Print response (SERVER, NONCE, MINTING_MAX_NONCE configurable)
 	@printf 'build: %s\n' '$(GIT_DESCRIBE)'
-	$(GO) run ./cmd/serverkey-demo -server $(SERVER) -valid-days $(SERVERKEY_VALID_DAYS) -pow-profile production -pow-start-graph-nonce $(NONCE) -pow-max-graph-nonce $(MINTING_MAX_NONCE)
+	$(GO) run ./cmd/serverkey-demo -server $(SERVER) -valid-days $(SERVERKEY_VALID_DAYS) -pow-profile production -pow-start-graph-nonce $(NONCE) -pow-max-graph-nonce $(MINTING_MAX_NONCE) -keygen-seed msc00e4-sha3-256-key-minting-vector-keygen-v1
 
 .PHONY: production-minting-vector
 production-minting-vector: meanminer ## Regenerate vector (SERVER, NONCE, MINTING_MAX_NONCE configurable)

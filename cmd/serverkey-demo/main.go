@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"slices"
 	"strings"
@@ -15,7 +16,23 @@ import (
 	"github.com/Wombat-Foundation/gomatrixcrypto/cuckoo/meanminer"
 	"github.com/Wombat-Foundation/gomatrixcrypto/fndsa512"
 	"github.com/Wombat-Foundation/gomatrixcrypto/serverkey"
+
+	"golang.org/x/crypto/sha3"
 )
+
+type shakeReader struct {
+	hash sha3.ShakeHash
+}
+
+func (r *shakeReader) Read(p []byte) (int, error) {
+	return r.hash.Read(p)
+}
+
+func deterministicReader(seed string) io.Reader {
+	hash := sha3.NewShake256()
+	_, _ = hash.Write([]byte(seed))
+	return &shakeReader{hash: hash}
+}
 
 const demoPoWProfileNote = "demo-only low-difficulty Cuckoo profile; not valid for production key minting"
 
@@ -41,6 +58,7 @@ func main() {
 	maxMintingNonce := flag.Uint64("pow-max-graph-nonce", 256, "exclusive graph-nonce limit")
 	privateKeyPassphraseEnv := flag.String("private-key-passphrase-env", "", "environment variable containing a passphrase for encrypted private-key output")
 	privateKeyPassphraseFile := flag.String("private-key-passphrase-file", "", "file containing a passphrase for encrypted private-key output")
+	keygenSeed := flag.String("keygen-seed", "", "ASCII seed for deterministic key generation; empty uses crypto/rand")
 	flag.Parse()
 	if uint64(*maxNonce) > maxProtocolMintingNonce {
 		fatal(fmt.Errorf("pow-max-nonce %d exceeds the uint32 edge-nonce limit", *maxNonce))
@@ -62,7 +80,11 @@ func main() {
 		fatal(err)
 	}
 
-	priv, pub, err := fndsa512.GenerateKey(nil)
+	var rng io.Reader
+	if *keygenSeed != "" {
+		rng = deterministicReader(*keygenSeed)
+	}
+	priv, pub, err := fndsa512.GenerateKey(rng)
 	if err != nil {
 		fatal(err)
 	}

@@ -167,8 +167,8 @@ base64 encoding expands a 666-byte signature to 888 base64 characters without
 padding.
 
 **Public key encoding.** The public key is the raw FN-DSA-512 public key byte
-string as defined by FIPS 206. It is encoded as unpadded standard base64 using the
-standard RFC 4648 §4 alphabet.
+string as defined by FIPS 206. It is encoded as unpadded standard base64 using
+the standard RFC 4648 §4 alphabet.
 
 **Signature encoding.** The signature is the raw FN-DSA-512 signature byte
 string as defined by FIPS 206. Unlike the original Falcon submission, which used
