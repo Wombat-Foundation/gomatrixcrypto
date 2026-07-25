@@ -20,18 +20,10 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
-type shakeReader struct {
-	hash sha3.ShakeHash
-}
-
-func (r *shakeReader) Read(p []byte) (int, error) {
-	return r.hash.Read(p)
-}
-
 func deterministicReader(seed string) io.Reader {
 	hash := sha3.NewShake256()
 	_, _ = hash.Write([]byte(seed))
-	return &shakeReader{hash: hash}
+	return hash
 }
 
 const demoPoWProfileNote = "demo-only low-difficulty Cuckoo profile; not valid for production key minting"

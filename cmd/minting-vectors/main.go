@@ -24,18 +24,10 @@ const (
 	maxProtocolMintingNonce = uint64(1<<32 - 1)
 )
 
-type shakeReader struct {
-	hash sha3.ShakeHash
-}
-
-func (r *shakeReader) Read(p []byte) (int, error) {
-	return r.hash.Read(p)
-}
-
 func deterministicReader(seed string) io.Reader {
 	hash := sha3.NewShake256()
 	_, _ = hash.Write([]byte(seed))
-	return &shakeReader{hash: hash}
+	return hash
 }
 
 type vectorEdge struct {

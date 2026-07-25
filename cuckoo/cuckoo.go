@@ -108,13 +108,13 @@ func GraphSeed(challenge []byte, nonce uint64) [sha256.Size]byte {
 	return sha256.Sum256(buf)
 }
 
-// EdgeForNonce deterministically maps a nonce to a cuckoo edge.
-func EdgeForNonce(cfg Config, seed []byte, nonce uint32) (Edge, error) {
+// EdgeForNonce deterministically maps an edge index to a cuckoo edge.
+func EdgeForNonce(cfg Config, seed []byte, edgeIdx uint32) (Edge, error) {
 	cfg, err := cfg.normalize()
 	if err != nil {
 		return Edge{}, err
 	}
-	if uint64(nonce) > cfg.edgeMask() {
+	if uint64(edgeIdx) > cfg.edgeMask() {
 		return Edge{}, ErrInvalidProof
 	}
 	words, err := seedWords(seed)
@@ -122,8 +122,8 @@ func EdgeForNonce(cfg Config, seed []byte, nonce uint32) (Edge, error) {
 		return Edge{}, err
 	}
 	mask := cfg.nodeMask()
-	u := siphash24(words, uint64(nonce)<<1) & mask
-	v := siphash24(words, (uint64(nonce)<<1)|1) & mask
+	u := siphash24(words, uint64(edgeIdx)<<1) & mask
+	v := siphash24(words, (uint64(edgeIdx)<<1)|1) & mask
 	return Edge{U: u, V: v}, nil
 }
 
