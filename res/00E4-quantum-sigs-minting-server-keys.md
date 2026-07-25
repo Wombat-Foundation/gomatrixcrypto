@@ -187,7 +187,11 @@ consistent with existing Matrix signing conventions. FN-DSA is invoked in pure
 (non-prehash) mode with an empty context string. Implementations MUST reject
 non-canonical public key and signature encodings.
 
-For general or un-profiled FN-DSA key objects, metadata like `fips_206_revision` or `claims` MAY be present. However, under the production profile `tk.nutra.msc45xx.serverkey.v1`, `claims`, `fips_206_revision`, and `pow.algorithm` MUST NOT be present in the wire key object, as all algorithm and implementation parameters are strictly fixed by the profile token.
+For general or un-profiled FN-DSA key objects, metadata like `fips_206_revision`
+or `claims` MAY be present. However, under the production profile
+`tk.nutra.msc45xx.serverkey.v1`, `claims`, `fips_206_revision`, and
+`pow.algorithm` MUST NOT be present in the wire key object, as all algorithm and
+implementation parameters are strictly fixed by the profile token.
 
 Servers MUST rotate an FN-DSA server key if a later FIPS 206 draft or final
 standard changes the public key encoding, signature encoding, or signing
