@@ -40,6 +40,7 @@ type powProfile struct {
 func main() {
 	serverName := flag.String("server", "example.com", "Matrix server_name to bind into the self-signed key object")
 	validDays := flag.Int("valid-days", 7, "validity window in days")
+	validUntilTS := flag.Int64("valid-until-ts", 0, "explicit valid_until_ts in milliseconds; 0 derives from valid-days and current time")
 	profileName := flag.String("pow-profile", "demo", "PoW profile: demo, production, or custom")
 	edgeBits := flag.Uint("pow-edge-bits", 8, "Cuckoo edge bits; ignored by -pow-profile production")
 	proofSize := flag.Int("pow-proof-size", 4, "Cuckoo proof size; ignored by -pow-profile production")
@@ -82,7 +83,7 @@ func main() {
 	}
 	var encryptedPrivateKey map[string]any
 	if len(passphrase) > 0 {
-		encryptedPrivateKey, err = serverkey.EncryptPrivateKey(nil, priv, passphrase, serverkey.DefaultPrivateKeyEncryptionParams())
+		encryptedPrivateKey, err = serverkey.EncryptPrivateKey(rng, priv, passphrase, serverkey.DefaultPrivateKeyEncryptionParams())
 		if err != nil {
 			fatal(err)
 		}
@@ -93,13 +94,18 @@ func main() {
 		fatal(err)
 	}
 
-	validUntil := time.Now().Add(time.Duration(*validDays) * 24 * time.Hour).UnixMilli()
+	var validUntil int64
+	if *validUntilTS > 0 {
+		validUntil = *validUntilTS
+	} else {
+		validUntil = time.Now().Add(time.Duration(*validDays) * 24 * time.Hour).UnixMilli()
+	}
 	metadata := serverkey.FNDSAMetadata{
 		FIPS206Revision: serverkey.DefaultFIPSRevision,
 		Claims:          []string{"constant-time-keygen", "constant-time-signing"},
 	}
 
-	obj, keyName, err := serverkey.NewSignedFNDSA(nil, *serverName, priv, pub, validUntil, metadata, proof)
+	obj, keyName, err := serverkey.NewSignedFNDSA(rng, *serverName, priv, pub, validUntil, metadata, proof)
 	if err != nil {
 		fatal(err)
 	}
