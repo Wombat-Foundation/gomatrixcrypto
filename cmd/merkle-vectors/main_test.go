@@ -20,7 +20,7 @@ func TestRunOutputsStableVectors(t *testing.T) {
 	})
 	os.Stdout = w
 
-	runErr := run()
+	runErr := run("")
 	closeErr := w.Close()
 	os.Stdout = stdout
 	if runErr != nil {

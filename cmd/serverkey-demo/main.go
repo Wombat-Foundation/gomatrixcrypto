@@ -100,9 +100,12 @@ func main() {
 	} else {
 		validUntil = time.Now().Add(time.Duration(*validDays) * 24 * time.Hour).UnixMilli()
 	}
-	metadata := serverkey.FNDSAMetadata{
-		FIPS206Revision: serverkey.DefaultFIPSRevision,
-		Claims:          []string{"constant-time-keygen", "constant-time-signing"},
+	var metadata serverkey.FNDSAMetadata
+	if profile.Algorithm != serverkey.ProductionProfile {
+		metadata = serverkey.FNDSAMetadata{
+			FIPS206Revision: serverkey.DefaultFIPSRevision,
+			Claims:          []string{"constant-time-keygen", "constant-time-signing"},
+		}
 	}
 
 	obj, keyName, err := serverkey.NewSignedFNDSA(rng, *serverName, priv, pub, validUntil, metadata, proof)
