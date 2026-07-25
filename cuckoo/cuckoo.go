@@ -1,4 +1,4 @@
-// Package cuckoo implements Cuckoo Cycle proof derivation and verification.
+// Package cuckoo implements Cuckatoo Cycle proof derivation and verification.
 package cuckoo
 
 import (
@@ -113,6 +113,9 @@ func EdgeForNonce(cfg Config, seed []byte, nonce uint32) (Edge, error) {
 	cfg, err := cfg.normalize()
 	if err != nil {
 		return Edge{}, err
+	}
+	if uint64(nonce) > cfg.edgeMask() {
+		return Edge{}, ErrInvalidProof
 	}
 	words, err := seedWords(seed)
 	if err != nil {

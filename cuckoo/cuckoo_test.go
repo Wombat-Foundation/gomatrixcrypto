@@ -37,6 +37,15 @@ func TestEdgeForNonceDeterministic(t *testing.T) {
 	}
 }
 
+func TestEdgeForNonceRejectsOutOfRangeNonce(t *testing.T) {
+	cfg := Config{EdgeBits: 10}
+	seed := GraphSeed([]byte("matrix-cuckoo-seed"), 7)
+	// Nonce 1024 is 2^10, which exceeds maximum edge index 2^10-1
+	if _, err := EdgeForNonce(cfg, seed[:], 1024); !errors.Is(err, ErrInvalidProof) {
+		t.Fatalf("EdgeForNonce out of range error = %v, want ErrInvalidProof", err)
+	}
+}
+
 func TestFindProofAndVerify(t *testing.T) {
 	cfg := Config{EdgeBits: 12, ProofSize: 4}
 	seed := testSeed()

@@ -54,8 +54,10 @@ profile or committed by the key ID preimage; therefore one key name identifies
 one key entry.
 
 The key name uses unpadded base64url encoding and the fixed algorithm token
-`fndsa512`. Its 22-character suffix is the unpadded base64url encoding of the
-first 128 bits (16 bytes) of the recomputed SHA3-256 key ID.
+`fndsa512`. The short ID is the unpadded RFC 4648 §5 URL-safe base64 encoding of
+the first 16 bytes (128 bits) of the recomputed SHA3-256 key ID. Key names are
+compared by exact string equality and MUST NOT be base64-decoded during
+verification.
 
 ### Bound preimages
 
