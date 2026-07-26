@@ -27,9 +27,12 @@ type Hash [WordCount]uint16
 
 // Entry identifies one state element in the lattice.
 type Entry struct {
+	// EventType is the Matrix event type.
 	EventType string
-	StateKey  string
-	EventID   string
+	// StateKey is the Matrix state key.
+	StateKey string
+	// EventID is the event identifier included in the accumulator.
+	EventID string
 }
 
 // truncateToU16Limit truncates string s to fit within a uint16 length.

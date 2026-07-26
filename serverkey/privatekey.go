@@ -31,11 +31,16 @@ var ErrWeakPassphrase = errors.New("private key passphrase too short")
 
 // PrivateKeyEncryptionParams configures private-key encryption and re-wrapping.
 type PrivateKeyEncryptionParams struct {
-	Time      uint32
+	// Time is the Argon2id time cost parameter.
+	Time uint32
+	// MemoryKiB is the Argon2id memory cost parameter in kibibytes.
 	MemoryKiB uint32
-	Threads   uint8
-	Salt      []byte
-	Nonce     []byte
+	// Threads is the Argon2id parallelism parameter.
+	Threads uint8
+	// Salt is the raw KDF salt.
+	Salt []byte
+	// Nonce is the raw XChaCha20-Poly1305 nonce.
+	Nonce []byte
 }
 
 // DefaultPrivateKeyEncryptionParams returns the package's recommended KDF settings.

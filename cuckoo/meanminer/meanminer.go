@@ -2,6 +2,7 @@
 // reference "mean" (bucket-sort) Cuckatoo Cycle solver — see solve_main.cpp
 // and external/cuckoo (vendored submodule) — for the one profile where a
 // pure-Go solver is too slow to be practical: EdgeBits=29, ProofSize=42
+// matching the current production server-key profile
 // (tk.nutra.msc45xx.serverkey.v1).
 //
 // The binary is built separately (run `make` in this directory) rather

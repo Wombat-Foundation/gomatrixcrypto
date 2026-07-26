@@ -13,16 +13,26 @@ import (
 	"github.com/Wombat-Foundation/gomatrixcrypto/merkle"
 )
 
+// MerkleVectors is the JSON fixture emitted by the merkle-vectors command.
 type MerkleVectors struct {
-	Schema                   string `json:"schema"`
-	FieldRootHex             string `json:"field_root_hex"`
-	EventHeaderRootHex       string `json:"event_header_root_hex"`
-	PrevEventsHashHex        string `json:"prev_events_hash_hex"`
-	AuthEventsHashHex        string `json:"auth_events_hash_hex"`
-	ContentHashHex           string `json:"content_hash_hex"`
+	// Schema identifies the vector schema version.
+	Schema string `json:"schema"`
+	// FieldRootHex is the hex-encoded Merkle root of the sample field set.
+	FieldRootHex string `json:"field_root_hex"`
+	// EventHeaderRootHex is the hex-encoded event_header_root.
+	EventHeaderRootHex string `json:"event_header_root_hex"`
+	// PrevEventsHashHex is the hex-encoded prev_events component hash.
+	PrevEventsHashHex string `json:"prev_events_hash_hex"`
+	// AuthEventsHashHex is the hex-encoded auth_events component hash.
+	AuthEventsHashHex string `json:"auth_events_hash_hex"`
+	// ContentHashHex is the hex-encoded content component hash.
+	ContentHashHex string `json:"content_hash_hex"`
+	// OtherSignedFieldsHashHex is the hex-encoded other_signed_fields hash.
 	OtherSignedFieldsHashHex string `json:"other_signed_fields_hash_hex"`
-	EventRootHex             string `json:"event_root_hex"`
-	EventID                  string `json:"event_id"`
+	// EventRootHex is the hex-encoded top-level event root.
+	EventRootHex string `json:"event_root_hex"`
+	// EventID is the Matrix event ID derived from EventRootHex.
+	EventID string `json:"event_id"`
 }
 
 // main is the entry point for the merkle-vectors generator.

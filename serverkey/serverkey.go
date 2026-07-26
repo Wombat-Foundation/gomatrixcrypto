@@ -54,8 +54,10 @@ type profile struct {
 // FNDSAMetadata is retained for source compatibility. Profile metadata is
 // authoritative; callers must not rely on these self-asserted fields.
 type FNDSAMetadata struct {
+	// FIPS206Revision records the FN-DSA revision string carried in metadata.
 	FIPS206Revision string
-	Claims          []string
+	// Claims lists any non-protocol implementation claims for the key.
+	Claims []string
 }
 
 var (
@@ -122,9 +124,12 @@ func IsRegisteredProfile(profileName string) bool {
 
 // FNDSAMintingProof records the proof data bound to a profile-selected graph.
 type FNDSAMintingProof struct {
+	// Algorithm is the registered proof profile name.
 	Algorithm string
-	Nonce     uint32
-	Solution  []uint32
+	// Nonce is the graph nonce committed into the proof seed.
+	Nonce uint32
+	// Solution lists the sorted edge nonces that form the proof cycle.
+	Solution []uint32
 }
 
 // NewSignedFNDSA builds a Matrix server-key object with one FN-DSA verify key

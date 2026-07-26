@@ -41,7 +41,9 @@ type Hash [HashSize]byte
 //
 // Value is encoded with Matrix Canonical JSON before hashing.
 type Field struct {
-	Name  string
+	// Name is the canonical field name committed into the leaf hash.
+	Name string
+	// Value is the field payload encoded with Matrix Canonical JSON.
 	Value any
 }
 
@@ -58,14 +60,22 @@ type leaf struct {
 // and verify the sending server's identity without disclosing the sender's
 // localpart.
 type Header struct {
-	RoomID          string
+	// RoomID is the Matrix room ID.
+	RoomID string
+	// SenderLocalpart is the localpart of the sender's Matrix ID.
 	SenderLocalpart string
-	SenderDomain    string
-	Type            string
-	StateKey        *string
-	Redacts         *string
-	Depth           int64
-	OriginServerTS  int64
+	// SenderDomain is the sender's homeserver domain.
+	SenderDomain string
+	// Type is the Matrix event type.
+	Type string
+	// StateKey is the optional Matrix state key.
+	StateKey *string
+	// Redacts is the optional redacted event ID.
+	Redacts *string
+	// Depth is the Matrix event depth.
+	Depth int64
+	// OriginServerTS is the origin server timestamp in milliseconds.
+	OriginServerTS int64
 }
 
 // leafHash computes SHA3-256("msc4511:leaf:v1" || field_name || "\x00" ||

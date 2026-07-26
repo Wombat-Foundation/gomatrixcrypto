@@ -8,8 +8,8 @@
 //
 // EDGEBITS/PROOFSIZE/NSIPHASH are compile-time constants in the vendored
 // C++ (see cuckoo.h), fixed via -D flags at build time to the one profile
-// this is for: EdgeBits=29, ProofSize=42
-// (tk.nutra.msc45xx.serverkey.v1).
+// this is for: EdgeBits=29, ProofSize=42, matching the current production
+// server-key profile (tk.nutra.msc45xx.serverkey.v1).
 //
 // We bypass the reference code's own key derivation (setheadernonce,
 // which hashes a header with blake2b) entirely: our graph_seed is

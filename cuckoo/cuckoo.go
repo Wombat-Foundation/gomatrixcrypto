@@ -25,7 +25,9 @@ var (
 
 // Config defines the cycle graph dimensions.
 type Config struct {
-	EdgeBits  uint
+	// EdgeBits is the number of bits in each graph node index.
+	EdgeBits uint
+	// ProofSize is the expected number of edges in a valid proof.
 	ProofSize int
 }
 
@@ -66,7 +68,9 @@ func (c Config) nodeMask() uint64 {
 
 // Edge identifies one graph edge by its U and V endpoints.
 type Edge struct {
+	// U is the U-side endpoint of the edge.
 	U uint64
+	// V is the V-side endpoint of the edge.
 	V uint64
 }
 
