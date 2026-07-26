@@ -20,6 +20,18 @@ func testSeed() []byte {
 	panic("no deterministic reduced-work test seed")
 }
 
+func TestConfigValidate(t *testing.T) {
+	if err := (Config{EdgeBits: 8, ProofSize: 4}).Validate(); err != nil {
+		t.Fatalf("valid config rejected: %v", err)
+	}
+	if err := (Config{EdgeBits: 1, ProofSize: 4}).Validate(); !errors.Is(err, ErrInvalidEdgeBits) {
+		t.Fatalf("expected ErrInvalidEdgeBits, got %v", err)
+	}
+	if err := (Config{EdgeBits: 8, ProofSize: 1}).Validate(); !errors.Is(err, ErrInvalidProof) {
+		t.Fatalf("expected ErrInvalidProof, got %v", err)
+	}
+}
+
 func TestEdgeForNonceDeterministic(t *testing.T) {
 	cfg := Config{EdgeBits: 10}
 	seed := GraphSeed([]byte("matrix-cuckoo-seed"), 7)

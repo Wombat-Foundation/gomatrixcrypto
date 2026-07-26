@@ -303,6 +303,9 @@ func TestRegisterProfile(t *testing.T) {
 	if err := RegisterProfile("", cuckoo.Config{EdgeBits: 8, ProofSize: 4}, 16); err == nil {
 		t.Fatal("expected empty profile name rejection")
 	}
+	if err := RegisterProfile("test.invalid.cuckoo", cuckoo.Config{EdgeBits: 1, ProofSize: 4}, 16); err == nil {
+		t.Fatal("expected invalid Cuckoo config rejection")
+	}
 
 	const customName = "test.custom.register"
 	if err := RegisterProfile(customName, cuckoo.Config{EdgeBits: 8, ProofSize: 4}, 16); err != nil {

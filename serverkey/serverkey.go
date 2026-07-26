@@ -76,6 +76,9 @@ func RegisterProfile(name string, cfg cuckoo.Config, shortBytes int) error {
 	if shortBytes < 1 || shortBytes > 32 {
 		return fmt.Errorf("%w: shortBytes %d out of range [1, 32]", ErrInvalidProfile, shortBytes)
 	}
+	if err := cfg.Validate(); err != nil {
+		return fmt.Errorf("%w: %v", ErrInvalidProfile, err)
+	}
 	profilesMu.Lock()
 	defer profilesMu.Unlock()
 	profiles[name] = profile{

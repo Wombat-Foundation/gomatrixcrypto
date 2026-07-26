@@ -25,6 +25,12 @@ type Config struct {
 	ProofSize int
 }
 
+// Validate checks whether the configuration graph dimensions are valid.
+func (c Config) Validate() error {
+	_, err := c.normalize()
+	return err
+}
+
 func (c Config) normalize() (Config, error) {
 	if c.EdgeBits < 2 || c.EdgeBits > 31 {
 		return Config{}, ErrInvalidEdgeBits
