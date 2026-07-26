@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -50,5 +51,16 @@ event_id = $TMyIBSf-X5fSegQQW7VebG512Hko5Ups0pc8IkgCzpE
 `
 	if got := buf.String(); got != want {
 		t.Fatalf("vector output mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestRunWritesOutputFile(t *testing.T) {
+	tempDir := t.TempDir()
+	outPath := filepath.Join(tempDir, "sub", "vectors.json")
+	if err := run(outPath); err != nil {
+		t.Fatalf("run failed: %v", err)
+	}
+	if _, err := os.Stat(outPath); err != nil {
+		t.Fatalf("output file not created: %v", err)
 	}
 }
