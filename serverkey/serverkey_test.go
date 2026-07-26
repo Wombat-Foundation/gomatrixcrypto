@@ -29,6 +29,8 @@ var registerTestSignatureProfile sync.Once
 
 func ensureTestSignatureProfile() {
 	registerTestSignatureProfile.Do(func() {
+		profilesMu.Lock()
+		defer profilesMu.Unlock()
 		profiles[testSignatureProfile] = profile{
 			config:     cuckoo.Config{EdgeBits: 8, ProofSize: 4},
 			graphTag:   testSignatureProfile + ".graph",
