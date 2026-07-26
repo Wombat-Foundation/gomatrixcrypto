@@ -71,7 +71,7 @@ meanminer: ## Build the reference Cuckoo mean-miner
 .PHONY: production-serverkey-response
 production-serverkey-response: meanminer ## Print response (SERVER, NONCE, MINTING_MAX_NONCE configurable)
 	@printf 'build: %s\n' '$(GIT_DESCRIBE)'
-	$(GO) run ./cmd/serverkey-demo -server $(SERVER) -pow-profile production -pow-start-graph-nonce $(NONCE) -pow-max-graph-nonce $(MINTING_MAX_NONCE) -valid-until-ts $(SERVERKEY_VALID_UNTIL_TS)
+	$(GO) run ./cmd/serverkey-demo -server $(SERVER) -pow-profile production -pow-start-graph-nonce $(NONCE) -pow-max-graph-nonce $(MINTING_MAX_NONCE) -valid-until-ts $(SERVERKEY_VALID_UNTIL_TS) -valid-days $(SERVERKEY_VALID_DAYS)
 
 .PHONY: production-minting-vector
 production-minting-vector: meanminer ## Regenerate vector (SERVER, NONCE, MINTING_MAX_NONCE configurable)

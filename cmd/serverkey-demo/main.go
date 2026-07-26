@@ -91,7 +91,7 @@ func main() {
 	}
 	var encryptedPrivateKey map[string]any
 	if len(passphrase) > 0 {
-		encryptedPrivateKey, err = serverkey.EncryptPrivateKey(rng, priv, passphrase, serverkey.DefaultPrivateKeyEncryptionParams())
+		encryptedPrivateKey, err = serverkey.EncryptPrivateKey(nil, priv, passphrase, serverkey.DefaultPrivateKeyEncryptionParams())
 		if err != nil {
 			fatal(err)
 		}
