@@ -81,12 +81,19 @@ func RegisterProfile(name string, cfg cuckoo.Config, shortBytes int) error {
 	}
 	profilesMu.Lock()
 	defer profilesMu.Unlock()
-	profiles[name] = profile{
+	newProfile := profile{
 		config:     cfg,
 		graphTag:   name + ".graph",
 		keyIDTag:   name + ".keyid",
 		shortBytes: shortBytes,
 	}
+	if existing, exists := profiles[name]; exists {
+		if existing == newProfile {
+			return nil
+		}
+		return fmt.Errorf("%w: profile %q already registered", ErrInvalidProfile, name)
+	}
+	profiles[name] = newProfile
 	return nil
 }
 
