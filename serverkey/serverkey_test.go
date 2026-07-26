@@ -322,6 +322,18 @@ func TestRegisterProfile(t *testing.T) {
 	if !ok || p.graphTag != customName+".graph" || p.keyIDTag != customName+".keyid" {
 		t.Fatalf("unexpected custom profile registration: %#v", p)
 	}
+
+	// Test idempotent re-registration with identical config
+	if err := RegisterProfile(customName, cuckoo.Config{EdgeBits: 8, ProofSize: 4}, 16); err != nil {
+		t.Fatalf("expected re-registering identical custom profile to succeed, got: %v", err)
+	}
+
+	// Test conflicting re-registration with different config
+	if err := RegisterProfile(customName, cuckoo.Config{EdgeBits: 10, ProofSize: 4}, 16); err == nil {
+		t.Fatal("expected conflicting custom profile registration to fail")
+	} else if !errors.Is(err, ErrInvalidProfile) {
+		t.Fatalf("expected ErrInvalidProfile, got: %v", err)
+	}
 }
 
 func TestIsRegisteredProfile(t *testing.T) {
