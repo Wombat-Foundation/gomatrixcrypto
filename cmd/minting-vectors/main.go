@@ -79,7 +79,7 @@ func generate(serverName string, startNonce, maxNonce uint64, threads int) (vect
 	if err != nil {
 		return vector{}, err
 	}
-	cfg := cuckoo.Config{EdgeBits: 29, ProofSize: 42}
+	cfg := serverkey.ProductionConfig()
 	for nonce := startNonce; nonce < maxNonce; nonce++ {
 		fmt.Fprintf(os.Stderr, "mining nonce %d\n", nonce)
 		seed, err := serverkey.GraphSeed(publicKey, serverName, serverkey.ProductionProfile, uint32(nonce))

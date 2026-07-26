@@ -219,7 +219,7 @@ func configurePoWProfile(name string, edgeBits uint, proofSize int, algorithm st
 	case "production":
 		prof = powProfile{
 			Algorithm: serverkey.ProductionPoW,
-			Config:    cuckoo.Config{EdgeBits: 29, ProofSize: 42},
+			Config:    serverkey.ProductionConfig(),
 			Demo:      false,
 		}
 	case "custom":
@@ -241,7 +241,7 @@ func configurePoWProfile(name string, edgeBits uint, proofSize int, algorithm st
 		return powProfile{}, fmt.Errorf("unknown -pow-profile %q", name)
 	}
 
-	if prof.Algorithm != serverkey.ProductionProfile {
+	if prof.Algorithm != serverkey.ProductionProfile && !serverkey.IsRegisteredProfile(prof.Algorithm) {
 		if err := serverkey.RegisterProfile(prof.Algorithm, prof.Config, 16); err != nil {
 			return powProfile{}, err
 		}
@@ -318,7 +318,7 @@ func solveMintingPoW(serverName string, publicKey []byte, profile powProfile, ma
 	return serverkey.FNDSAMintingProof{}, "", cuckoo.ErrNoSolution
 }
 
-// serverKeyPackageSHA256 computes the hex SHA-256 hash of canonical JSON.
+// serverKeyPackageSHA256 computes the base64url-encoded SHA-256 hash of canonical JSON.
 func serverKeyPackageSHA256(obj map[string]any) (string, error) {
 	signingBytes, err := serverkey.SigningBytes(obj)
 	if err != nil {

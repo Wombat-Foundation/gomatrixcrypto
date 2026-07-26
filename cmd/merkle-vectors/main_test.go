@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"os"
 	"path/filepath"
@@ -23,20 +24,16 @@ func TestRunOutputsStableVectors(t *testing.T) {
 
 	runErr := run("")
 	closeErr := w.Close()
-	os.Stdout = stdout
 	if runErr != nil {
-		t.Fatal(runErr)
+		t.Fatalf("run failed: %v", runErr)
 	}
 	if closeErr != nil {
-		t.Fatal(closeErr)
+		t.Fatalf("stdout close failed: %v", closeErr)
 	}
 
 	var buf bytes.Buffer
 	if _, err := io.Copy(&buf, r); err != nil {
-		t.Fatal(err)
-	}
-	if err := r.Close(); err != nil {
-		t.Fatal(err)
+		t.Fatalf("stdout read failed: %v", err)
 	}
 
 	const want = `[msc4511-merkle]
@@ -60,7 +57,15 @@ func TestRunWritesOutputFile(t *testing.T) {
 	if err := run(outPath); err != nil {
 		t.Fatalf("run failed: %v", err)
 	}
-	if _, err := os.Stat(outPath); err != nil {
+	data, err := os.ReadFile(outPath)
+	if err != nil {
 		t.Fatalf("output file not created: %v", err)
+	}
+	var vecs MerkleVectors
+	if err := json.Unmarshal(data, &vecs); err != nil {
+		t.Fatalf("failed to unmarshal output file: %v", err)
+	}
+	if vecs.Schema != "msc4511-merkle-vectors-v1" {
+		t.Fatalf("unexpected schema in output file: got %q want %q", vecs.Schema, "msc4511-merkle-vectors-v1")
 	}
 }

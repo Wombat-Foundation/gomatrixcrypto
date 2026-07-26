@@ -170,7 +170,7 @@ func privateKeyAEAD(passphrase []byte, params PrivateKeyEncryptionParams) (ciphe
 
 var privateKeyAEADFn = privateKeyAEAD
 
-// privateKeyEncryptionParamsFromObject extracts KDF parameters from JSON.
+// privateKeyEncryptionParamsFromObject extracts KDF and AEAD encryption parameters from JSON.
 func privateKeyEncryptionParamsFromObject(encrypted map[string]any) (PrivateKeyEncryptionParams, error) {
 	rawKDF, ok := encrypted["kdf"].(map[string]any)
 	if !ok {

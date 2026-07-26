@@ -29,13 +29,8 @@ var registerTestSignatureProfile sync.Once
 
 func ensureTestSignatureProfile() {
 	registerTestSignatureProfile.Do(func() {
-		profilesMu.Lock()
-		defer profilesMu.Unlock()
-		profiles[testSignatureProfile] = profile{
-			config:     cuckoo.Config{EdgeBits: 8, ProofSize: 4},
-			graphTag:   testSignatureProfile + ".graph",
-			keyIDTag:   testSignatureProfile + ".keyid",
-			shortBytes: 16,
+		if err := RegisterProfile(testSignatureProfile, cuckoo.Config{EdgeBits: 8, ProofSize: 4}, 16); err != nil {
+			panic(err)
 		}
 	})
 }
@@ -92,7 +87,11 @@ func testRegisteredMintingProof(t *testing.T, serverName string, pub []byte) (st
 		if err != nil {
 			t.Fatal(err)
 		}
-		proof, err := cuckoo.FindProof(profiles[profileName].config, seed[:], 1<<12)
+		p, ok := getProfile(profileName)
+		if !ok {
+			t.Fatalf("profile %q not found", profileName)
+		}
+		proof, err := cuckoo.FindProof(p.config, seed[:], 1<<12)
 		if errors.Is(err, cuckoo.ErrNoSolution) {
 			continue
 		}
@@ -323,14 +322,9 @@ func TestRegisterProfile(t *testing.T) {
 		t.Fatalf("unexpected custom profile registration: %#v", p)
 	}
 
-	// Test idempotent re-registration with identical config
-	if err := RegisterProfile(customName, cuckoo.Config{EdgeBits: 8, ProofSize: 4}, 16); err != nil {
-		t.Fatalf("expected re-registering identical custom profile to succeed, got: %v", err)
-	}
-
-	// Test conflicting re-registration with different config
-	if err := RegisterProfile(customName, cuckoo.Config{EdgeBits: 10, ProofSize: 4}, 16); err == nil {
-		t.Fatal("expected conflicting custom profile registration to fail")
+	// Test duplicate re-registration
+	if err := RegisterProfile(customName, cuckoo.Config{EdgeBits: 8, ProofSize: 4}, 16); err == nil {
+		t.Fatal("expected duplicate profile registration to fail")
 	} else if !errors.Is(err, ErrInvalidProfile) {
 		t.Fatalf("expected ErrInvalidProfile, got: %v", err)
 	}
@@ -342,6 +336,13 @@ func TestIsRegisteredProfile(t *testing.T) {
 	}
 	if IsRegisteredProfile("unregistered.profile") {
 		t.Fatalf("expected unregistered profile to return false")
+	}
+}
+
+func TestProductionConfig(t *testing.T) {
+	cfg := ProductionConfig()
+	if cfg.EdgeBits != 29 || cfg.ProofSize != 42 {
+		t.Fatalf("unexpected production config: %#v", cfg)
 	}
 }
 

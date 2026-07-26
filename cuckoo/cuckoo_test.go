@@ -415,3 +415,23 @@ func TestLeafCounterHelpers(t *testing.T) {
 		t.Fatalf("counter should stay saturated")
 	}
 }
+
+func TestDocumentedNormativeGraphTestVector(t *testing.T) {
+	seed, err := hex.DecodeString("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := Config{EdgeBits: 29, ProofSize: 42}
+	edge, err := EdgeForNonce(cfg, seed, 0)
+	if err != nil {
+		t.Fatalf("EdgeForNonce failed: %v", err)
+	}
+	const wantU = uint64(6597635)   // 0x0064ac03
+	const wantV = uint64(142045839) // 0x0877728f
+	if edge.U != wantU {
+		t.Errorf("endpoint U mismatch: got %d (0x%08x), want %d (0x%08x)", edge.U, edge.U, wantU, wantU)
+	}
+	if edge.V != wantV {
+		t.Errorf("endpoint V mismatch: got %d (0x%08x), want %d (0x%08x)", edge.V, edge.V, wantV, wantV)
+	}
+}

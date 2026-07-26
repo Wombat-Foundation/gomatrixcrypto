@@ -926,15 +926,15 @@ therefore an attestation by default, with an optional embedded-proof upgrade:
       "algorithm": "fndsa512",
       "short_key_id": "TijfPlCUWjteG2SVsIeBSA",
       "first": {
-        "key_id": "fndsa512:TijfPlCUWjteG2SVsIeBSA",
-        "full_key_id": "<unpadded-base64url-sha3-256-key-id>",
+        "key_name": "fndsa512:TijfPlCUWjteG2SVsIeBSA",
+        "key_id": "<unpadded-base64url-sha3-256-key-id>",
         "server_key_package_sha256": "<unpadded-base64url-sha256>",
         "first_observed_ts": 1798848000000,
         "observed_via": "direct"
       },
       "conflicting": {
-        "key_id": "fndsa512:TijfPlCUWjteG2SVsIeBSA",
-        "full_key_id": "<unpadded-base64url-sha3-256-key-id>",
+        "key_name": "fndsa512:TijfPlCUWjteG2SVsIeBSA",
+        "key_id": "<unpadded-base64url-sha3-256-key-id>",
         "server_key_package_sha256": "<unpadded-base64url-sha256>",
         "first_observed_ts": 1798848600000,
         "observed_via": "notary"
@@ -964,11 +964,11 @@ Field semantics:
   conflicting key bodies. Despite the naming, the pair is unordered for dedup
   purposes (see below); `first` denotes whichever observation this notary
   learned of earlier, per its own `first_observed_ts`.
-- `key_id` in each observation is the canonical `fndsa512:<short_key_id>`
+- `key_name` in each observation is the canonical `fndsa512:<short_key_id>`
   identifier for that key body, derived as specified in
   [profile-bound key minting](#canonical-key-object). Both observations share
-  the same key_id and short_key_id.
-- `full_key_id` in each observation is the unpadded base64url 32-byte SHA3-256
+  the same key_name and short_key_id.
+- `key_id` in each observation is the unpadded base64url 32-byte SHA3-256
   Key ID digest computed over that observation's key body, providing a unique
   full-digest identifier for collision proof and unordered deduplication.
 - `server_key_package_sha256` is the unpadded base64url-encoded SHA-256 digest

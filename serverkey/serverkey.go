@@ -61,15 +61,18 @@ var (
 	}
 )
 
+// ProductionConfig returns the cuckoo.Config for the production server-key profile.
+func ProductionConfig() cuckoo.Config {
+	p, _ := getProfile(ProductionProfile)
+	return p.config
+}
+
 var ErrInvalidProfile = errors.New("invalid server-key profile configuration")
 
 // RegisterProfile registers a profile algorithm for key minting and verification.
 // The production profile algorithm name cannot be mutated or overridden, and
 // shortBytes must be between 1 and 32 inclusive.
 func RegisterProfile(name string, cfg cuckoo.Config, shortBytes int) error {
-	if name == ProductionProfile {
-		return fmt.Errorf("%w: production profile %q cannot be overridden", ErrInvalidProfile, ProductionProfile)
-	}
 	if name == "" {
 		return fmt.Errorf("%w: profile name cannot be empty", ErrInvalidProfile)
 	}
@@ -77,23 +80,19 @@ func RegisterProfile(name string, cfg cuckoo.Config, shortBytes int) error {
 		return fmt.Errorf("%w: shortBytes %d out of range [1, 32]", ErrInvalidProfile, shortBytes)
 	}
 	if err := cfg.Validate(); err != nil {
-		return fmt.Errorf("%w: %v", ErrInvalidProfile, err)
+		return fmt.Errorf("%w: %w", ErrInvalidProfile, err)
 	}
 	profilesMu.Lock()
 	defer profilesMu.Unlock()
-	newProfile := profile{
+	if _, exists := profiles[name]; exists {
+		return fmt.Errorf("%w: profile %q already registered", ErrInvalidProfile, name)
+	}
+	profiles[name] = profile{
 		config:     cfg,
 		graphTag:   name + ".graph",
 		keyIDTag:   name + ".keyid",
 		shortBytes: shortBytes,
 	}
-	if existing, exists := profiles[name]; exists {
-		if existing == newProfile {
-			return nil
-		}
-		return fmt.Errorf("%w: profile %q already registered", ErrInvalidProfile, name)
-	}
-	profiles[name] = newProfile
 	return nil
 }
 
