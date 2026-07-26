@@ -964,12 +964,15 @@ Field semantics:
   conflicting key bodies. Despite the naming, the pair is unordered for dedup
   purposes (see below); `first` denotes whichever observation this notary
   learned of earlier, per its own `first_observed_ts`.
-- `key_name` in each observation is the canonical `fndsa512:<short_key_id>`
+- `key_name` in each observation is the canonical `<algorithm>:<short_key_id>`
   identifier for that key body, derived as specified in
   [profile-bound key minting](#canonical-key-object). Both observations share
-  the same key_name and short_key_id.
-- `key_id` in each observation is the unpadded base64url 32-byte SHA3-256
-  Key ID digest computed over that observation's key body, providing a unique
+  the same key_name and short_key_id. Verifiers MUST recompute or validate that
+  `key_name` in both `first` and `conflicting` entries equals
+  `<algorithm>:<short_key_id>` and MUST reject any record where `key_name` does
+  not match.
+- `key_id` in each observation is the unpadded base64url 32-byte SHA3-256 Key ID
+  digest computed over that observation's key body, providing a unique
   full-digest identifier for collision proof and unordered deduplication.
 - `server_key_package_sha256` is the unpadded base64url-encoded SHA-256 digest
   of that observation's origin `/_matrix/key/v2/server` response, after Matrix
@@ -1051,7 +1054,10 @@ conflicting.observed_via
 [Notary observations](#notary-observations). Embedded full responses, when
 present, are not covered by this signature input; their integrity is instead
 verified independently via each embedded response's own self-signature, matched
-against `server_key_package_sha256`.
+against `server_key_package_sha256`. Similarly, `key_name` is a derived
+convenience field covered by the signed `algorithm` and `short_key_id` fields;
+verifiers MUST verify that `key_name` equals `<algorithm>:<short_key_id>` before
+using it.
 
 - Dedup identity: a record is identified by the tuple
   `(observed_server_name, algorithm, short_key_id, first.key_id, conflicting.key_id)`,
