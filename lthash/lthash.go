@@ -11,8 +11,11 @@ import (
 )
 
 const (
-	WordCount   = 1024
-	ByteSize    = WordCount * 2
+	// WordCount is the number of uint16 words in an LtHash16 state.
+	WordCount = 1024
+	// ByteSize is the byte length of a serialized LtHash16 state.
+	ByteSize = WordCount * 2
+	// ChecksumLen is the length of the LtHash16 checksum.
 	ChecksumLen = 32
 )
 

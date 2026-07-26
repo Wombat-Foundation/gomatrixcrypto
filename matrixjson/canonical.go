@@ -19,9 +19,12 @@ const (
 )
 
 var (
+	// ErrUnsupportedType reports a value that cannot be encoded canonically.
 	ErrUnsupportedType = errors.New("unsupported canonical json type")
-	ErrIntegerRange    = errors.New("canonical json integer out of range")
-	ErrInvalidString   = errors.New("canonical json string is not valid utf-8")
+	// ErrIntegerRange reports an integer outside the canonical JSON range.
+	ErrIntegerRange = errors.New("canonical json integer out of range")
+	// ErrInvalidString reports a string that is not valid UTF-8.
+	ErrInvalidString = errors.New("canonical json string is not valid utf-8")
 )
 
 // Canonical encodes v using the Matrix Canonical JSON rules used for signing:

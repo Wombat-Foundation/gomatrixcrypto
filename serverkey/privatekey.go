@@ -14,6 +14,7 @@ import (
 )
 
 const (
+	// EncryptedPrivateKeyAlgorithm identifies the encrypted private-key format.
 	EncryptedPrivateKeyAlgorithm = "tk.nutra.msc45xx.private-key.xchacha20poly1305-argon2id.v1"
 	privateKeyKDFAlgorithm       = "argon2id"
 	privateKeyAEADAlgorithm      = "xchacha20poly1305"

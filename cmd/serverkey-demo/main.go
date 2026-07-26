@@ -1,3 +1,4 @@
+// Command serverkey-demo demonstrates Matrix server-key generation and proof minting.
 package main
 
 import (

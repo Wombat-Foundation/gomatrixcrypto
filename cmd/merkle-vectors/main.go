@@ -1,3 +1,4 @@
+// Command merkle-vectors generates stable MSC4511 Merkle vector fixtures.
 package main
 
 import (

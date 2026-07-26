@@ -1,3 +1,4 @@
+// Command cuckoo-scan scans Cuckoo Cycle graph nonces for proofs.
 package main
 
 import (

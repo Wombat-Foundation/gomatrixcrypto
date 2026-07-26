@@ -18,10 +18,14 @@ import (
 const HashSize = 32
 
 var (
-	ErrEmptyFieldName   = errors.New("merkle: empty field name")
+	// ErrEmptyFieldName reports an empty Merkle field name.
+	ErrEmptyFieldName = errors.New("merkle: empty field name")
+	// ErrInvalidFieldName reports a field name that is not valid UTF-8 or contains NUL.
 	ErrInvalidFieldName = errors.New("merkle: invalid field name")
-	ErrDuplicateField   = errors.New("merkle: duplicate field")
-	ErrNoLeaves         = errors.New("merkle: no leaves")
+	// ErrDuplicateField reports repeated field names in a Merkle input.
+	ErrDuplicateField = errors.New("merkle: duplicate field")
+	// ErrNoLeaves reports that Merkle root computation received no fields.
+	ErrNoLeaves = errors.New("merkle: no leaves")
 )
 
 var (

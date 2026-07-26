@@ -10,16 +10,23 @@ import (
 )
 
 const (
-	LogN           = 9
-	PublicKeySize  = 897
+	// LogN is the FN-DSA-512 security parameter for this wrapper.
+	LogN = 9
+	// PublicKeySize is the byte length of an FN-DSA-512 public key.
+	PublicKeySize = 897
+	// PrivateKeySize is the byte length of an FN-DSA-512 private key.
 	PrivateKeySize = 1281
-	SignatureSize  = 666
+	// SignatureSize is the byte length of an FN-DSA-512 signature.
+	SignatureSize = 666
 )
 
 var (
+	// ErrInvalidPrivateKey reports an invalid FN-DSA-512 private key size.
 	ErrInvalidPrivateKey = errors.New("invalid fn-dsa-512 private key")
-	ErrInvalidPublicKey  = errors.New("invalid fn-dsa-512 public key")
-	ErrInvalidSignature  = errors.New("invalid fn-dsa-512 signature")
+	// ErrInvalidPublicKey reports an invalid FN-DSA-512 public key size.
+	ErrInvalidPublicKey = errors.New("invalid fn-dsa-512 public key")
+	// ErrInvalidSignature reports an invalid FN-DSA-512 signature size.
+	ErrInvalidSignature = errors.New("invalid fn-dsa-512 signature")
 )
 
 var sign = fndsa.Sign

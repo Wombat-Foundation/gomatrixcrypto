@@ -1,3 +1,4 @@
+// Command minting-vectors generates stable server-key minting vectors.
 package main
 
 import (

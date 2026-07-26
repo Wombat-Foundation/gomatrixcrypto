@@ -1,3 +1,4 @@
+// Command serverkey-keytool encrypts and reencrypts FN-DSA private keys.
 package main
 
 import (

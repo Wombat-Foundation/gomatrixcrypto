@@ -19,20 +19,29 @@ import (
 )
 
 const (
-	FNDSAAlgorithm      = "fndsa512"
-	ProductionProfile   = "tk.nutra.msc45xx.serverkey.v1"
-	ProductionPoW       = ProductionProfile
+	// FNDSAAlgorithm identifies the FN-DSA signature algorithm name.
+	FNDSAAlgorithm = "fndsa512"
+	// ProductionProfile identifies the production server-key profile.
+	ProductionProfile = "tk.nutra.msc45xx.serverkey.v1"
+	// ProductionPoW is the production proof-of-work profile name.
+	ProductionPoW = ProductionProfile
+	// DefaultFIPSRevision is the FIPS 206 revision label stored in metadata.
 	DefaultFIPSRevision = "ipd-2025-08"
 	productionGraphTag  = "tk.nutra.msc45xx.serverkey.v1.graph"
 	productionKeyIDTag  = "tk.nutra.msc45xx.serverkey.v1.keyid"
 )
 
 var (
+	// ErrInvalidServerName reports a malformed or unsupported server name.
 	ErrInvalidServerName = errors.New("invalid server name")
-	ErrInvalidKeyName    = errors.New("invalid key name")
-	ErrInvalidKeyObject  = errors.New("invalid server key object")
-	ErrInvalidSignature  = errors.New("invalid server key signature")
-	ErrUnknownProfile    = errors.New("unknown server-key profile")
+	// ErrInvalidKeyName reports an invalid key name.
+	ErrInvalidKeyName = errors.New("invalid key name")
+	// ErrInvalidKeyObject reports a malformed server key object.
+	ErrInvalidKeyObject = errors.New("invalid server key object")
+	// ErrInvalidSignature reports an invalid server key signature.
+	ErrInvalidSignature = errors.New("invalid server key signature")
+	// ErrUnknownProfile reports an unregistered server-key profile.
+	ErrUnknownProfile = errors.New("unknown server-key profile")
 )
 
 type profile struct {
@@ -67,6 +76,7 @@ func ProductionConfig() cuckoo.Config {
 	return p.config
 }
 
+// ErrInvalidProfile reports an invalid profile registration request.
 var ErrInvalidProfile = errors.New("invalid server-key profile configuration")
 
 // RegisterProfile registers a profile algorithm for key minting and verification.

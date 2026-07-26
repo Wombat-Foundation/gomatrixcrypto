@@ -13,10 +13,14 @@ import (
 const ProofSize = 42
 
 var (
+	// ErrInvalidEdgeBits reports an out-of-range edge-bit configuration.
 	ErrInvalidEdgeBits = errors.New("edge bits out of range")
-	ErrInvalidSeed     = errors.New("invalid graph seed")
-	ErrInvalidProof    = errors.New("invalid cuckoo cycle proof")
-	ErrNoSolution      = errors.New("no cycle found")
+	// ErrInvalidSeed reports a graph seed with the wrong length.
+	ErrInvalidSeed = errors.New("invalid graph seed")
+	// ErrInvalidProof reports a malformed or invalid proof.
+	ErrInvalidProof = errors.New("invalid cuckoo cycle proof")
+	// ErrNoSolution reports that proof search found no valid cycle.
+	ErrNoSolution = errors.New("no cycle found")
 )
 
 // Config defines the cycle graph dimensions.
