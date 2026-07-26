@@ -2,7 +2,7 @@
 // reference "mean" (bucket-sort) Cuckatoo Cycle solver — see solve_main.cpp
 // and external/cuckoo (vendored submodule) — for the one profile where a
 // pure-Go solver is too slow to be practical: EdgeBits=29, ProofSize=42
-// (tk.nutra.msc45xx.pow.cuckatoo-42-29-sha3-256-cogen).
+// (tk.nutra.msc45xx.serverkey.v1).
 //
 // The binary is built separately (run `make` in this directory) rather
 // than compiled in by `go build`, so this package is plain Go: no cgo, no
