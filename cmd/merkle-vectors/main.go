@@ -24,6 +24,7 @@ type MerkleVectors struct {
 	EventID                  string `json:"event_id"`
 }
 
+// main is the entry point for the merkle-vectors generator.
 func main() {
 	output := flag.String("output", "", "optional JSON output file path")
 	flag.Parse()
@@ -33,6 +34,7 @@ func main() {
 	}
 }
 
+// run generates Merkle vector test data and writes output.
 func run(outputPath string) error {
 	fieldRoot, err := merkle.Root(sampleFields())
 	if err != nil {
@@ -109,6 +111,7 @@ func run(outputPath string) error {
 	return nil
 }
 
+// sampleFields returns a set of test fields for Merkle tree generation.
 func sampleFields() []merkle.Field {
 	return []merkle.Field{
 		{Name: "depth", Value: int64(7)},
@@ -118,6 +121,7 @@ func sampleFields() []merkle.Field {
 	}
 }
 
+// sampleHeader returns a sample event header for testing.
 func sampleHeader() merkle.Header {
 	return merkle.Header{
 		RoomID:          "!room:example.org",

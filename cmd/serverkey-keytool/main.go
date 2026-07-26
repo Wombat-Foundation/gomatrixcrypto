@@ -12,12 +12,14 @@ import (
 	"github.com/Wombat-Foundation/gomatrixcrypto/serverkey"
 )
 
+// main is the entry point for the serverkey-keytool command.
 func main() {
 	if err := run(os.Args[1:], os.Stdin, os.Stdout); err != nil {
 		fatal(err)
 	}
 }
 
+// run processes command-line arguments for key encryption and re-encryption.
 func run(args []string, stdin io.Reader, stdout io.Writer) error {
 	flags := flag.NewFlagSet("serverkey-keytool", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
@@ -79,6 +81,7 @@ func run(args []string, stdin io.Reader, stdout io.Writer) error {
 	return enc.Encode(encrypted)
 }
 
+// readInput reads key material from a file path or standard input.
 func readInput(path string, stdin io.Reader) ([]byte, error) {
 	if path == "-" {
 		return io.ReadAll(stdin)
@@ -86,6 +89,7 @@ func readInput(path string, stdin io.Reader) ([]byte, error) {
 	return os.ReadFile(path)
 }
 
+// readPassphrase retrieves a passphrase from an environment variable or file.
 func readPassphrase(envName, fileName, label string) ([]byte, error) {
 	if envName != "" && fileName != "" {
 		return nil, fmt.Errorf("use only one of -%s-env or -%s-file", strings.ReplaceAll(label, " ", "-"), strings.ReplaceAll(label, " ", "-"))
@@ -107,6 +111,7 @@ func readPassphrase(envName, fileName, label string) ([]byte, error) {
 	return nil, fmt.Errorf("missing %s source", label)
 }
 
+// fatal prints an error to stderr and exits with status 1.
 func fatal(err error) {
 	fmt.Fprintf(os.Stderr, "serverkey-keytool: %v\n", err)
 	os.Exit(1)

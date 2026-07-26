@@ -140,6 +140,7 @@ func ReencryptPrivateKey(rng io.Reader, encrypted map[string]any, oldPassphrase,
 	return EncryptPrivateKey(rng, privateKey, newPassphrase, params)
 }
 
+// validatePrivateKeyPassphrase validates private key passphrase constraints.
 func validatePrivateKeyPassphrase(passphrase []byte) error {
 	if len(passphrase) == 0 {
 		return ErrInvalidPassphrase
@@ -150,6 +151,7 @@ func validatePrivateKeyPassphrase(passphrase []byte) error {
 	return nil
 }
 
+// validatePrivateKeyEncryptionInputs checks key length and KDF params.
 func validatePrivateKeyEncryptionInputs(privateKey []byte, params PrivateKeyEncryptionParams) error {
 	if len(privateKey) != fndsa512.PrivateKeySize {
 		return fndsa512.ErrInvalidPrivateKey
@@ -160,6 +162,7 @@ func validatePrivateKeyEncryptionInputs(privateKey []byte, params PrivateKeyEncr
 	return nil
 }
 
+// privateKeyAEAD constructs an Argon2id + XChaCha20-Poly1305 AEAD cipher.
 func privateKeyAEAD(passphrase []byte, params PrivateKeyEncryptionParams) (cipher.AEAD, error) {
 	key := argon2.IDKey(passphrase, params.Salt, params.Time, params.MemoryKiB, params.Threads, privateKeyKeySize)
 	return chacha20poly1305.NewX(key)
@@ -167,6 +170,7 @@ func privateKeyAEAD(passphrase []byte, params PrivateKeyEncryptionParams) (ciphe
 
 var privateKeyAEADFn = privateKeyAEAD
 
+// privateKeyEncryptionParamsFromObject extracts KDF parameters from JSON.
 func privateKeyEncryptionParamsFromObject(encrypted map[string]any) (PrivateKeyEncryptionParams, error) {
 	rawKDF, ok := encrypted["kdf"].(map[string]any)
 	if !ok {

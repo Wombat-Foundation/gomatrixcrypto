@@ -20,6 +20,7 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
+// deterministicReader returns an io.Reader seeded with the provided string.
 func deterministicReader(seed string) io.Reader {
 	hash := sha3.NewShake256()
 	_, _ = hash.Write([]byte(seed))
@@ -37,6 +38,7 @@ type powProfile struct {
 	Note      string
 }
 
+// main is the entry point for the serverkey-demo command.
 func main() {
 	serverName := flag.String("server", "example.com", "Matrix server_name to bind into the self-signed key object")
 	validDays := flag.Int("valid-days", 7, "validity window in days")
@@ -180,6 +182,7 @@ func validateMintingNonceRange(start, limit uint64) error {
 	return nil
 }
 
+// privateKeyPassphrase retrieves the passphrase from environment variable or file.
 func privateKeyPassphrase(envName, fileName string) ([]byte, error) {
 	if envName != "" && fileName != "" {
 		return nil, fmt.Errorf("use only one of -private-key-passphrase-env or -private-key-passphrase-file")
@@ -201,6 +204,7 @@ func privateKeyPassphrase(envName, fileName string) ([]byte, error) {
 	return nil, nil
 }
 
+// configurePoWProfile sets up and registers the requested PoW profile.
 func configurePoWProfile(name string, edgeBits uint, proofSize int, algorithm string, demo bool) (powProfile, error) {
 	var prof powProfile
 	switch name {
@@ -257,6 +261,7 @@ func validateServerKeyProfile(profile powProfile) error {
 	return nil
 }
 
+// solveMintingPoW mines a valid Cuckoo Cycle proof for server-key minting.
 func solveMintingPoW(serverName string, publicKey []byte, profile powProfile, maxNonce uint32, startMintingNonce, maxMintingNonce uint64) (serverkey.FNDSAMintingProof, string, error) {
 	useMeanMiner := profile.Config.EdgeBits == 29 && profile.Config.ProofSize == 42 && meanminer.Available()
 
@@ -313,6 +318,7 @@ func solveMintingPoW(serverName string, publicKey []byte, profile powProfile, ma
 	return serverkey.FNDSAMintingProof{}, "", cuckoo.ErrNoSolution
 }
 
+// serverKeyPackageSHA256 computes the hex SHA-256 hash of canonical JSON.
 func serverKeyPackageSHA256(obj map[string]any) (string, error) {
 	signingBytes, err := serverkey.SigningBytes(obj)
 	if err != nil {
@@ -322,6 +328,7 @@ func serverKeyPackageSHA256(obj map[string]any) (string, error) {
 	return base64.RawURLEncoding.EncodeToString(sum[:]), nil
 }
 
+// fatal prints an error message and terminates the process.
 func fatal(err error) {
 	fmt.Fprintln(os.Stderr, err)
 	os.Exit(1)

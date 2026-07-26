@@ -29,6 +29,7 @@ type Entry struct {
 	EventID   string
 }
 
+// truncateToU16Limit truncates string s to fit within a uint16 length.
 func truncateToU16Limit(s string) (string, uint16) {
 	if len(s) <= int(^uint16(0)) {
 		return s, uint16(len(s))
@@ -40,6 +41,7 @@ func truncateToU16Limit(s string) (string, uint16) {
 	return s[:end], uint16(end)
 }
 
+// seed generates the lattice seed vector for a state entry.
 func seed(eventType, stateKey, eventID string) Hash {
 	eventType, typeLen := truncateToU16Limit(eventType)
 	stateKey, stateKeyLen := truncateToU16Limit(stateKey)
@@ -68,12 +70,14 @@ func seed(eventType, stateKey, eventID string) Hash {
 	return out
 }
 
+// addSeed adds seed elementwise into h.
 func (h *Hash) addSeed(seed Hash) {
 	for i := range h {
 		h[i] += seed[i]
 	}
 }
 
+// subSeed subtracts seed elementwise from h.
 func (h *Hash) subSeed(seed Hash) {
 	for i := range h {
 		h[i] -= seed[i]

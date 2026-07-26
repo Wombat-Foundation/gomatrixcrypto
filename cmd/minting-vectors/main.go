@@ -24,6 +24,7 @@ const (
 	maxProtocolMintingNonce = uint64(1<<32 - 1)
 )
 
+// deterministicReader returns an io.Reader initialized with a SHAKE-256 hash of seed.
 func deterministicReader(seed string) io.Reader {
 	hash := sha3.NewShake256()
 	_, _ = hash.Write([]byte(seed))
@@ -65,6 +66,7 @@ type vector struct {
 	NoncanonicalDiagnostics vectorDiagnostics `json:"noncanonical_diagnostics"`
 }
 
+// generate mines a production PoW minting proof vector.
 func generate(serverName string, startNonce, maxNonce uint64, threads int) (vector, error) {
 	if err := validateMintingNonceRange(startNonce, maxNonce); err != nil {
 		return vector{}, err
@@ -160,6 +162,7 @@ func validateMintingNonceRange(startNonce, maxNonce uint64) error {
 	return nil
 }
 
+// main is the entry point for the minting-vectors generator.
 func main() {
 	serverName := flag.String("server-name", "example.com", "server name committed by the minting proof")
 	startNonce := flag.Uint64("start-nonce", 0, "first minting nonce to try")

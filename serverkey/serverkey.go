@@ -90,6 +90,7 @@ func RegisterProfile(name string, cfg cuckoo.Config, shortBytes int) error {
 	return nil
 }
 
+// getProfile retrieves a profile by name from the global profile registry.
 func getProfile(name string) (profile, bool) {
 	profilesMu.RLock()
 	defer profilesMu.RUnlock()
@@ -162,6 +163,7 @@ func FNDSAKeyObject(publicKey []byte, _ FNDSAMetadata, proof FNDSAMintingProof) 
 	}
 }
 
+// graphObject constructs the graph seed payload map.
 func graphObject(publicKey []byte, serverName, profileName string, nonce uint32) map[string]any {
 	return map[string]any{
 		"action":      graphTag(profileName),
@@ -172,6 +174,7 @@ func graphObject(publicKey []byte, serverName, profileName string, nonce uint32)
 	}
 }
 
+// graphTag returns the graph domain separation tag for a profile.
 func graphTag(profileName string) string {
 	if p, ok := getProfile(profileName); ok {
 		return p.graphTag
@@ -179,6 +182,7 @@ func graphTag(profileName string) string {
 	return profileName + ".graph"
 }
 
+// keyIDTag returns the key ID domain separation tag for a profile.
 func keyIDTag(profileName string) string {
 	if p, ok := getProfile(profileName); ok {
 		return p.keyIDTag
@@ -186,6 +190,7 @@ func keyIDTag(profileName string) string {
 	return profileName + ".keyid"
 }
 
+// mintingObject constructs the payload map for key ID derivation.
 func mintingObject(publicKey []byte, serverName, profileName string, proof FNDSAMintingProof) map[string]any {
 	return map[string]any{
 		"action":      keyIDTag(profileName),
@@ -241,6 +246,7 @@ func ShortKeyID(profileName string, keyID [32]byte) (string, error) {
 	return base64.RawURLEncoding.EncodeToString(keyID[:p.shortBytes]), nil
 }
 
+// validateProof verifies that a minting proof matches graph parameters and profile.
 func validateProof(publicKey []byte, serverName, profileName string, proof FNDSAMintingProof) error {
 	p, ok := getProfile(profileName)
 	if !ok {
@@ -332,6 +338,7 @@ func VerifyMintedFNDSAServerKey(obj map[string]any, serverName string) (string, 
 	return verifyFNDSASignature(obj, serverName, true)
 }
 
+// verifyFNDSASignature validates an FNDSA signature on a serverkey object.
 func verifyFNDSASignature(obj map[string]any, serverName string, requireProof bool) (string, error) {
 	objectServerName, ok := obj["server_name"].(string)
 	if !ok {
@@ -404,6 +411,7 @@ func verifyFNDSASignature(obj map[string]any, serverName string, requireProof bo
 	return "", ErrInvalidKeyName
 }
 
+// publicKeyFromObject extracts the raw public key from a key object map.
 func publicKeyFromObject(keyObject map[string]any) ([]byte, error) {
 	rawKey, ok := keyObject["key"].(string)
 	if !ok {
@@ -419,6 +427,7 @@ func publicKeyFromObject(keyObject map[string]any) ([]byte, error) {
 	return publicKey, nil
 }
 
+// mintingProofFromObject extracts proof algorithm, nonce, and solution.
 func mintingProofFromObject(keyObject map[string]any) (string, FNDSAMintingProof, error) {
 	profileName, ok := keyObject["profile"].(string)
 	if !ok || profileName == "" {
@@ -439,6 +448,7 @@ func mintingProofFromObject(keyObject map[string]any) (string, FNDSAMintingProof
 	return profileName, FNDSAMintingProof{Algorithm: profileName, Nonce: nonce, Solution: solution}, nil
 }
 
+// uint32FromAny converts an arbitrary interface value into uint32.
 func uint32FromAny(v any) (uint32, error) {
 	n, err := uint64FromAny(v)
 	if err != nil || n > uint64(^uint32(0)) {
@@ -447,6 +457,7 @@ func uint32FromAny(v any) (uint32, error) {
 	return uint32(n), nil
 }
 
+// uint64FromAny converts an arbitrary interface value into uint64.
 func uint64FromAny(v any) (uint64, error) {
 	switch n := v.(type) {
 	case uint8:
@@ -479,6 +490,7 @@ func uint64FromAny(v any) (uint64, error) {
 	}
 }
 
+// uint32sToAny converts a slice of uint32 into a slice of any.
 func uint32sToAny(values []uint32) []any {
 	out := make([]any, len(values))
 	for i, v := range values {
@@ -487,6 +499,7 @@ func uint32sToAny(values []uint32) []any {
 	return out
 }
 
+// uint32sFromAny converts an interface slice into a slice of uint32.
 func uint32sFromAny(v any) ([]uint32, error) {
 	if values, ok := v.([]uint32); ok {
 		out := make([]uint32, len(values))

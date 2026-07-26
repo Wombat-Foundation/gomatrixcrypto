@@ -19,18 +19,22 @@ type labeledEdge struct {
 	u, v  uint64
 }
 
+// newBitset allocates a bitset capable of holding n bits.
 func newBitset(n uint64) bitset {
 	return make(bitset, (n+63)/64)
 }
 
+// get returns whether bit i is set in the bitset.
 func (b bitset) get(i uint64) bool {
 	return b[i>>6]&(1<<(i&63)) != 0
 }
 
+// set marks bit i as set in the bitset.
 func (b bitset) set(i uint64) {
 	b[i>>6] |= 1 << (i & 63)
 }
 
+// clear unsets bit i in the bitset.
 func (b bitset) clear(i uint64) {
 	b[i>>6] &^= 1 << (i & 63)
 }
@@ -49,6 +53,7 @@ func bumpLeafCounter(lo, hi bitset, node uint64) {
 	lo.set(node)
 }
 
+// isLeafCounter checks whether node has exactly degree 1.
 func isLeafCounter(lo, hi bitset, node uint64) bool {
 	return lo.get(node) && !hi.get(node)
 }
@@ -262,6 +267,7 @@ func FindProof(cfg Config, seed []byte, maxNonce uint32, onProgress ...func(stri
 	return nil, ErrNoSolution
 }
 
+// trimAliveEdges eliminates degree-1 leaf nodes from the edge graph.
 func trimAliveEdges(alive bitset, lo, hi bitset, maxNonce uint32, edgeEndpoints func(uint32) (uint64, uint64)) uint64 {
 	for i := range lo {
 		lo[i] = 0
@@ -290,6 +296,7 @@ func trimAliveEdges(alive bitset, lo, hi bitset, maxNonce uint32, edgeEndpoints 
 	return removedThisRound
 }
 
+// collectSurvivors gathers all remaining active edges into a slice.
 func collectSurvivors(alive bitset, maxNonce uint32, aliveCount uint64, edgeEndpoints func(uint32) (uint64, uint64)) []labeledEdge {
 	survivors := make([]labeledEdge, 0, aliveCount)
 	for nonce := uint32(0); nonce < maxNonce; nonce++ {
@@ -302,12 +309,14 @@ func collectSurvivors(alive bitset, maxNonce uint32, aliveCount uint64, edgeEndp
 	return survivors
 }
 
+// logDFSProgress logs search progress during depth-first cycle search.
 func logDFSProgress(startIdx, total int, startTime time.Time, logf func(string, ...any)) {
 	if startIdx > 0 && startIdx%dfsLogInterval == 0 {
 		logf("cuckoo: dfs: tried %d/%d starting edges (elapsed %s)", startIdx, total, time.Since(startTime).Round(time.Millisecond))
 	}
 }
 
+// canTraverseDFSNeighbor checks whether DFS can proceed to nextNode.
 func canTraverseDFSNeighbor(nextNode, startNode uint64, depth, proofSize int, seenNodes map[uint64]bool) bool {
 	if nextNode == startNode {
 		return depth+1 == proofSize

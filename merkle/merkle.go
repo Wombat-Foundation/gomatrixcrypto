@@ -89,6 +89,7 @@ func validateFieldName(fieldName string) error {
 	return nil
 }
 
+// fieldLeaf computes the leaf representation and hash for a field.
 func fieldLeaf(field Field) (leaf, error) {
 	if field.Name == "" {
 		return leaf{}, ErrEmptyFieldName
@@ -104,6 +105,7 @@ func fieldLeaf(field Field) (leaf, error) {
 	return leaf{Name: field.Name, CanonicalJSON: canonical, Hash: h}, nil
 }
 
+// leaves converts fields to leaf structures and sorts them by name.
 func leaves(fields []Field) ([]leaf, error) {
 	leaves := make([]leaf, len(fields))
 	for i, field := range fields {
@@ -136,6 +138,7 @@ func Root(fields []Field) (Hash, error) {
 	return rootFromLeaves(leaves)
 }
 
+// rootFromLeaves calculates the Merkle tree root from leaf nodes.
 func rootFromLeaves(leaves []leaf) (Hash, error) {
 	if len(leaves) == 0 {
 		return Hash{}, ErrNoLeaves
@@ -195,6 +198,7 @@ func EventID(eventRoot Hash) string {
 	return "$" + base64.RawURLEncoding.EncodeToString(eventRoot[:])
 }
 
+// merkleRoot computes the binary Merkle root hash of leaf hashes.
 func merkleRoot(hashes []Hash) Hash {
 	switch len(hashes) {
 	case 0:
@@ -213,6 +217,7 @@ func merkleRoot(hashes []Hash) Hash {
 	}
 }
 
+// largestPowerOfTwoLessThan returns the largest power of 2 strictly less than n.
 func largestPowerOfTwoLessThan(n int) int {
 	k := 1
 	for k<<1 < n {
@@ -221,10 +226,12 @@ func largestPowerOfTwoLessThan(n int) int {
 	return k
 }
 
+// innerHash computes the domain-separated internal Merkle node hash.
 func innerHash(left, right Hash) Hash {
 	return hash(nodeDST, left[:], right[:])
 }
 
+// hash computes SHA3-256 over the concatenation of parts.
 func hash(parts ...[]byte) Hash {
 	h := sha3.New256()
 	for _, part := range parts {

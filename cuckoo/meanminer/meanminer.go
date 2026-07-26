@@ -49,6 +49,7 @@ func Available() bool {
 	return availableWithDeps(binaryPathForAvailable, statForAvailable)
 }
 
+// availableWithDeps checks if the external solver binary exists.
 func availableWithDeps(binaryPath binaryPathFunc, stat statFunc) bool {
 	bin, err := binaryPath()
 	if err != nil {
@@ -68,10 +69,12 @@ func Solve(seed []byte, nthreads int) (proof []uint32, ok bool, err error) {
 	return solveWithDeps(seed, nthreads, BinaryPath, runCommand)
 }
 
+// runCommand executes an external binary command.
 func runCommand(path string, args ...string) ([]byte, error) {
 	return exec.Command(path, args...).Output()
 }
 
+// solveWithDeps executes the solver binary using injected dependencies.
 func solveWithDeps(seed []byte, nthreads int, binaryPath binaryPathFunc, run commandRunner) (proof []uint32, ok bool, err error) {
 	if len(seed) != 32 {
 		return nil, false, fmt.Errorf("meanminer: seed must be 32 bytes, got %d", len(seed))

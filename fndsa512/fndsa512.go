@@ -24,6 +24,7 @@ var (
 
 var sign = fndsa.Sign
 
+// checkPrivateKey validates the length of an FN-DSA-512 private key.
 func checkPrivateKey(key []byte) error {
 	if len(key) != PrivateKeySize {
 		return ErrInvalidPrivateKey
@@ -31,6 +32,7 @@ func checkPrivateKey(key []byte) error {
 	return nil
 }
 
+// checkPublicKey validates the length of an FN-DSA-512 public key.
 func checkPublicKey(key []byte) error {
 	if len(key) != PublicKeySize {
 		return ErrInvalidPublicKey
@@ -38,6 +40,7 @@ func checkPublicKey(key []byte) error {
 	return nil
 }
 
+// checkSignature validates the length of an FN-DSA-512 signature.
 func checkSignature(sig []byte) error {
 	if len(sig) != SignatureSize {
 		return ErrInvalidSignature

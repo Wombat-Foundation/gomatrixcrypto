@@ -31,6 +31,7 @@ func (c Config) Validate() error {
 	return err
 }
 
+// normalize validates and fills default values for Config.
 func (c Config) normalize() (Config, error) {
 	if c.EdgeBits < 2 || c.EdgeBits > 31 {
 		return Config{}, ErrInvalidEdgeBits
@@ -44,14 +45,17 @@ func (c Config) normalize() (Config, error) {
 	return c, nil
 }
 
+// EdgeMask returns the bitmask for edge indices given EdgeBits.
 func (c Config) EdgeMask() uint64 {
 	return (uint64(1) << c.EdgeBits) - 1
 }
 
+// edgeMask returns EdgeMask for the configuration.
 func (c Config) edgeMask() uint64 {
 	return c.EdgeMask()
 }
 
+// nodeMask returns the bitmask for graph nodes.
 func (c Config) nodeMask() uint64 {
 	return c.edgeMask()
 }
@@ -62,6 +66,7 @@ type Edge struct {
 	V uint64
 }
 
+// sipRound performs one round of the SipHash-2-4 mixing function.
 func sipRound(v *[4]uint64) {
 	v[0] += v[1]
 	v[1] = bits.RotateLeft64(v[1], 13)
@@ -79,6 +84,7 @@ func sipRound(v *[4]uint64) {
 	v[2] = bits.RotateLeft64(v[2], 32)
 }
 
+// siphash24 calculates 64-bit SipHash-2-4 output for a message.
 func siphash24(seed [4]uint64, msg uint64) uint64 {
 	// The MSC defines graph_seed as four little-endian 64-bit words k0..k3.
 	// We treat those words as the seeded SipHash state directly.
@@ -94,6 +100,7 @@ func siphash24(seed [4]uint64, msg uint64) uint64 {
 	return v[0] ^ v[1] ^ v[2] ^ v[3]
 }
 
+// seedWords converts a 32-byte graph seed into four uint64 words.
 func seedWords(seed []byte) ([4]uint64, error) {
 	var words [4]uint64
 	if len(seed) != sha256.Size {
@@ -170,6 +177,7 @@ func Verify(cfg Config, seed []byte, nonces []uint32) error {
 
 // verifyCycle checks that tagged endpoints form exactly one cycle. Its input
 // is internal and has already been range-checked by Verify.
+// verifyCycle verifies that the specified endpoint pairs form a single cycle.
 func verifyCycle(uvs []uint64) error {
 	xor := uint64(0)
 	for _, endpoint := range uvs {

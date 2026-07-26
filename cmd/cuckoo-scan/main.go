@@ -11,6 +11,7 @@ import (
 	"github.com/Wombat-Foundation/gomatrixcrypto/cuckoo/meanminer"
 )
 
+// main is the entry point for the cuckoo-scan utility.
 func main() {
 	code := run(os.Args[1:], os.Stdout, os.Stderr, meanminer.Solve)
 	if code != 0 {
@@ -20,6 +21,7 @@ func main() {
 
 type solverFunc func(seed []byte, nthreads int) ([]uint32, bool, error)
 
+// run parses CLI flags and executes the Cuckoo cycle graph scanning loop.
 func run(args []string, stdout, stderr io.Writer, solve solverFunc) int {
 	flags := flag.NewFlagSet("cuckoo-scan", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
@@ -68,11 +70,13 @@ func run(args []string, stdout, stderr io.Writer, solve solverFunc) int {
 	return 2
 }
 
+// writeLine writes a line to the provided writer.
 func writeLine(w io.Writer, a ...any) error {
 	_, err := fmt.Fprintln(w, a...)
 	return err
 }
 
+// writef writes a formatted string to the provided writer.
 func writef(w io.Writer, format string, a ...any) error {
 	_, err := fmt.Fprintf(w, format, a...)
 	return err
