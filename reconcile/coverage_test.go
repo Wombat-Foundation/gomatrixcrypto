@@ -274,6 +274,11 @@ func TestSyndromeSketchOperations(t *testing.T) {
 	if !equalSketch(xorLeft, xorLeft) || equalSketch(xorLeft, other) {
 		t.Fatal("equalSketch coverage setup failed")
 	}
+	mismatch, _ := NewSyndromeSketch(4)
+	_ = mismatch.Toggle(4)
+	if equalSketch(xorLeft, mismatch) {
+		t.Fatal("equalSketch should reject unequal coordinates")
+	}
 	if got := canonicalStringArray(nil); string(got) != "null" {
 		t.Fatalf("expected null canonical encoding, got %q", got)
 	}
@@ -297,6 +302,9 @@ func TestSyndromeSketchOperations(t *testing.T) {
 	}
 	if _, err := sketch.DecodeElements(0); err != ErrInvalidSketchCapacity {
 		t.Fatalf("expected ErrInvalidSketchCapacity, got %v", err)
+	}
+	if _, err := sketch.DecodeElements(5); err != ErrInvalidSketchCapacity {
+		t.Fatalf("expected ErrInvalidSketchCapacity for over-capacity decode, got %v", err)
 	}
 	if containsZero([]uint64{0, 1}) != true || containsZero([]uint64{1, 2}) {
 		t.Fatal("containsZero mismatch")
@@ -328,8 +336,15 @@ func TestResidentKernelAndBucketValidation(t *testing.T) {
 	if err := emptyRK.Remove(first); err != ErrCountUnderflow {
 		t.Fatalf("expected ErrCountUnderflow, got %v", err)
 	}
+	rk.accumulator.Count = ^uint64(0)
+	if err := rk.Insert(first); err != ErrCountOverflow {
+		t.Fatalf("expected ErrCountOverflow via resident kernel, got %v", err)
+	}
 	if err := rk.Insert(ElementHash{H128: [16]byte{1}, H64: 0}); err != ErrZeroShortIdentifier {
 		t.Fatalf("expected ErrZeroShortIdentifier, got %v", err)
+	}
+	if err := rk.Remove(ElementHash{H128: [16]byte{1}, H64: 0}); err != ErrZeroShortIdentifier {
+		t.Fatalf("expected ErrZeroShortIdentifier on remove, got %v", err)
 	}
 
 	if err := ValidateBucketRequests([]BucketRequest{{Depth: 0, Prefix: 0, Capacity: 4}}); err != nil {
@@ -378,6 +393,14 @@ func TestClientAndTriageFlow(t *testing.T) {
 	remote := RemoteDigest{FrameMatches: false}
 	if got := c.SelectAction(&local, remote, 0); got.Type != ActionExtremityDiff {
 		t.Fatalf("expected extremity diff, got %v", got.Type)
+	}
+	if got := c.SelectAction(&local, RemoteDigest{
+		Digest:              remote.Digest,
+		KnownEventCount:     remote.KnownEventCount,
+		FrameMatches:        true,
+		HasUnknownExtremity: true,
+	}, 0); got.Type != ActionExtremityDiff {
+		t.Fatalf("expected unknown extremity fallback, got %v", got.Type)
 	}
 
 	event := ElementHash{H128: [16]byte{1}, H64: 1}
@@ -699,6 +722,11 @@ func TestMatrixAndPinSketchHelperBranches(t *testing.T) {
 	}
 	if got, ok := polyGCD(polynomial{1}, polynomial{1, 0, 1}); !ok || !reflect.DeepEqual(got, polynomial{1}) {
 		t.Fatalf("polyGCD should normalize the gcd, got %v %v", got, ok)
+	}
+	var failedRoots []uint64
+	failedWork := maxFactorWork
+	if err := findRootsWithBudget(polynomial{1, 2, 3, 4}, &failedRoots, &failedWork); err != ErrDecodeFailure {
+		t.Fatalf("expected ErrDecodeFailure from non-monic factorization, got %v", err)
 	}
 	zeroRoots := []uint64{}
 	if err := findRoots(polynomial{0, 1, 1}, &zeroRoots); err != nil {
