@@ -420,6 +420,15 @@ func TestClientAndTriageFlow(t *testing.T) {
 	if got := c.SelectAction(&local, remote, 0); got.Type != ActionBucketSketches {
 		t.Fatalf("expected bucket sketches, got %v", got.Type)
 	}
+	if got := c.SelectAction(&local, RemoteDigest{
+		Digest:              [16]byte{9},
+		KnownEventCount:     local.Accumulator().Count,
+		Strata:              *local.Strata(),
+		FrameMatches:        true,
+		HasUnknownExtremity: false,
+	}, maxInt); got.Type != ActionBucketSketches || len(got.Requests) != 64 {
+		t.Fatalf("expected overflow-localized bucket sketches, got %v", got)
+	}
 
 	wide := NewResidentKernel()
 	wideAction := c.SelectAction(&wide, RemoteDigest{
