@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -98,6 +99,12 @@ func TestElementHashAndEventIDs(t *testing.T) {
 	}
 	if _, err := MatrixEventDigest32("$not base64", V4Plus); err != ErrInvalidBase64 {
 		t.Fatalf("expected ErrInvalidBase64, got %v", err)
+	}
+	if _, err := MatrixEventDigest32("$not base64", V3); err != ErrInvalidBase64 {
+		t.Fatalf("expected ErrInvalidBase64 for V3, got %v", err)
+	}
+	if _, err := MatrixEventDigest32("$AA", V3); err != ErrInvalidEventID {
+		t.Fatalf("expected ErrInvalidEventID for short V3 digest, got %v", err)
 	}
 	if _, err := MatrixEventDigest32("$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", V4Plus); err != ErrInvalidBase64 {
 		t.Fatalf("expected ErrInvalidBase64 for overlong encoded digest, got %v", err)
@@ -228,10 +235,12 @@ func TestSyndromeSketchOperations(t *testing.T) {
 	if _, err := DecodeSyndromeSketch(0, encoded); err != ErrInvalidSketchCapacity {
 		t.Fatalf("expected ErrInvalidSketchCapacity, got %v", err)
 	}
+	if _, err := DecodeSyndromeSketch(4, strings.Repeat("!", 43)); err != ErrInvalidBase64 {
+		t.Fatalf("expected ErrInvalidBase64, got %v", err)
+	}
 	if _, err := DecodeSyndromeSketch(4, "AAAA"); err != ErrInvalidSketchLength {
 		t.Fatalf("expected ErrInvalidSketchLength, got %v", err)
 	}
-
 	xorLeft, _ := NewSyndromeSketch(4)
 	xorRight, _ := NewSyndromeSketch(4)
 	_ = xorLeft.Toggle(1)
@@ -270,6 +279,9 @@ func TestSyndromeSketchOperations(t *testing.T) {
 	if equalSketch(xorLeft, &SyndromeSketch{Coordinates: []uint64{1, 2, 3, 4}}) {
 		t.Fatal("equalSketch should reject capacity mismatch")
 	}
+	if equalSketch(xorLeft, &SyndromeSketch{Coordinates: []uint64{1, 2, 3}}) {
+		t.Fatal("equalSketch should reject different capacities")
+	}
 	other, _ := NewSyndromeSketch(4)
 	if !equalSketch(xorLeft, xorLeft) || equalSketch(xorLeft, other) {
 		t.Fatal("equalSketch coverage setup failed")
@@ -305,6 +317,10 @@ func TestSyndromeSketchOperations(t *testing.T) {
 	}
 	if _, err := sketch.DecodeElements(5); err != ErrInvalidSketchCapacity {
 		t.Fatalf("expected ErrInvalidSketchCapacity for over-capacity decode, got %v", err)
+	}
+	badDecode, _ := NewSyndromeSketchFromCoordinates([]uint64{1, 2})
+	if _, err := badDecode.DecodeElements(1); err != ErrDecodeFailure {
+		t.Fatalf("expected ErrDecodeFailure from decode mismatch, got %v", err)
 	}
 	if containsZero([]uint64{0, 1}) != true || containsZero([]uint64{1, 2}) {
 		t.Fatal("containsZero mismatch")
@@ -365,6 +381,13 @@ func TestResidentKernelAndBucketValidation(t *testing.T) {
 	if err := ValidateBucketRequests([]BucketRequest{{Depth: 0, Prefix: 0, Capacity: 0}}); err != ErrInvalidSketchCapacity {
 		t.Fatalf("expected invalid capacity, got %v", err)
 	}
+	overflowRequests := make([]BucketRequest, 0, 65)
+	for i := 0; i < 65; i++ {
+		overflowRequests = append(overflowRequests, BucketRequest{Depth: 32, Prefix: uint32(i), Capacity: 64})
+	}
+	if err := ValidateBucketRequests(overflowRequests); err != ErrInvalidSketchCapacity {
+		t.Fatalf("expected capacity overflow, got %v", err)
+	}
 }
 
 func TestClientAndTriageFlow(t *testing.T) {
@@ -421,9 +444,22 @@ func TestClientAndTriageFlow(t *testing.T) {
 		t.Fatalf("expected bucket sketches, got %v", got.Type)
 	}
 	if got := c.SelectAction(&local, RemoteDigest{
-		Digest:              [16]byte{9},
+		Digest:              [16]byte{7},
 		KnownEventCount:     local.Accumulator().Count,
-		Strata:              *local.Strata(),
+		Strata:              strataFromValues(1, 2, 4, 8, 3, 5),
+		FrameMatches:        true,
+		HasUnknownExtremity: false,
+	}, 0); got.Type != ActionBucketSketches {
+		t.Fatalf("expected estimate-driven bucket sketches, got %v", got)
+	}
+	overflowLocal := NewResidentKernel()
+	if err := overflowLocal.Insert(ElementHash{H128: [16]byte{3}, H64: 3}); err != nil {
+		t.Fatal(err)
+	}
+	if got := c.SelectAction(&overflowLocal, RemoteDigest{
+		Digest:              [16]byte{9},
+		KnownEventCount:     0,
+		Strata:              *overflowLocal.Strata(),
 		FrameMatches:        true,
 		HasUnknownExtremity: false,
 	}, maxInt); got.Type != ActionBucketSketches || len(got.Requests) != 64 {
@@ -667,6 +703,10 @@ func TestDecodeBucketSketchesAndHelpers(t *testing.T) {
 	if _, err := DecodeBucketSketches(encoded[:len(encoded)-1], requests); err != ErrInvalidSketchLength {
 		t.Fatalf("expected ErrInvalidSketchLength, got %v", err)
 	}
+	leftover := append(append([]byte(nil), encoded...), 0)
+	if _, err := DecodeBucketSketches(leftover, requests); err != ErrInvalidSketchLength {
+		t.Fatalf("expected ErrInvalidSketchLength for leftover bytes, got %v", err)
+	}
 	if _, err := DecodeBucketSketches(encoded, []BucketRequest{{Depth: 0, Prefix: 0, Capacity: 4}, {Depth: 1, Prefix: 0, Capacity: 4}}); err != ErrInvalidBucketIndex {
 		t.Fatalf("expected ErrInvalidBucketIndex, got %v", err)
 	}
@@ -732,6 +772,9 @@ func TestMatrixAndPinSketchHelperBranches(t *testing.T) {
 	if got, ok := polyGCD(polynomial{1}, polynomial{1, 0, 1}); !ok || !reflect.DeepEqual(got, polynomial{1}) {
 		t.Fatalf("polyGCD should normalize the gcd, got %v %v", got, ok)
 	}
+	if got, ok := polyGCD(nil, nil); ok || got != nil {
+		t.Fatalf("polyGCD should reject empty inputs, got %v %v", got, ok)
+	}
 	var failedRoots []uint64
 	failedWork := maxFactorWork
 	if err := findRootsWithBudget(polynomial{1, 2, 3, 4}, &failedRoots, &failedWork); err != ErrDecodeFailure {
@@ -746,6 +789,41 @@ func TestMatrixAndPinSketchHelperBranches(t *testing.T) {
 	}
 	if err := findRoots(polynomial{1, 0, 1}, &zeroRoots); err != ErrDecodeFailure {
 		t.Fatalf("expected ErrDecodeFailure for inseparable quadratic, got %v", err)
+	}
+	var inconsistentTarget uint64
+	for bit := 0; bit < 64; bit++ {
+		target := uint64(1) << uint(bit)
+		trace := target
+		power := target
+		for i := 1; i < 64; i++ {
+			power = Mul(power, power)
+			trace ^= power
+		}
+		if trace == 1 {
+			inconsistentTarget = target
+			break
+		}
+	}
+	if inconsistentTarget == 0 {
+		t.Fatal("failed to find inconsistent quadratic target")
+	}
+	if got, ok := solveQuadraticForm(inconsistentTarget); ok || got != 0 {
+		t.Fatalf("solveQuadraticForm should reject inconsistent target, got %d %v", got, ok)
+	}
+	var emptyRoots []uint64
+	emptyWork := maxFactorWork
+	if err := findRootsWithBudget(nil, &emptyRoots, &emptyWork); err != ErrDecodeFailure {
+		t.Fatalf("expected ErrDecodeFailure for empty polynomial, got %v", err)
+	}
+	constantRoots := []uint64{}
+	constantWork := maxFactorWork
+	if err := findRootsWithBudget(polynomial{1}, &constantRoots, &constantWork); err != nil || len(constantRoots) != 0 {
+		t.Fatalf("expected constant polynomial to decode trivially, got %v %v", constantRoots, err)
+	}
+	quadraticFailure := []uint64{}
+	quadraticWork := maxFactorWork
+	if err := findRootsWithBudget(polynomial{inconsistentTarget, 1, 1}, &quadraticFailure, &quadraticWork); err != ErrDecodeFailure {
+		t.Fatalf("expected quadratic decode failure, got %v", err)
 	}
 
 	var roots []uint64
@@ -765,8 +843,11 @@ func TestMatrixAndPinSketchHelperBranches(t *testing.T) {
 	if cost, ok := factorTrialCost(-1); ok || cost != 0 {
 		t.Fatalf("factorTrialCost(-1) = %d %v", cost, ok)
 	}
-	if cost, ok := factorTrialCost(1_000_000_000); ok || cost != 0 {
+	if cost, ok := factorTrialCost(4_000_000_000); ok || cost != 0 {
 		t.Fatalf("factorTrialCost overflow = %d %v", cost, ok)
+	}
+	if cost, ok := factorTrialCost(400_000_000); ok || cost != 0 {
+		t.Fatalf("factorTrialCost trace overflow = %d %v", cost, ok)
 	}
 	if trailingZeros64(0) != 64 {
 		t.Fatal("trailingZeros64(0) should be 64")
@@ -779,6 +860,10 @@ func TestEstimateDeltaRustCases(t *testing.T) {
 	if got, ok, err := EstimateDelta(&local, &remote); err != nil || !ok || got != 0 {
 		t.Fatalf("EstimateDelta identical = %d %v %v", got, ok, err)
 	}
+	var empty [StrataCount][StratumCapacity]uint64
+	if got, ok, err := EstimateDelta(&local, &empty); err != nil || !ok || got != 0 {
+		t.Fatalf("EstimateDelta empty remote = %d %v %v", got, ok, err)
+	}
 
 	remote = strataFromValues(1, 2, 4, 8, 3, 5)
 	if got, ok, err := EstimateDelta(&local, &remote); err != nil || !ok || got != 6 {
@@ -788,6 +873,26 @@ func TestEstimateDeltaRustCases(t *testing.T) {
 	remote = strataFromValues(1, 3, 5, 7, 9, 11, 13, 15, 17)
 	if got, ok, err := EstimateDelta(&local, &remote); err != nil || ok || got != 0 {
 		t.Fatalf("EstimateDelta sparse failure = %d %v %v", got, ok, err)
+	}
+
+	var undecodableLocal, undecodableRemote [StrataCount][StratumCapacity]uint64
+	foundUndecodable := false
+	seed := uint64(0x9e3779b97f4a7c15)
+	for attempt := 0; attempt < 256; attempt++ {
+		seed ^= seed << 7
+		seed ^= seed >> 9
+		seed ^= seed << 8
+		for i := 0; i < StratumCapacity; i++ {
+			seed = nextFactorParameter(seed)
+			undecodableRemote[StrataCount-1][i] = seed
+		}
+		if got, ok, err := EstimateDelta(&undecodableLocal, &undecodableRemote); err == nil && !ok && got == 0 {
+			foundUndecodable = true
+			break
+		}
+	}
+	if !foundUndecodable {
+		t.Fatal("failed to provoke undecodable EstimateDelta fallback")
 	}
 }
 
@@ -858,6 +963,54 @@ func TestClientTransitionAndDecodeFailures(t *testing.T) {
 	)
 	if overflow.Type != ActionExtremityDiff {
 		t.Fatalf("expected extremity diff on aggregate overflow, got %#v", overflow)
+	}
+	if got := client.TransitionBucketBatch(
+		BucketDecodeBatch{FailedBuckets: []FailedBucket{{Depth: 4, Prefix: 3}}},
+		[]BucketRequest{{Depth: 4, Prefix: 3, Capacity: 8}},
+		[]uint64{1, 2, 3},
+		func() *uint64 {
+			v := uint64(10)
+			return &v
+		}(),
+		4096,
+	); got.Type != ActionBucketSketches {
+		t.Fatalf("expected estimate-aware retry, got %#v", got)
+	}
+	if got := client.TransitionBucketBatch(
+		BucketDecodeBatch{FailedBuckets: []FailedBucket{{Depth: 4, Prefix: 3}}},
+		[]BucketRequest{{Depth: 4, Prefix: 3, Capacity: 8}},
+		nil,
+		func() *uint64 {
+			v := ^uint64(0)
+			return &v
+		}(),
+		5000,
+	); got.Type != ActionExtremityDiff {
+		t.Fatalf("expected overflow fallback from huge estimate, got %#v", got)
+	}
+	if got := client.TransitionBucketBatch(
+		BucketDecodeBatch{FailedBuckets: []FailedBucket{{Depth: 4, Prefix: 3}}},
+		[]BucketRequest{{Depth: 4, Prefix: 3, Capacity: MaxBucketSketchCapacity}},
+		nil,
+		func() *uint64 {
+			v := ^uint64(0)
+			return &v
+		}(),
+		4096,
+	); got.Type != ActionExtremityDiff {
+		t.Fatalf("expected split overflow fallback, got %#v", got)
+	}
+	if got := client.TransitionBucketBatch(
+		BucketDecodeBatch{FailedBuckets: []FailedBucket{{Depth: 4, Prefix: 3}}},
+		[]BucketRequest{{Depth: 4, Prefix: 3, Capacity: MaxBucketSketchCapacity}},
+		nil,
+		func() *uint64 {
+			v := uint64(2)
+			return &v
+		}(),
+		4,
+	); got.Type != ActionExtremityDiff {
+		t.Fatalf("expected aggregate-cap split overflow, got %#v", got)
 	}
 	if got := client.TransitionBucketBatch(
 		BucketDecodeBatch{FailedBuckets: []FailedBucket{{Depth: 1, Prefix: 0}}},
