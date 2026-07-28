@@ -221,7 +221,7 @@ func traceMod(modulus []uint64, parameter uint64) (polynomial, bool) {
 			return nil, false
 		}
 		if len(trace) < 2 {
-			trace = append(trace, 0)
+			trace = append(trace, make([]uint64, 2-len(trace))...)
 		}
 		trace[1] = parameter
 		if !polyMod(modulus, &trace) {

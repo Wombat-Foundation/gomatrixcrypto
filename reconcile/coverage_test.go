@@ -31,6 +31,14 @@ func makeOddSyndromes(values []uint64, capacity int) []uint64 {
 	return odd
 }
 
+func strataFromValues(values ...uint64) [StrataCount][StratumCapacity]uint64 {
+	var kernel ResidentKernel
+	for _, value := range values {
+		_ = kernel.Insert(ElementHash{H64: value, H128: [16]byte{byte(value)}})
+	}
+	return *kernel.Strata()
+}
+
 func TestElementHashAndEventIDs(t *testing.T) {
 	var digest [32]byte
 	for i := range digest {
@@ -229,6 +237,20 @@ func TestSyndromeSketchOperations(t *testing.T) {
 	if !equalSketch(xorLeft, expected) {
 		t.Fatalf("xor mismatch: %#v != %#v", xorLeft, expected)
 	}
+	subLeft, _ := NewSyndromeSketch(4)
+	subRight, _ := NewSyndromeSketch(4)
+	_ = subLeft.Toggle(1)
+	_ = subLeft.Toggle(2)
+	_ = subRight.Toggle(2)
+	subtracted, err := subLeft.Subtract(subRight)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectedSub, _ := NewSyndromeSketch(4)
+	_ = expectedSub.Toggle(1)
+	if !equalSketch(subtracted, expectedSub) {
+		t.Fatalf("subtract mismatch: %#v != %#v", subtracted, expectedSub)
+	}
 	if _, err := xorLeft.Subtract(&SyndromeSketch{Coordinates: []uint64{1, 2, 3}}); err != ErrInvalidSketchLength {
 		t.Fatalf("expected ErrInvalidSketchLength, got %v", err)
 	}
@@ -262,6 +284,10 @@ func TestResidentKernelAndBucketValidation(t *testing.T) {
 	}
 	if err := rk.Remove(first); err != nil {
 		t.Fatal(err)
+	}
+	var emptyRK ResidentKernel
+	if err := emptyRK.Remove(first); err != ErrCountUnderflow {
+		t.Fatalf("expected ErrCountUnderflow, got %v", err)
 	}
 	if err := rk.Insert(ElementHash{H128: [16]byte{1}, H64: 0}); err != ErrZeroShortIdentifier {
 		t.Fatalf("expected ErrZeroShortIdentifier, got %v", err)
@@ -333,12 +359,50 @@ func TestClientAndTriageFlow(t *testing.T) {
 		t.Fatalf("expected bucket sketches, got %v", got.Type)
 	}
 
+	wide := NewResidentKernel()
+	wideAction := c.SelectAction(&wide, RemoteDigest{
+		Digest:              [16]byte{2},
+		KnownEventCount:     1000,
+		Strata:              *wide.Strata(),
+		FrameMatches:        true,
+		HasUnknownExtremity: false,
+	}, 0)
+	if wideAction.Type != ActionBucketSketches || len(wideAction.Requests) != 64 {
+		t.Fatalf("expected 64-way localization, got %#v", wideAction)
+	}
+	if wideAction.Requests[0].Depth != 6 || wideAction.Requests[0].Prefix != 0 || wideAction.Requests[0].Capacity != 24 {
+		t.Fatalf("unexpected localized request: %#v", wideAction.Requests[0])
+	}
+	if wideAction.Requests[63].Prefix != 63 {
+		t.Fatalf("unexpected final localized prefix: %#v", wideAction.Requests[63])
+	}
+
+	gated := c.WithGateThreshold(func() *uint64 {
+		threshold := uint64(1)
+		return &threshold
+	}())
+	if got := gated.SelectAction(&wide, RemoteDigest{
+		Digest:              [16]byte{2},
+		KnownEventCount:     1000,
+		Strata:              *wide.Strata(),
+		FrameMatches:        true,
+		HasUnknownExtremity: false,
+	}, 0); got.Type != ActionExtremityDiff {
+		t.Fatalf("expected gate fallback, got %#v", got)
+	}
+
 	sketch, err := c.BuildSketch(1, []ElementHash{event})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if decoded, err := DecodeSyndromeSketch(1, sketch.Encode()); err != nil || !equalSketch(sketch, decoded) {
 		t.Fatalf("BuildSketch round-trip failed: %v", err)
+	}
+	if _, err := c.BuildSketch(0, nil); err != ErrInvalidSketchCapacity {
+		t.Fatalf("expected ErrInvalidSketchCapacity, got %v", err)
+	}
+	if _, err := c.BuildSketch(c.maxSketchCapacity+1, nil); err != ErrInvalidSketchCapacity {
+		t.Fatalf("expected ErrInvalidSketchCapacity, got %v", err)
 	}
 
 	if !VerifyGlobalResidual([16]byte{3}, [][16]byte{{1}, {2}}, nil) {
@@ -362,6 +426,9 @@ func TestClientAndTriageFlow(t *testing.T) {
 	}
 	if len(next.Requests) == 0 {
 		t.Fatal("expected retry requests")
+	}
+	if next.Requests[0].Capacity != 10 || next.Requests[0].Depth != 1 || next.Requests[0].Prefix != 0 {
+		t.Fatalf("unexpected split retry request: %#v", next.Requests[0])
 	}
 
 	if got := absDiffU64(10, 3); got != 7 {
@@ -514,6 +581,162 @@ func TestDecodeBucketSketchesAndHelpers(t *testing.T) {
 	}
 	if _, ok := safeAdd(maxInt, 1); ok {
 		t.Fatal("safeAdd should overflow")
+	}
+}
+
+func TestMatrixAndPinSketchHelperBranches(t *testing.T) {
+	if _, err := FromMatrixEventID("not-an-event-id", V4Plus); err != ErrInvalidEventID {
+		t.Fatalf("expected ErrInvalidEventID, got %v", err)
+	}
+
+	var emptyPoly polynomial
+	if makeMonic(&emptyPoly) {
+		t.Fatal("makeMonic should reject empty polynomials")
+	}
+	poly := polynomial{1, 2, 3}
+	if !makeMonic(&poly) {
+		t.Fatal("makeMonic should accept a monic polynomial")
+	}
+	if !polyMod([]uint64{1, 2, 1}, &poly) {
+		t.Fatal("polyMod should accept monic modulus")
+	}
+	value := polynomial{1, 2}
+	if polyMod([]uint64{1, 2}, &value) {
+		t.Fatal("polyMod should reject non-monic modulus")
+	}
+
+	if _, ok := polyDiv(polynomial{1}, []uint64{1, 1}); ok {
+		t.Fatal("polyDiv should reject short dividend")
+	}
+	if got, ok := polyDiv(polynomial{2, 3, 1}, []uint64{1, 1}); !ok || !reflect.DeepEqual(got, polynomial{2, 1}) {
+		t.Fatalf("polyDiv success mismatch: %v %v", got, ok)
+	}
+	if got, ok := polyDiv(polynomial{0, 1, 1}, []uint64{1, 1}); !ok || !reflect.DeepEqual(got, polynomial{0, 1}) {
+		t.Fatalf("polyDiv zero-term mismatch: %v %v", got, ok)
+	}
+
+	if got, ok := polyGCD(polynomial{1, 1}, polynomial{1, 0, 1}); !ok || !reflect.DeepEqual(got, polynomial{1, 1}) {
+		t.Fatalf("polyGCD mismatch: %v %v", got, ok)
+	}
+
+	if _, ok := traceMod([]uint64{1, 1}, 1); !ok {
+		t.Fatal("traceMod should succeed")
+	}
+
+	var roots []uint64
+	work := 0
+	pairProducts := Mul(1, 2) ^ Mul(1, 3) ^ Mul(2, 3)
+	polynomialWithThreeRoots := polynomial{Mul(Mul(1, 2), 3), pairProducts, 0, 1}
+	if err := findRootsWithBudget(polynomialWithThreeRoots, &roots, &work); err != ErrBudgetExhausted {
+		t.Fatalf("expected budget exhaustion, got %v", err)
+	}
+	if len(roots) != 0 {
+		t.Fatalf("expected no roots after budget exhaustion, got %v", roots)
+	}
+
+	if cost, ok := factorTrialCost(1000); !ok || cost <= maxFactorWork {
+		t.Fatalf("unexpected factorTrialCost(1000) = %d %v", cost, ok)
+	}
+	if trailingZeros64(0) != 64 {
+		t.Fatal("trailingZeros64(0) should be 64")
+	}
+}
+
+func TestEstimateDeltaRustCases(t *testing.T) {
+	local := strataFromValues()
+	remote := local
+	if got, ok, err := EstimateDelta(&local, &remote); err != nil || !ok || got != 0 {
+		t.Fatalf("EstimateDelta identical = %d %v %v", got, ok, err)
+	}
+
+	remote = strataFromValues(1, 2, 4, 8, 3, 5)
+	if got, ok, err := EstimateDelta(&local, &remote); err != nil || !ok || got != 6 {
+		t.Fatalf("EstimateDelta sparse tail = %d %v %v", got, ok, err)
+	}
+
+	remote = strataFromValues(1, 3, 5, 7, 9, 11, 13, 15, 17)
+	if got, ok, err := EstimateDelta(&local, &remote); err != nil || ok || got != 0 {
+		t.Fatalf("EstimateDelta sparse failure = %d %v %v", got, ok, err)
+	}
+}
+
+func TestClientTransitionAndDecodeFailures(t *testing.T) {
+	client, err := NewReconciliationClient(8)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Retry a failed bucket at a larger capacity.
+	retry := client.TransitionBucketBatch(
+		BucketDecodeBatch{FailedBuckets: []FailedBucket{{Depth: 4, Prefix: 3}}},
+		[]BucketRequest{{Depth: 4, Prefix: 3, Capacity: 8}},
+		[]uint64{1, 2},
+		nil,
+		4096,
+	)
+	if retry.Type != ActionBucketSketches || len(retry.Requests) != 1 {
+		t.Fatalf("unexpected retry action: %#v", retry)
+	}
+	if retry.Requests[0].Depth != 4 || retry.Requests[0].Prefix != 3 || retry.Requests[0].Capacity <= 8 {
+		t.Fatalf("unexpected retry request: %#v", retry.Requests[0])
+	}
+
+	// Split a max-capacity bucket into two narrower buckets.
+	split := client.TransitionBucketBatch(
+		BucketDecodeBatch{FailedBuckets: []FailedBucket{{Depth: 0, Prefix: 0}}},
+		[]BucketRequest{{Depth: 0, Prefix: 0, Capacity: MaxBucketSketchCapacity}},
+		nil,
+		nil,
+		4096,
+	)
+	if split.Type != ActionBucketSketches || len(split.Requests) != 2 {
+		t.Fatalf("unexpected split action: %#v", split)
+	}
+	if split.Requests[0].Depth != 1 || split.Requests[1].Depth != 1 {
+		t.Fatalf("unexpected split depths: %#v", split.Requests)
+	}
+
+	// Missing prior request falls back to extremity diff.
+	missing := client.TransitionBucketBatch(
+		BucketDecodeBatch{FailedBuckets: []FailedBucket{{Depth: 2, Prefix: 1}}},
+		[]BucketRequest{{Depth: 2, Prefix: 0, Capacity: 8}},
+		nil,
+		nil,
+		4096,
+	)
+	if missing.Type != ActionExtremityDiff {
+		t.Fatalf("expected extremity diff, got %#v", missing)
+	}
+
+	// Aggregate cap enforcement falls back as well.
+	overflow := client.TransitionBucketBatch(
+		BucketDecodeBatch{FailedBuckets: []FailedBucket{{Depth: 4, Prefix: 3}, {Depth: 4, Prefix: 4}}},
+		[]BucketRequest{{Depth: 4, Prefix: 3, Capacity: 8}, {Depth: 4, Prefix: 4, Capacity: 8}},
+		nil,
+		nil,
+		8,
+	)
+	if overflow.Type != ActionExtremityDiff {
+		t.Fatalf("expected extremity diff on aggregate overflow, got %#v", overflow)
+	}
+
+	// Corrupt a valid sketch so DecodeElements reaches the validation failure path.
+	sketch, err := NewSyndromeSketch(2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sketch.Toggle(1); err != nil {
+		t.Fatal(err)
+	}
+	sketch.Coordinates[0] ^= 1
+	if _, err := sketch.DecodeElements(2); err != ErrDecodeFailure {
+		t.Fatalf("expected ErrDecodeFailure, got %v", err)
+	}
+
+	// ETag escaping path.
+	etag := NewRoomAccumulator().ETag([]string{"$quoted\nline", "$back\\slash"})
+	if etag == "" {
+		t.Fatal("ETag should not be empty")
 	}
 }
 
