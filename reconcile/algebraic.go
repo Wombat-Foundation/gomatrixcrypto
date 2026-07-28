@@ -213,7 +213,7 @@ type SyndromeSketch struct {
 
 // NewSyndromeSketch allocates an empty sketch with the requested capacity.
 func NewSyndromeSketch(capacity int) (*SyndromeSketch, error) {
-	if capacity == 0 || capacity > MaxSketchCapacity {
+	if capacity <= 0 || capacity > MaxSketchCapacity {
 		return nil, ErrInvalidSketchCapacity
 	}
 	return &SyndromeSketch{Coordinates: make([]uint64, capacity)}, nil
@@ -273,7 +273,7 @@ func (s *SyndromeSketch) Subtract(other *SyndromeSketch) (*SyndromeSketch, error
 
 // DecodeElements decodes up to maxElements roots from the sketch.
 func (s *SyndromeSketch) DecodeElements(maxElements int) ([]uint64, error) {
-	if maxElements == 0 || maxElements > s.Capacity() || maxElements > MaxLocalSketchDecodeCapacity {
+	if maxElements <= 0 || maxElements > s.Capacity() || maxElements > MaxLocalSketchDecodeCapacity {
 		return nil, ErrInvalidSketchCapacity
 	}
 	decoded, err := decodePinsketch(s.Coordinates[:maxElements], maxElements)

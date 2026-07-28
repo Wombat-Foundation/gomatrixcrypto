@@ -566,14 +566,17 @@ func TestClientAndTriageFlow(t *testing.T) {
 	batch := BucketDecodeBatch{
 		SuccessfulBuckets: []BucketDecodeSuccess{{Depth: 1, Prefix: 0, Roots: []uint64{10}}},
 	}
-	if got := c.TransitionBucketBatch(batch, nil, nil, nil, 4096); got.Type != ActionResolveRoots {
+	if got := c.TransitionBucketBatch(batch, nil, nil, nil, 0, 4096); got.Type != ActionResolveRoots {
 		t.Fatalf("expected resolve roots, got %v", got.Type)
 	}
 
 	failed := BucketDecodeBatch{FailedBuckets: []FailedBucket{{Depth: 0, Prefix: 0}}}
-	next := c.TransitionBucketBatch(failed, []BucketRequest{{Depth: 0, Prefix: 0, Capacity: 64}}, nil, nil, 4096)
+	next := c.TransitionBucketBatch(failed, []BucketRequest{{Depth: 0, Prefix: 0, Capacity: 64}}, nil, nil, 0, 4096)
 	if next.Type != ActionBucketSketches {
 		t.Fatalf("expected bucket sketches retry, got %v", next.Type)
+	}
+	if got := c.TransitionBucketBatch(failed, []BucketRequest{{Depth: 0, Prefix: 0, Capacity: 64}}, nil, nil, c.MaxRounds(), 4096); got.Type != ActionExtremityDiff {
+		t.Fatalf("expected round-limit fallback, got %v", got.Type)
 	}
 	if len(next.Requests) == 0 {
 		t.Fatal("expected retry requests")
@@ -611,8 +614,8 @@ func TestPinSketchHelpersAndDecoding(t *testing.T) {
 	if got, ok := factorTrialCost(0); !ok || got != 0 {
 		t.Fatalf("factorTrialCost(0) = %d, %v", got, ok)
 	}
-	if _, ok := nextFactorParameter(1), true; !ok {
-		t.Fatal("nextFactorParameter sanity")
+	if got := nextFactorParameter(1); got == 0 {
+		t.Fatal("nextFactorParameter returned zero")
 	}
 
 	values := []uint64{1, 2, 3, 4}
@@ -922,6 +925,7 @@ func TestClientTransitionAndDecodeFailures(t *testing.T) {
 		[]BucketRequest{{Depth: 4, Prefix: 3, Capacity: 8}},
 		[]uint64{1, 2},
 		nil,
+		0,
 		4096,
 	)
 	if retry.Type != ActionBucketSketches || len(retry.Requests) != 1 {
@@ -937,6 +941,7 @@ func TestClientTransitionAndDecodeFailures(t *testing.T) {
 		[]BucketRequest{{Depth: 0, Prefix: 0, Capacity: MaxBucketSketchCapacity}},
 		nil,
 		nil,
+		0,
 		4096,
 	)
 	if split.Type != ActionBucketSketches || len(split.Requests) != 2 {
@@ -950,6 +955,7 @@ func TestClientTransitionAndDecodeFailures(t *testing.T) {
 		[]BucketRequest{{Depth: 31, Prefix: 1, Capacity: MaxBucketSketchCapacity}},
 		nil,
 		nil,
+		0,
 		4096,
 	); got.Type != ActionExtremityDiff {
 		t.Fatalf("expected extremity diff for max-depth bucket, got %#v", got)
@@ -961,6 +967,7 @@ func TestClientTransitionAndDecodeFailures(t *testing.T) {
 		[]BucketRequest{{Depth: 2, Prefix: 0, Capacity: 8}},
 		nil,
 		nil,
+		0,
 		4096,
 	)
 	if missing.Type != ActionExtremityDiff {
@@ -973,6 +980,7 @@ func TestClientTransitionAndDecodeFailures(t *testing.T) {
 		[]BucketRequest{{Depth: 4, Prefix: 3, Capacity: 8}, {Depth: 4, Prefix: 4, Capacity: 8}},
 		nil,
 		nil,
+		0,
 		8,
 	)
 	if overflow.Type != ActionExtremityDiff {
@@ -986,6 +994,7 @@ func TestClientTransitionAndDecodeFailures(t *testing.T) {
 			v := uint64(10)
 			return &v
 		}(),
+		0,
 		4096,
 	); got.Type != ActionBucketSketches {
 		t.Fatalf("expected estimate-aware retry, got %#v", got)
@@ -998,6 +1007,7 @@ func TestClientTransitionAndDecodeFailures(t *testing.T) {
 			v := ^uint64(0)
 			return &v
 		}(),
+		0,
 		5000,
 	); got.Type != ActionExtremityDiff {
 		t.Fatalf("expected overflow fallback from huge estimate, got %#v", got)
@@ -1010,6 +1020,7 @@ func TestClientTransitionAndDecodeFailures(t *testing.T) {
 			v := ^uint64(0)
 			return &v
 		}(),
+		0,
 		4096,
 	); got.Type != ActionExtremityDiff {
 		t.Fatalf("expected split overflow fallback, got %#v", got)
@@ -1022,6 +1033,7 @@ func TestClientTransitionAndDecodeFailures(t *testing.T) {
 			v := uint64(2)
 			return &v
 		}(),
+		0,
 		4,
 	); got.Type != ActionExtremityDiff {
 		t.Fatalf("expected aggregate-cap split overflow, got %#v", got)
@@ -1031,6 +1043,7 @@ func TestClientTransitionAndDecodeFailures(t *testing.T) {
 		nil,
 		nil,
 		nil,
+		0,
 		4096,
 	); got.Type != ActionExtremityDiff {
 		t.Fatalf("expected extremity diff with missing request set, got %#v", got)

@@ -26,7 +26,10 @@ func NewReconciliationClient(maxSketchCapacity int) (*ReconciliationClient, erro
 // WithMaxRounds returns a copy with a custom round limit.
 func (c ReconciliationClient) WithMaxRounds(maxRounds int) ReconciliationClient {
 	c.maxRounds = maxRounds
-	threshold := uint64(maxRounds * MaxBucketedSketchCapacity)
+	var threshold uint64
+	if maxRounds > 0 {
+		threshold = uint64(maxRounds) * MaxBucketedSketchCapacity
+	}
 	c.gateThreshold = &threshold
 	return c
 }
@@ -165,6 +168,7 @@ func (c ReconciliationClient) TransitionBucketBatch(
 	previousRequests []BucketRequest,
 	accumulatedRoots []uint64,
 	globalEstimate *uint64,
+	exchangeRound int,
 	aggregateCap int,
 ) ClientAction {
 	for _, success := range batch.SuccessfulBuckets {
@@ -172,6 +176,9 @@ func (c ReconciliationClient) TransitionBucketBatch(
 	}
 	if len(batch.FailedBuckets) == 0 {
 		return ClientAction{Type: ActionResolveRoots, Roots: accumulatedRoots}
+	}
+	if exchangeRound >= c.maxRounds {
+		return ClientAction{Type: ActionExtremityDiff}
 	}
 
 	resolvedCount := uint64(len(accumulatedRoots))
@@ -293,7 +300,11 @@ func ceilDiv(n, d int) int {
 	if n <= 0 {
 		return 0
 	}
-	return (n + d - 1) / d
+	q := n / d
+	if n%d != 0 {
+		q++
+	}
+	return q
 }
 
 func maxU64(a, b uint64) uint64 {

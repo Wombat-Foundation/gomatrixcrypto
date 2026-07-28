@@ -24,6 +24,9 @@ func decodePinSketch(oddSyndromes []uint64, maxElements int) ([]uint64, error) {
 	expected := len(locator) - 1
 	roots := make([]uint64, 0, expected)
 	if err := findRoots(locator, &roots); err != nil {
+		if err == ErrBudgetExhausted {
+			return nil, ErrDecodeFailure
+		}
 		return nil, err
 	}
 	// coverage:ignore

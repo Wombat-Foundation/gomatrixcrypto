@@ -38,7 +38,7 @@ func ValidateBucketRequests(requests []BucketRequest) error {
 	var previousEnd uint64
 
 	for _, req := range requests {
-		if req.Capacity == 0 || req.Capacity > MaxBucketSketchCapacity {
+		if req.Capacity <= 0 || req.Capacity > MaxBucketSketchCapacity {
 			return ErrInvalidSketchCapacity
 		}
 		if req.Depth > 32 {
