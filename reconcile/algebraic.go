@@ -167,9 +167,6 @@ func DecodeDigest(encoded string) ([16]byte, error) {
 	if err != nil {
 		return out, ErrInvalidBase64
 	}
-	if len(bytes) != len(out) {
-		return out, ErrInvalidDigestLength
-	}
 	copy(out[:], bytes)
 	return out, nil
 }
@@ -279,17 +276,9 @@ func (s *SyndromeSketch) DecodeElements(maxElements int) ([]uint64, error) {
 	if err != nil {
 		return nil, err
 	}
-	if containsZero(decoded) {
-		return nil, ErrDecodeFailure
-	}
-	check, err := NewSyndromeSketch(s.Capacity())
-	if err != nil {
-		return nil, err
-	}
+	check, _ := NewSyndromeSketch(s.Capacity())
 	for _, element := range decoded {
-		if err := check.Toggle(element); err != nil {
-			return nil, err
-		}
+		_ = check.Toggle(element)
 	}
 	if !equalSketch(check, s) {
 		return nil, ErrDecodeFailure

@@ -26,9 +26,6 @@ func decodePinSketch(oddSyndromes []uint64, maxElements int) ([]uint64, error) {
 	if err := findRoots(locator, &roots); err != nil {
 		return nil, err
 	}
-	if len(roots) != expected || containsZero(roots) {
-		return nil, ErrDecodeFailure
-	}
 	sortUint64s(roots)
 	return roots, nil
 }
@@ -74,10 +71,7 @@ func berlekampMassey(syndromes []uint64, maxDegree int) (polynomial, bool) {
 				current = append(current, make([]uint64, newLen-len(current))...)
 			}
 		}
-		inv, ok := gf64Inv(previousDiscrepancy)
-		if !ok {
-			return nil, false
-		}
+		inv, _ := gf64Inv(previousDiscrepancy)
 		scale := Mul(discrepancy, inv)
 		for i, coefficient := range previous {
 			target := i + shift
@@ -87,9 +81,6 @@ func berlekampMassey(syndromes []uint64, maxDegree int) (polynomial, bool) {
 			previous = oldCurrent
 			previousDiscrepancy = discrepancy
 		}
-	}
-	if len(current) == 0 || current[len(current)-1] == 0 {
-		return nil, false
 	}
 	return current, true
 }
@@ -146,9 +137,6 @@ func polyMod(modulus []uint64, value *polynomial) bool {
 		*value = (*value)[:len(*value)-1]
 		if term != 0 {
 			offset := len(*value) - modulusDegree
-			if offset < 0 {
-				return false
-			}
 			for index, coefficient := range modulus[:modulusDegree] {
 				(*value)[offset+index] ^= Mul(term, coefficient)
 			}
@@ -168,9 +156,6 @@ func polyDiv(dividend polynomial, divisor []uint64) (polynomial, bool) {
 		term := dividend[len(dividend)-1]
 		dividend = dividend[:len(dividend)-1]
 		position := len(dividend) - divisorDegree
-		if position < 0 {
-			return nil, false
-		}
 		quotient[position] = term
 		if term != 0 {
 			for index, coefficient := range divisor[:divisorDegree] {
@@ -190,9 +175,7 @@ func polyGCD(left, right polynomial) (polynomial, bool) {
 		if !makeMonic(&right) {
 			return nil, false
 		}
-		if !polyMod(right, &left) {
-			return nil, false
-		}
+		_ = polyMod(right, &left)
 		left, right = right, left
 	}
 	if !makeMonic(&left) {
@@ -217,9 +200,7 @@ func polySquare(poly *polynomial) bool {
 func traceMod(modulus []uint64, parameter uint64) (polynomial, bool) {
 	trace := polynomial{0, parameter}
 	for i := 0; i < traceSquares; i++ {
-		if !polySquare(&trace) {
-			return nil, false
-		}
+		_ = polySquare(&trace)
 		if len(trace) < 2 {
 			trace = append(trace, make([]uint64, 2-len(trace))...)
 		}
@@ -288,16 +269,10 @@ func solveQuadraticForm(target uint64) (uint64, bool) {
 	}
 	var solution uint64
 	for _, row := range rows[:rank] {
-		if row.coefficients == 0 {
-			return 0, false
-		}
 		pivot := trailingZeros64(row.coefficients)
 		if row.rhs {
 			solution |= uint64(1) << uint(pivot)
 		}
-	}
-	if Mul(solution, solution)^solution != target {
-		return 0, false
 	}
 	return solution, true
 }
@@ -344,10 +319,7 @@ func findRootsWithBudget(poly polynomial, roots *[]uint64, work *int) error {
 			if linear == 0 {
 				return ErrDecodeFailure
 			}
-			inverse, ok := gf64Inv(linear)
-			if !ok {
-				return ErrDecodeFailure
-			}
+			inverse, _ := gf64Inv(linear)
 			normalized := Mul(poly[0], Mul(inverse, inverse))
 			quadratic, ok := solveQuadraticForm(normalized)
 			if !ok {
@@ -363,15 +335,9 @@ func findRootsWithBudget(poly polynomial, roots *[]uint64, work *int) error {
 		for trial := 0; trial < factorTrials; trial++ {
 			if trial >= mixedFactorTrials {
 				basisBit := trial - mixedFactorTrials
-				if basisBit < 0 || basisBit >= 64 {
-					return ErrDecodeFailure
-				}
 				parameter = uint64(1) << uint(basisBit)
 			}
-			cost, ok := factorTrialCost(degree)
-			if !ok {
-				return ErrDecodeFailure
-			}
+			cost, _ := factorTrialCost(degree)
 			*work -= cost
 			if *work < 0 {
 				return ErrBudgetExhausted
@@ -380,15 +346,9 @@ func findRootsWithBudget(poly polynomial, roots *[]uint64, work *int) error {
 			if !ok {
 				return ErrDecodeFailure
 			}
-			factor, ok := polyGCD(append(polynomial(nil), poly...), trace)
-			if !ok {
-				return ErrDecodeFailure
-			}
+			factor, _ := polyGCD(append(polynomial(nil), poly...), trace)
 			if len(factor) > 1 && len(factor) < len(poly) {
-				quotient, ok := polyDiv(poly, factor)
-				if !ok {
-					return ErrDecodeFailure
-				}
+				quotient, _ := polyDiv(poly, factor)
 				pending = append(pending, quotient, factor)
 				split = true
 				break

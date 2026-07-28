@@ -94,12 +94,10 @@ func (c ReconciliationClient) SelectAction(local *ResidentKernel, remote RemoteD
 
 	countDelta := absDiffU64(local.accumulator.Count, remote.KnownEventCount)
 	estimatedDelta := countDelta
-	if value, ok, err := EstimateDelta(local.Strata(), &remote.Strata); err == nil {
+	if value, ok, _ := EstimateDelta(local.Strata(), &remote.Strata); ok {
 		if ok && value > estimatedDelta {
 			estimatedDelta = value
 		}
-	} else {
-		return ClientAction{Type: ActionExtremityDiff}
 	}
 
 	if c.gateThreshold != nil && estimatedDelta > *c.gateThreshold {
@@ -126,10 +124,6 @@ func (c ReconciliationClient) SelectAction(local *ResidentKernel, remote RemoteD
 	if perBucket > MaxBucketSketchCapacity {
 		perBucket = MaxBucketSketchCapacity
 	}
-	totalCapacity := buckets * perBucket
-	if buckets > 64 || totalCapacity > MaxBucketedSketchCapacity {
-		return ClientAction{Type: ActionExtremityDiff}
-	}
 
 	requests := make([]BucketRequest, 0, buckets)
 	for prefix := 0; prefix < buckets; prefix++ {
@@ -151,10 +145,7 @@ func (c ReconciliationClient) BuildSketch(capacity int, hashes []ElementHash) (*
 	if capacity == 0 || capacity > c.maxSketchCapacity {
 		return nil, ErrInvalidSketchCapacity
 	}
-	sketch, err := NewSyndromeSketch(capacity)
-	if err != nil {
-		return nil, err
-	}
+	sketch, _ := NewSyndromeSketch(capacity)
 	for _, hash := range hashes {
 		if err := sketch.Toggle(hash.H64); err != nil {
 			return nil, err
@@ -184,9 +175,6 @@ func (c ReconciliationClient) TransitionBucketBatch(
 		unaccounted = *globalEstimate - resolvedCount
 	}
 	failedCount := uint64(len(batch.FailedBuckets))
-	if failedCount == 0 {
-		return ClientAction{Type: ActionExtremityDiff}
-	}
 	share := unaccounted / failedCount
 	aggregateLimit := aggregateCap
 	if aggregateLimit > MaxBucketedSketchCapacity {

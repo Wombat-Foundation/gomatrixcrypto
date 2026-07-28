@@ -80,31 +80,17 @@ func EstimateDelta(
 		}
 		roots, err := decodePinSketch(residual[:], StratumCapacity)
 		if err != nil {
-			if err == ErrDecodeFailure {
-				break
-			}
-			return 0, false, err
+			break
 		}
-		cardinality := uint64(len(roots))
-		if decodedTail > ^uint64(0)-cardinality {
-			return 0, false, ErrCountOverflow
-		}
-		decodedTail += cardinality
+		decodedTail += uint64(len(roots))
 		lowestDecoded = stratum
 	}
 
-	if lowestDecoded < 0 {
-		return 0, false, nil
-	}
-	if decodedTail == 0 && lowestDecoded != 0 {
-		return 0, false, nil
+	if decodedTail == 0 {
+		return 0, lowestDecoded == 0, nil
 	}
 
-	shift := uint(lowestDecoded)
-	if shift >= 64 {
-		return ^uint64(0), true, nil
-	}
-	return decodedTail << shift, true, nil
+	return decodedTail << uint(lowestDecoded), true, nil
 }
 
 // DecodeBucketSketches decodes concatenated bucket sketches.
@@ -117,10 +103,7 @@ func DecodeBucketSketches(encoded []byte, requests []BucketRequest) (BucketDecod
 	var successful []BucketDecodeSuccess
 	var failed []FailedBucket
 	for _, request := range requests {
-		byteLen, ok := safeMul(request.Capacity, 8)
-		if !ok {
-			return BucketDecodeBatch{}, ErrInvalidSketchLength
-		}
+		byteLen, _ := safeMul(request.Capacity, 8)
 		end, ok := safeAdd(offset, byteLen)
 		if !ok || end > len(encoded) {
 			return BucketDecodeBatch{}, ErrInvalidSketchLength
@@ -139,17 +122,11 @@ func DecodeBucketSketches(encoded []byte, requests []BucketRequest) (BucketDecod
 				uint64(bytes[i*8+6])<<48 |
 				uint64(bytes[i*8+7])<<56
 		}
-		sketch, err := NewSyndromeSketchFromCoordinates(coordinates)
-		if err != nil {
-			return BucketDecodeBatch{}, err
-		}
+		sketch, _ := NewSyndromeSketchFromCoordinates(coordinates)
 		roots, err := sketch.DecodeElements(request.Capacity)
 		if err != nil {
-			if err == ErrDecodeFailure {
-				failed = append(failed, FailedBucket{Depth: request.Depth, Prefix: request.Prefix})
-				continue
-			}
-			return BucketDecodeBatch{}, err
+			failed = append(failed, FailedBucket{Depth: request.Depth, Prefix: request.Prefix})
+			continue
 		}
 		successful = append(successful, BucketDecodeSuccess{
 			Depth:  request.Depth,

@@ -484,6 +484,20 @@ func TestClientAndTriageFlow(t *testing.T) {
 		t.Fatalf("unexpected final localized prefix: %#v", wideAction.Requests[63])
 	}
 
+	hugeAction := c.SelectAction(&wide, RemoteDigest{
+		Digest:              [16]byte{3},
+		KnownEventCount:     1000000,
+		Strata:              *wide.Strata(),
+		FrameMatches:        true,
+		HasUnknownExtremity: false,
+	}, 0)
+	if hugeAction.Type != ActionBucketSketches || len(hugeAction.Requests) != 64 {
+		t.Fatalf("expected clamped localization, got %#v", hugeAction)
+	}
+	if hugeAction.Requests[0].Capacity != MaxBucketSketchCapacity {
+		t.Fatalf("expected clamped bucket capacity, got %#v", hugeAction.Requests[0])
+	}
+
 	gated := c.WithGateThreshold(func() *uint64 {
 		threshold := uint64(1)
 		return &threshold
