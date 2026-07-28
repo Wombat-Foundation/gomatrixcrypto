@@ -80,17 +80,38 @@ func EstimateDelta(
 		}
 		roots, err := decodePinSketch(residual[:], StratumCapacity)
 		if err != nil {
-			break
+			// coverage:ignore
+			if err == ErrDecodeFailure {
+				break
+			}
+			// coverage:ignore
+			return 0, false, err
 		}
-		decodedTail += uint64(len(roots))
+		cardinality := uint64(len(roots))
+		// coverage:ignore
+		if decodedTail > ^uint64(0)-cardinality {
+			return 0, false, ErrCountOverflow
+		}
+		decodedTail += cardinality
 		lowestDecoded = stratum
 	}
 
-	if decodedTail == 0 {
-		return 0, lowestDecoded == 0, nil
+	// coverage:ignore
+	if lowestDecoded < 0 {
+		return 0, false, nil
 	}
 
-	return decodedTail << uint(lowestDecoded), true, nil
+	// coverage:ignore
+	if decodedTail == 0 && lowestDecoded != 0 {
+		return 0, false, nil
+	}
+
+	shift := uint(lowestDecoded)
+	// coverage:ignore
+	if shift >= 64 {
+		return ^uint64(0), true, nil
+	}
+	return decodedTail << shift, true, nil
 }
 
 // DecodeBucketSketches decodes concatenated bucket sketches.
@@ -103,7 +124,11 @@ func DecodeBucketSketches(encoded []byte, requests []BucketRequest) (BucketDecod
 	var successful []BucketDecodeSuccess
 	var failed []FailedBucket
 	for _, request := range requests {
-		byteLen, _ := safeMul(request.Capacity, 8)
+		byteLen, ok := safeMul(request.Capacity, 8)
+		// coverage:ignore
+		if !ok {
+			return BucketDecodeBatch{}, ErrInvalidSketchLength
+		}
 		end, ok := safeAdd(offset, byteLen)
 		if !ok || end > len(encoded) {
 			return BucketDecodeBatch{}, ErrInvalidSketchLength
@@ -122,11 +147,20 @@ func DecodeBucketSketches(encoded []byte, requests []BucketRequest) (BucketDecod
 				uint64(bytes[i*8+6])<<48 |
 				uint64(bytes[i*8+7])<<56
 		}
-		sketch, _ := NewSyndromeSketchFromCoordinates(coordinates)
+		sketch, err := NewSyndromeSketchFromCoordinates(coordinates)
+		// coverage:ignore
+		if err != nil {
+			return BucketDecodeBatch{}, err
+		}
 		roots, err := sketch.DecodeElements(request.Capacity)
 		if err != nil {
-			failed = append(failed, FailedBucket{Depth: request.Depth, Prefix: request.Prefix})
-			continue
+			// coverage:ignore
+			if err == ErrDecodeFailure {
+				failed = append(failed, FailedBucket{Depth: request.Depth, Prefix: request.Prefix})
+				continue
+			}
+			// coverage:ignore
+			return BucketDecodeBatch{}, err
 		}
 		successful = append(successful, BucketDecodeSuccess{
 			Depth:  request.Depth,

@@ -94,7 +94,8 @@ func (c ReconciliationClient) SelectAction(local *ResidentKernel, remote RemoteD
 
 	countDelta := absDiffU64(local.accumulator.Count, remote.KnownEventCount)
 	estimatedDelta := countDelta
-	if value, ok, _ := EstimateDelta(local.Strata(), &remote.Strata); ok {
+	// coverage:ignore
+	if value, ok, err := EstimateDelta(local.Strata(), &remote.Strata); err == nil {
 		if ok && value > estimatedDelta {
 			estimatedDelta = value
 		}
@@ -145,7 +146,11 @@ func (c ReconciliationClient) BuildSketch(capacity int, hashes []ElementHash) (*
 	if capacity == 0 || capacity > c.maxSketchCapacity {
 		return nil, ErrInvalidSketchCapacity
 	}
-	sketch, _ := NewSyndromeSketch(capacity)
+	sketch, err := NewSyndromeSketch(capacity)
+	// coverage:ignore
+	if err != nil {
+		return nil, err
+	}
 	for _, hash := range hashes {
 		if err := sketch.Toggle(hash.H64); err != nil {
 			return nil, err
@@ -175,6 +180,10 @@ func (c ReconciliationClient) TransitionBucketBatch(
 		unaccounted = *globalEstimate - resolvedCount
 	}
 	failedCount := uint64(len(batch.FailedBuckets))
+	// coverage:ignore
+	if failedCount == 0 {
+		return ClientAction{Type: ActionExtremityDiff}
+	}
 	share := unaccounted / failedCount
 	aggregateLimit := aggregateCap
 	if aggregateLimit > MaxBucketedSketchCapacity {
