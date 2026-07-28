@@ -19,30 +19,7 @@ func main() {
 	marker := flag.String("marker", "coverage:ignore", "source marker used to ignore a coverage block")
 	flag.Parse()
 
-	if *modulePath == "" {
-		modulePath = detectModulePath()
-	}
-
-	in, err := os.Open(*inPath)
-	must(err)
-	defer func() {
-		must(in.Close())
-	}()
-
-	var out io.Writer = os.Stdout
-	var file *os.File
-	if *outPath != "" {
-		file, err = os.Create(*outPath)
-		must(err)
-		defer func() {
-			must(file.Close())
-		}()
-		out = file
-	}
-
-	if err := filterProfile(in, out, *modulePath, *marker); err != nil {
-		must(err)
-	}
+	must(run(*inPath, *outPath, *modulePath, *marker))
 }
 
 func detectModulePath() *string {
@@ -52,6 +29,61 @@ func detectModulePath() *string {
 	}
 	value := strings.TrimSpace(string(out))
 	return &value
+}
+
+func run(inPath, outPath, modulePath, marker string) (err error) {
+	if modulePath == "" {
+		modulePath = *detectModulePath()
+	}
+
+	in, err := os.Open(inPath)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if cerr := in.Close(); err == nil && cerr != nil {
+			err = cerr
+		}
+	}()
+
+	if outPath == "" {
+		return filterProfile(in, os.Stdout, modulePath, marker)
+	}
+
+	if filepath.Clean(inPath) == filepath.Clean(outPath) {
+		dir := filepath.Dir(outPath)
+		tmp, err := os.CreateTemp(dir, "coverfilter-*.out")
+		if err != nil {
+			return err
+		}
+		tmpPath := tmp.Name()
+		if err = filterProfile(in, tmp, modulePath, marker); err != nil {
+			_ = tmp.Close()
+			_ = os.Remove(tmpPath)
+			return err
+		}
+		if err = tmp.Close(); err != nil {
+			_ = os.Remove(tmpPath)
+			return err
+		}
+		if err = os.Rename(tmpPath, outPath); err != nil {
+			_ = os.Remove(tmpPath)
+			return err
+		}
+		return nil
+	}
+
+	out, err := os.Create(outPath)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if cerr := out.Close(); err == nil && cerr != nil {
+			err = cerr
+		}
+	}()
+
+	return filterProfile(in, out, modulePath, marker)
 }
 
 func filterProfile(in io.Reader, out io.Writer, modulePath, marker string) error {

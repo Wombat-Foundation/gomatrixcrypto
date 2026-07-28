@@ -187,10 +187,6 @@ func (c ReconciliationClient) TransitionBucketBatch(
 		unaccounted = *globalEstimate - resolvedCount
 	}
 	failedCount := uint64(len(batch.FailedBuckets))
-	// coverage:ignore
-	if failedCount == 0 {
-		return ClientAction{Type: ActionExtremityDiff}
-	}
 	share := unaccounted / failedCount
 	aggregateLimit := aggregateCap
 	if aggregateLimit > MaxBucketedSketchCapacity {
