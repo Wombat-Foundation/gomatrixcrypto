@@ -56,14 +56,23 @@ type vectorDiagnostics struct {
 	Edges                     []vectorEdge       `json:"edges"`
 }
 
+// vector is the JSON fixture emitted by the minting-vectors command.
 type vector struct {
-	Schema                  string            `json:"schema"`
-	ServerName              string            `json:"server_name"`
-	PublicKeyBase64         string            `json:"public_key_base64"`
-	Profile                 string            `json:"profile"`
-	PoW                     vectorPoW         `json:"pow"`
-	GraphSeedHex            string            `json:"graph_seed_hex"`
-	KeyID                   string            `json:"key_id"`
+	// Schema identifies the fixture schema version.
+	Schema string `json:"schema"`
+	// ServerName is the Matrix server name embedded in the fixture.
+	ServerName string `json:"server_name"`
+	// PublicKeyBase64 is the generated public key in unpadded base64.
+	PublicKeyBase64 string `json:"public_key_base64"`
+	// Profile identifies the minting profile used for the proof.
+	Profile string `json:"profile"`
+	// PoW carries the proof-of-work nonce and solution.
+	PoW vectorPoW `json:"pow"`
+	// GraphSeedHex is the graph seed rendered as hex words.
+	GraphSeedHex string `json:"graph_seed_hex"`
+	// KeyID is the canonical key identifier for the fixture.
+	KeyID string `json:"key_id"`
+	// NoncanonicalDiagnostics carries extra reproducibility data.
 	NoncanonicalDiagnostics vectorDiagnostics `json:"noncanonical_diagnostics"`
 }
 

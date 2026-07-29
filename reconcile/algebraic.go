@@ -34,15 +34,20 @@ var (
 type EventIDFormat int
 
 const (
+	// Legacy uses the room versions 1 and 2 event-ID binding.
 	Legacy EventIDFormat = iota
+	// V3 uses the room version 3 event-ID binding.
 	V3
+	// V4Plus uses the room versions 4 and later event-ID binding.
 	V4Plus
 )
 
 // ElementHash is the pair of MSC0500 digest truncations.
 type ElementHash struct {
+	// H128 is the first 128 bits of the canonical digest, in network byte order.
 	H128 [16]byte
-	H64  uint64
+	// H64 is the first non-zero 64-bit chunk of the canonical digest.
+	H64 uint64
 }
 
 // FromDigest32 derives the profile truncations from a canonical 32-byte digest.
@@ -119,8 +124,10 @@ func trimSigil(eventID string) (string, bool) {
 
 // RoomAccumulator tracks the level-0 digest and exact event count.
 type RoomAccumulator struct {
+	// Digest is the 128-bit XOR accumulator over element hashes.
 	Digest [16]byte
-	Count  uint64
+	// Count is the exact number of accumulated elements.
+	Count uint64
 }
 
 // NewRoomAccumulator returns an empty accumulator.
@@ -208,6 +215,7 @@ func VerifyResidual(expectedResidual [16]byte, hashes []ElementHash) bool {
 
 // SyndromeSketch stores odd syndrome coordinates s1, s3, ... over GF(2^64).
 type SyndromeSketch struct {
+	// Coordinates stores the odd-power syndrome coordinates in order.
 	Coordinates []uint64
 }
 

@@ -8,28 +8,38 @@ const MaxBucketSketchCapacity = 32
 
 // BucketRequest describes one localized sketch request.
 type BucketRequest struct {
-	Depth    uint8
-	Prefix   uint32
+	// Depth is the binary-tree depth of the request.
+	Depth uint8
+	// Prefix is the binary prefix at the given depth.
+	Prefix uint32
+	// Capacity is the extraction capacity requested for this bucket.
 	Capacity int
 }
 
 // BucketDecodeSuccess captures one independently decoded bucket.
 type BucketDecodeSuccess struct {
-	Depth  uint8
+	// Depth is the binary-tree depth of the decoded bucket.
+	Depth uint8
+	// Prefix is the binary prefix at the given depth.
 	Prefix uint32
-	Roots  []uint64
+	// Roots are the decoded short identifiers for the bucket.
+	Roots []uint64
 }
 
 // FailedBucket records a bucket that exceeded decode capacity.
 type FailedBucket struct {
-	Depth  uint8
+	// Depth is the binary-tree depth of the failed bucket.
+	Depth uint8
+	// Prefix is the binary prefix at the given depth.
 	Prefix uint32
 }
 
 // BucketDecodeBatch is the partial result of concatenated bucket decoding.
 type BucketDecodeBatch struct {
+	// SuccessfulBuckets lists the decoded buckets in request order.
 	SuccessfulBuckets []BucketDecodeSuccess
-	FailedBuckets     []FailedBucket
+	// FailedBuckets lists buckets that must be retried or split.
+	FailedBuckets []FailedBucket
 }
 
 // ValidateBucketRequests checks capacity limits and antichain ordering.

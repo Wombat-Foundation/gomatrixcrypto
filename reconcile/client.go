@@ -61,10 +61,15 @@ func (c ReconciliationClient) GateThreshold() (uint64, bool) {
 
 // RemoteDigest captures the responder's room digest and strata.
 type RemoteDigest struct {
-	Digest              [16]byte
-	KnownEventCount     uint64
-	Strata              [StrataCount][StratumCapacity]uint64
-	FrameMatches        bool
+	// Digest is the responder's 128-bit room accumulator digest.
+	Digest [16]byte
+	// KnownEventCount is the responder's exact event count.
+	KnownEventCount uint64
+	// Strata contains the responder's 32-entry strata estimator.
+	Strata [StrataCount][StratumCapacity]uint64
+	// FrameMatches reports whether the peers negotiated the same frame.
+	FrameMatches bool
+	// HasUnknownExtremity reports whether the responder has unconfirmed extremity state.
 	HasUnknownExtremity bool
 }
 
@@ -72,18 +77,26 @@ type RemoteDigest struct {
 type ClientActionType int
 
 const (
+	// ActionSynchronized means both peers are already aligned.
 	ActionSynchronized ClientActionType = iota
+	// ActionExtremityDiff requests the extremity-diff fallback path.
 	ActionExtremityDiff
+	// ActionBucketSketches requests localized bucket sketches.
 	ActionBucketSketches
+	// ActionResolveRoots returns decoded roots to the caller.
 	ActionResolveRoots
 )
 
 // ClientAction is the next request selected by the reconciliation client.
 type ClientAction struct {
-	Type             ClientActionType
-	Requests         []BucketRequest
+	// Type is the selected protocol action.
+	Type ClientActionType
+	// Requests are the bucket sketch requests to send when Type is ActionBucketSketches.
+	Requests []BucketRequest
+	// AccumulatedRoots carries previously resolved roots across retries.
 	AccumulatedRoots []uint64
-	Roots            []uint64
+	// Roots carries the final resolved roots when Type is ActionResolveRoots.
+	Roots []uint64
 }
 
 // SelectAction decides the next protocol step from local and remote state.
