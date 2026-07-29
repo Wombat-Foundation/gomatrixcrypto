@@ -306,7 +306,7 @@ func TestSyndromeSketchOperations(t *testing.T) {
 	}
 	values := []string{"b"}
 	sortStrings(values)
-	if !reflect.DeepEqual(values, []string{"b"}) {
+	if got := values; !reflect.DeepEqual(got, []string{"b"}) {
 		t.Fatalf("sortStrings changed single-element input: %v", values)
 	}
 	if _, err := newSketchFromEncodedBytes(1, []byte{0, 0, 0, 0, 0, 0, 0}); err != ErrInvalidSketchLength {
@@ -330,7 +330,10 @@ func TestSyndromeSketchOperations(t *testing.T) {
 	if _, err := badDecode.DecodeElements(1); err != ErrDecodeFailure {
 		t.Fatalf("expected ErrDecodeFailure from decode mismatch, got %v", err)
 	}
-	if !containsZero([]uint64{0, 1}) || containsZero([]uint64{1, 2}) {
+	if !containsZero([]uint64{0, 1}) {
+		t.Fatal("containsZero mismatch")
+	}
+	if containsZero([]uint64{1, 2}) {
 		t.Fatal("containsZero mismatch")
 	}
 }
