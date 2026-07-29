@@ -10,12 +10,26 @@ type ReconciliationClient struct {
 	gateThreshold     *uint64
 }
 
+func gateThresholdForRounds(maxRounds int) uint64 {
+	if maxRounds <= 0 {
+		return 0
+	}
+
+	rounds := uint64(maxRounds)
+	maxThreshold := ^uint64(0) / MaxBucketedSketchCapacity
+	if rounds > maxThreshold {
+		return ^uint64(0)
+	}
+
+	return rounds * MaxBucketedSketchCapacity
+}
+
 // NewReconciliationClient creates a requester with an explicit local decode cap.
 func NewReconciliationClient(maxSketchCapacity int) (*ReconciliationClient, error) {
 	if maxSketchCapacity == 0 || maxSketchCapacity > MaxLocalSketchDecodeCapacity {
 		return nil, ErrInvalidSketchCapacity
 	}
-	threshold := uint64(MaxReconciliationRounds * MaxBucketedSketchCapacity)
+	threshold := gateThresholdForRounds(MaxReconciliationRounds)
 	return &ReconciliationClient{
 		maxSketchCapacity: maxSketchCapacity,
 		maxRounds:         MaxReconciliationRounds,
@@ -26,10 +40,7 @@ func NewReconciliationClient(maxSketchCapacity int) (*ReconciliationClient, erro
 // WithMaxRounds returns a copy with a custom round limit.
 func (c ReconciliationClient) WithMaxRounds(maxRounds int) ReconciliationClient {
 	c.maxRounds = maxRounds
-	var threshold uint64
-	if maxRounds > 0 {
-		threshold = uint64(maxRounds) * MaxBucketedSketchCapacity
-	}
+	threshold := gateThresholdForRounds(maxRounds)
 	c.gateThreshold = &threshold
 	return c
 }

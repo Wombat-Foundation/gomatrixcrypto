@@ -235,6 +235,9 @@ func TestSyndromeSketchOperations(t *testing.T) {
 	if _, err := DecodeSyndromeSketch(0, encoded); err != ErrInvalidSketchCapacity {
 		t.Fatalf("expected ErrInvalidSketchCapacity, got %v", err)
 	}
+	if _, err := DecodeSyndromeSketch(-1, encoded); err != ErrInvalidSketchCapacity {
+		t.Fatalf("expected ErrInvalidSketchCapacity for negative input, got %v", err)
+	}
 	if _, err := DecodeSyndromeSketch(4, strings.Repeat("!", 43)); err != ErrInvalidBase64 {
 		t.Fatalf("expected ErrInvalidBase64, got %v", err)
 	}

@@ -322,7 +322,7 @@ func (s *SyndromeSketch) Encode() string {
 
 // DecodeSyndromeSketch parses a sketch with an externally negotiated capacity.
 func DecodeSyndromeSketch(capacity int, encoded string) (*SyndromeSketch, error) {
-	if capacity == 0 || capacity > MaxSketchCapacity {
+	if capacity <= 0 || capacity > MaxSketchCapacity {
 		return nil, ErrInvalidSketchCapacity
 	}
 	expectedLen := capacity * 8
