@@ -381,9 +381,9 @@ func TestResidentKernelAndBucketValidation(t *testing.T) {
 	if err := ValidateBucketRequests([]BucketRequest{{Depth: 0, Prefix: 0, Capacity: 0}}); err != ErrInvalidSketchCapacity {
 		t.Fatalf("expected invalid capacity, got %v", err)
 	}
-	overflowRequests := make([]BucketRequest, 0, 65)
-	for i := 0; i < 65; i++ {
-		overflowRequests = append(overflowRequests, BucketRequest{Depth: 32, Prefix: uint32(i), Capacity: 64})
+	overflowRequests := make([]BucketRequest, 0, 129)
+	for i := 0; i < 129; i++ {
+		overflowRequests = append(overflowRequests, BucketRequest{Depth: 32, Prefix: uint32(i), Capacity: MaxBucketSketchCapacity})
 	}
 	if err := ValidateBucketRequests(overflowRequests); err != ErrInvalidSketchCapacity {
 		t.Fatalf("expected capacity overflow, got %v", err)
@@ -571,11 +571,11 @@ func TestClientAndTriageFlow(t *testing.T) {
 	}
 
 	failed := BucketDecodeBatch{FailedBuckets: []FailedBucket{{Depth: 0, Prefix: 0}}}
-	next := c.TransitionBucketBatch(failed, []BucketRequest{{Depth: 0, Prefix: 0, Capacity: 64}}, nil, nil, 0, 4096)
+	next := c.TransitionBucketBatch(failed, []BucketRequest{{Depth: 0, Prefix: 0, Capacity: MaxBucketSketchCapacity}}, nil, nil, 0, 4096)
 	if next.Type != ActionBucketSketches {
 		t.Fatalf("expected bucket sketches retry, got %v", next.Type)
 	}
-	if got := c.TransitionBucketBatch(failed, []BucketRequest{{Depth: 0, Prefix: 0, Capacity: 64}}, nil, nil, c.MaxRounds(), 4096); got.Type != ActionExtremityDiff {
+	if got := c.TransitionBucketBatch(failed, []BucketRequest{{Depth: 0, Prefix: 0, Capacity: MaxBucketSketchCapacity}}, nil, nil, c.MaxRounds(), 4096); got.Type != ActionExtremityDiff {
 		t.Fatalf("expected round-limit fallback, got %v", got.Type)
 	}
 	if len(next.Requests) == 0 {

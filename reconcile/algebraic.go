@@ -9,7 +9,7 @@ import (
 )
 
 // MaxSketchCapacity is the maximum extraction capacity for an unbucketed algebraic_v1 sketch.
-const MaxSketchCapacity = 64
+const MaxSketchCapacity = 32
 
 // MaxLocalSketchDecodeCapacity is the default local extraction limit for CPU-bounded sketch decoding.
 const MaxLocalSketchDecodeCapacity = MaxSketchCapacity

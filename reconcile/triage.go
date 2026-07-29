@@ -4,7 +4,7 @@ package reconcile
 const MaxBucketedSketchCapacity = 4096
 
 // MaxBucketSketchCapacity is the maximum extraction capacity assigned to one bucket.
-const MaxBucketSketchCapacity = 64
+const MaxBucketSketchCapacity = 32
 
 // BucketRequest describes one localized sketch request.
 type BucketRequest struct {
