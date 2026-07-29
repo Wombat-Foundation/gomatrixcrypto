@@ -57,12 +57,22 @@ func run(inPath, outPath, modulePath, marker string) (err error) {
 			return err
 		}
 		tmpPath := tmp.Name()
+		info, err := in.Stat()
+		if err != nil {
+			_ = tmp.Close()
+			_ = os.Remove(tmpPath)
+			return err
+		}
 		if err = filterProfile(in, tmp, modulePath, marker); err != nil {
 			_ = tmp.Close()
 			_ = os.Remove(tmpPath)
 			return err
 		}
 		if err = tmp.Close(); err != nil {
+			_ = os.Remove(tmpPath)
+			return err
+		}
+		if err = os.Chmod(tmpPath, info.Mode().Perm()); err != nil {
 			_ = os.Remove(tmpPath)
 			return err
 		}
