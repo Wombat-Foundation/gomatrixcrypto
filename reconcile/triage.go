@@ -128,6 +128,7 @@ func DecodeBucketSketches(encoded []byte, requests []BucketRequest) (BucketDecod
 	}
 
 	offset := 0
+	work := maxFactorWork
 	var successful []BucketDecodeSuccess
 	var failed []FailedBucket
 	for _, request := range requests {
@@ -148,15 +149,36 @@ func DecodeBucketSketches(encoded []byte, requests []BucketRequest) (BucketDecod
 		if err != nil {
 			return BucketDecodeBatch{}, err
 		}
-		roots, err := sketch.DecodeElements(request.Capacity)
+		roots, err := decodePinSketch(sketch.Coordinates, request.Capacity, &work)
 		if err != nil {
 			// coverage:ignore
-			if errors.Is(err, ErrDecodeFailure) {
+			if errors.Is(err, ErrDecodeFailure) || errors.Is(err, ErrBudgetExhausted) {
 				failed = append(failed, FailedBucket{Depth: request.Depth, Prefix: request.Prefix})
 				continue
 			}
 			// coverage:ignore
 			return BucketDecodeBatch{}, err
+		}
+		// coverage:ignore
+		if containsZero(roots) {
+			failed = append(failed, FailedBucket{Depth: request.Depth, Prefix: request.Prefix})
+			continue
+		}
+		check, err := NewSyndromeSketch(request.Capacity)
+		// coverage:ignore
+		if err != nil {
+			return BucketDecodeBatch{}, err
+		}
+		for _, element := range roots {
+			// coverage:ignore
+			if err := check.Toggle(element); err != nil {
+				return BucketDecodeBatch{}, err
+			}
+		}
+		// coverage:ignore
+		if !equalSketch(check, sketch) {
+			failed = append(failed, FailedBucket{Depth: request.Depth, Prefix: request.Prefix})
+			continue
 		}
 		successful = append(successful, BucketDecodeSuccess{
 			Depth:  request.Depth,
