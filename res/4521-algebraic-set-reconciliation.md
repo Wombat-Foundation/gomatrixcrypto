@@ -22,9 +22,8 @@ therefore costs $O\!\left(\frac{d^2}{n}\log\frac{d}{n}\right)$. Quadratic
 complexity means that invertible bloom filters will outscale this MSC
 asymptotically, but at smaller deltas, this MSC wins (nearly all typical use
 cases). Larger differences are a frame problem, not a reconciliation problem
-(see [Scalability](#scalability)); the baseline 20-round, 4096-capacity sequence
-reaches about 82,000 differing elements under the default ceiling parameters.
-More capacity extends a round; it does not restart it.
+(see [Scalability](#scalability)). More capacity extends a round; it does not
+restart it.
 
 ## Scope
 
@@ -36,6 +35,21 @@ decode-and-verify contract, capacity budgets, and the resident structure.
 This profile does **not** define frames, negotiation, scheduling, endpoints, or
 authorization; those belong to the consuming MSC. Consumers MUST still verify
 that both sides digest the same population before comparing them.
+
+## Summary of protocol bounds and recommendations
+
+The following summary consolidates the shared bounds used throughout this MSC.
+
+<!-- markdownlint-disable MD013 -->
+
+| Bound                       |  Value | Normative meaning                                              |
+| --------------------------- | -----: | -------------------------------------------------------------- |
+| Request depth cap           |   `32` | A node MUST NOT split past depth 32.                           |
+| Per-entry capacity cap      |   `32` | A single entry's `capacity` MUST NOT exceed 32.                |
+| Aggregate exchange capacity | `4096` | The sum of `capacity` across an exchange MUST NOT exceed 4096. |
+| Strata entry count          |   `32` | Implementations SHOULD maintain 32 strata entries.             |
+
+<!-- markdownlint-enable MD013 -->
 
 ## Element derivation
 
@@ -250,6 +264,9 @@ before decoding, and split only when the current capacity is not enough.
 
 This split is a localization step, not a proof that the peer is wrong: it only
 narrows the candidate population to the prefix that still overflows.
+
+Non-normative baseline note: the reference sequence note uses a 20-round,
+4096-capacity baseline for sizing examples.
 
 ## Strata estimator
 
@@ -629,11 +646,11 @@ h128:   0x0000_0000_0000_002a_0000_0000_0000_0000
 h64:    0x0000_0000_0000_002a
 ```
 
-### All-zero digest fallback
+### All-zero input
 
 ```text
 input:  $ || URL_SAFE_NO_PAD.encode([0x00; 32])
-h128:   0x0000_0000_0000_0000_0000_0000_0000_0001
+h128:   0x0000_0000_0000_0000_0000_0000_0000_0000
 h64:    0x0000_0000_0000_0001
 ```
 
