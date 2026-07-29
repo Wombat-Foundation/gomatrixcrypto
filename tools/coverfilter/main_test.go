@@ -13,6 +13,10 @@ func TestRunHandlesSameInputAndOutputPath(t *testing.T) {
 	if err := os.WriteFile(profile, []byte(input), 0o644); err != nil {
 		t.Fatalf("write profile: %v", err)
 	}
+	initialInfo, err := os.Stat(profile)
+	if err != nil {
+		t.Fatalf("stat profile after write: %v", err)
+	}
 
 	if err := run(profile, profile, "github.com/Wombat-Foundation/gomatrixcrypto", "coverage:ignore"); err != nil {
 		t.Fatalf("run returned error: %v", err)
@@ -22,7 +26,7 @@ func TestRunHandlesSameInputAndOutputPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stat profile: %v", err)
 	}
-	if got := info.Mode().Perm(); got != 0o644 {
+	if got := info.Mode().Perm(); got != initialInfo.Mode().Perm() {
 		t.Fatalf("unexpected mode: %v", got)
 	}
 

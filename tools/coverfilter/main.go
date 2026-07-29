@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -10,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func main() {
@@ -23,7 +25,9 @@ func main() {
 }
 
 func detectModulePath() *string {
-	out, err := exec.Command("go", "list", "-m", "-f", "{{.Path}}").Output()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "go", "list", "-m", "-f", "{{.Path}}").Output()
 	if err != nil {
 		return new(string)
 	}
@@ -32,6 +36,9 @@ func detectModulePath() *string {
 }
 
 func run(inPath, outPath, modulePath, marker string) (err error) {
+	if marker == "" {
+		return fmt.Errorf("marker must not be empty")
+	}
 	if modulePath == "" {
 		modulePath = *detectModulePath()
 	}
@@ -50,7 +57,21 @@ func run(inPath, outPath, modulePath, marker string) (err error) {
 		return filterProfile(in, os.Stdout, modulePath, marker)
 	}
 
-	if filepath.Clean(inPath) == filepath.Clean(outPath) {
+	useTemp := filepath.Clean(inPath) == filepath.Clean(outPath)
+	if !useTemp {
+		outInfo, statErr := os.Stat(outPath)
+		if statErr == nil {
+			inInfo, err := in.Stat()
+			if err != nil {
+				return err
+			}
+			useTemp = os.SameFile(inInfo, outInfo)
+		} else if !os.IsNotExist(statErr) {
+			return statErr
+		}
+	}
+
+	if useTemp {
 		dir := filepath.Dir(outPath)
 		tmp, err := os.CreateTemp(dir, "coverfilter-*.out")
 		if err != nil {

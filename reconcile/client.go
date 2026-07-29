@@ -26,7 +26,7 @@ func gateThresholdForRounds(maxRounds int) uint64 {
 
 // NewReconciliationClient creates a requester with an explicit local decode cap.
 func NewReconciliationClient(maxSketchCapacity int) (*ReconciliationClient, error) {
-	if maxSketchCapacity == 0 || maxSketchCapacity > MaxLocalSketchDecodeCapacity {
+	if maxSketchCapacity <= 0 || maxSketchCapacity > MaxLocalSketchDecodeCapacity {
 		return nil, ErrInvalidSketchCapacity
 	}
 	threshold := gateThresholdForRounds(MaxReconciliationRounds)
@@ -170,7 +170,7 @@ func (c ReconciliationClient) SelectAction(local *ResidentKernel, remote RemoteD
 
 // BuildSketch constructs an unbucketed sketch over the negotiated frame.
 func (c ReconciliationClient) BuildSketch(capacity int, hashes []ElementHash) (*SyndromeSketch, error) {
-	if capacity == 0 || capacity > c.maxSketchCapacity {
+	if capacity <= 0 || capacity > c.maxSketchCapacity {
 		return nil, ErrInvalidSketchCapacity
 	}
 	sketch, err := NewSyndromeSketch(capacity)
@@ -250,7 +250,7 @@ func (c ReconciliationClient) TransitionBucketBatch(
 			continue
 		}
 
-		if previous.Depth >= 31 {
+		if previous.Depth >= 32 {
 			return ClientAction{Type: ActionExtremityDiff}
 		}
 		target := maxU64(share/2, 4)
@@ -303,9 +303,30 @@ func absDiffU64(a, b uint64) uint64 {
 }
 
 func provisionCapacity(estimatedDelta uint64, headroom int) int {
-	value := estimatedDelta + estimatedDelta/2 + estimatedDelta%2 + 4
+	value := estimatedDelta
+	half := estimatedDelta / 2
+	if value > ^uint64(0)-half {
+		return -1
+	}
+	value += half
+	remainder := estimatedDelta % 2
+	if value > ^uint64(0)-remainder {
+		return -1
+	}
+	value += remainder
+	if value > ^uint64(0)-4 {
+		return -1
+	}
+	value += 4
 	if headroom > 0 {
-		value += uint64(headroom)
+		if headroom > maxInt {
+			return -1
+		}
+		headroomValue := uint64(headroom)
+		if value > ^uint64(0)-headroomValue {
+			return -1
+		}
+		value += headroomValue
 	}
 	if value > uint64(maxInt) {
 		return -1
@@ -335,7 +356,21 @@ func maxU64(a, b uint64) uint64 {
 }
 
 func provisionBucketCapacity(target uint64, floor int) (int, bool) {
-	value := target + target/2 + target%2 + 4
+	value := target
+	half := target / 2
+	if value > ^uint64(0)-half {
+		return 0, false
+	}
+	value += half
+	remainder := target % 2
+	if value > ^uint64(0)-remainder {
+		return 0, false
+	}
+	value += remainder
+	if value > ^uint64(0)-4 {
+		return 0, false
+	}
+	value += 4
 	if value > uint64(maxInt) {
 		return 0, false
 	}

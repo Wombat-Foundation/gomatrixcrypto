@@ -1,5 +1,11 @@
 package reconcile
 
+import (
+	"errors"
+	"math/bits"
+	"slices"
+)
+
 type polynomial []uint64
 
 const (
@@ -11,7 +17,7 @@ const (
 	maxFactorWork       = 8_000_000
 )
 
-func decodePinSketch(oddSyndromes []uint64, maxElements int) ([]uint64, error) {
+func decodePinSketch(oddSyndromes []uint64, maxElements int, work *int) ([]uint64, error) {
 	all := reconstructSyndromes(oddSyndromes)
 	locator, ok := berlekampMassey(all, maxElements)
 	if !ok {
@@ -23,17 +29,23 @@ func decodePinSketch(oddSyndromes []uint64, maxElements int) ([]uint64, error) {
 	reverseUint64s(locator)
 	expected := len(locator) - 1
 	roots := make([]uint64, 0, expected)
-	if err := findRoots(locator, &roots); err != nil {
-		if err == ErrBudgetExhausted {
-			return nil, ErrDecodeFailure
+	if work == nil {
+		if err := findRoots(locator, &roots); err != nil {
+			if errors.Is(err, ErrBudgetExhausted) {
+				return nil, ErrDecodeFailure
+			}
+			return nil, err
 		}
-		return nil, err
+	} else {
+		if err := findRootsWithBudget(locator, &roots, work); err != nil {
+			return nil, err
+		}
 	}
 	// coverage:ignore
 	if len(roots) != expected || containsZero(roots) {
 		return nil, ErrDecodeFailure
 	}
-	sortUint64s(roots)
+	slices.Sort(roots)
 	return roots, nil
 }
 
@@ -302,7 +314,7 @@ func solveQuadraticForm(target uint64) (uint64, bool) {
 		if row.coefficients == 0 {
 			return 0, false
 		}
-		pivot := trailingZeros64(row.coefficients)
+		pivot := bits.TrailingZeros64(row.coefficients)
 		if row.rhs {
 			solution |= uint64(1) << uint(pivot)
 		}
@@ -316,7 +328,11 @@ func solveQuadraticForm(target uint64) (uint64, bool) {
 
 func findRoots(poly polynomial, roots *[]uint64) error {
 	work := maxFactorWork
-	return findRootsWithBudget(poly, roots, &work)
+	err := findRootsWithBudget(poly, roots, &work)
+	if errors.Is(err, ErrBudgetExhausted) {
+		return ErrDecodeFailure
+	}
+	return err
 }
 
 func factorTrialCost(degree int) (int, bool) {
@@ -425,31 +441,4 @@ func reverseUint64s(values []uint64) {
 	for i, j := 0, len(values)-1; i < j; i, j = i+1, j-1 {
 		values[i], values[j] = values[j], values[i]
 	}
-}
-
-func sortUint64s(values []uint64) {
-	if len(values) < 2 {
-		return
-	}
-	for i := 1; i < len(values); i++ {
-		v := values[i]
-		j := i - 1
-		for j >= 0 && values[j] > v {
-			values[j+1] = values[j]
-			j--
-		}
-		values[j+1] = v
-	}
-}
-
-func trailingZeros64(v uint64) int {
-	if v == 0 {
-		return 64
-	}
-	n := 0
-	for (v & 1) == 0 {
-		n++
-		v >>= 1
-	}
-	return n
 }

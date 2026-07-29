@@ -1,5 +1,7 @@
 package reconcile
 
+import "errors"
+
 // MaxBucketedSketchCapacity is the maximum sum of capacities in one bucketed sketch request.
 const MaxBucketedSketchCapacity = 4096
 
@@ -80,48 +82,43 @@ func EstimateDelta(
 	local *[StrataCount][StratumCapacity]uint64,
 	remote *[StrataCount][StratumCapacity]uint64,
 ) (uint64, bool, error) {
-	var decodedTail uint64
-	lowestDecoded := -1
+	const fallbackEstimate = uint64(8) << 31
+	work := maxFactorWork
 
 	for stratum := StrataCount - 1; stratum >= 0; stratum-- {
 		var residual [StratumCapacity]uint64
 		for i := 0; i < StratumCapacity; i++ {
 			residual[i] = local[stratum][i] ^ remote[stratum][i]
 		}
-		roots, err := decodePinSketch(residual[:], StratumCapacity)
+		roots, err := decodePinSketch(residual[:], StratumCapacity, &work)
 		if err != nil {
 			// coverage:ignore
-			if err == ErrDecodeFailure {
-				break
+			if errors.Is(err, ErrBudgetExhausted) {
+				return 0, false, nil
 			}
 			// coverage:ignore
+			if errors.Is(err, ErrDecodeFailure) {
+				return fallbackEstimate, true, nil
+			}
 			return 0, false, err
 		}
 		cardinality := uint64(len(roots))
-		// coverage:ignore
-		if decodedTail > ^uint64(0)-cardinality {
-			return 0, false, ErrCountOverflow
+		if cardinality == 0 {
+			continue
 		}
-		decodedTail += cardinality
-		lowestDecoded = stratum
+		if stratum == 31 {
+			if cardinality > ^uint64(0)>>31 {
+				return fallbackEstimate, true, nil
+			}
+			return cardinality << 31, true, nil
+		}
+		shift := uint(stratum + 1)
+		if cardinality > ^uint64(0)>>shift {
+			return fallbackEstimate, true, nil
+		}
+		return cardinality << shift, true, nil
 	}
-
-	// coverage:ignore
-	if lowestDecoded < 0 {
-		return 0, false, nil
-	}
-
-	// coverage:ignore
-	if decodedTail == 0 && lowestDecoded != 0 {
-		return 0, false, nil
-	}
-
-	shift := uint(lowestDecoded)
-	// coverage:ignore
-	if shift >= 64 {
-		return ^uint64(0), true, nil
-	}
-	return decodedTail << shift, true, nil
+	return 0, true, nil
 }
 
 // DecodeBucketSketches decodes concatenated bucket sketches.
@@ -146,18 +143,7 @@ func DecodeBucketSketches(encoded []byte, requests []BucketRequest) (BucketDecod
 		bytes := encoded[offset:end]
 		offset = end
 
-		coordinates := make([]uint64, request.Capacity)
-		for i := 0; i < request.Capacity; i++ {
-			coordinates[i] = uint64(bytes[i*8]) |
-				uint64(bytes[i*8+1])<<8 |
-				uint64(bytes[i*8+2])<<16 |
-				uint64(bytes[i*8+3])<<24 |
-				uint64(bytes[i*8+4])<<32 |
-				uint64(bytes[i*8+5])<<40 |
-				uint64(bytes[i*8+6])<<48 |
-				uint64(bytes[i*8+7])<<56
-		}
-		sketch, err := NewSyndromeSketchFromCoordinates(coordinates)
+		sketch, err := newSketchFromEncodedBytes(request.Capacity, bytes)
 		// coverage:ignore
 		if err != nil {
 			return BucketDecodeBatch{}, err
@@ -165,7 +151,7 @@ func DecodeBucketSketches(encoded []byte, requests []BucketRequest) (BucketDecod
 		roots, err := sketch.DecodeElements(request.Capacity)
 		if err != nil {
 			// coverage:ignore
-			if err == ErrDecodeFailure {
+			if errors.Is(err, ErrDecodeFailure) {
 				failed = append(failed, FailedBucket{Depth: request.Depth, Prefix: request.Prefix})
 				continue
 			}

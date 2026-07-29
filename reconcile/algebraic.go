@@ -5,7 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"errors"
-	"fmt"
+	"slices"
 )
 
 // MaxSketchCapacity is the maximum extraction capacity for an unbucketed algebraic_v1 sketch.
@@ -284,7 +284,7 @@ func (s *SyndromeSketch) DecodeElements(maxElements int) ([]uint64, error) {
 	if maxElements <= 0 || maxElements > s.Capacity() || maxElements > MaxLocalSketchDecodeCapacity {
 		return nil, ErrInvalidSketchCapacity
 	}
-	decoded, err := decodePinsketch(s.Coordinates[:maxElements], maxElements)
+	decoded, err := decodePinSketch(s.Coordinates[:maxElements], maxElements, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -376,18 +376,7 @@ func containsZero(values []uint64) bool {
 }
 
 func sortStrings(values []string) {
-	if len(values) < 2 {
-		return
-	}
-	for i := 1; i < len(values); i++ {
-		v := values[i]
-		j := i - 1
-		for j >= 0 && values[j] > v {
-			values[j+1] = values[j]
-			j--
-		}
-		values[j+1] = v
-	}
+	slices.Sort(values)
 }
 
 func canonicalStringArray(values []string) []byte {
@@ -424,12 +413,3 @@ func canonicalStringArray(values []string) []byte {
 	out = append(out, ']')
 	return out
 }
-
-func decodePinsketch(oddSyndromes []uint64, maxElements int) ([]uint64, error) {
-	return decodePinSketch(oddSyndromes, maxElements)
-}
-
-// Eagerly fail if the package API drifts away from the Rust surface.
-var (
-	_ = fmt.Sprintf
-)

@@ -3,11 +3,21 @@ package reconcile
 import "testing"
 
 func TestMulBitwiseVectors(t *testing.T) {
-	if got := Mul(0x1b, 0x1b); got != 0x145 {
-		t.Fatalf("Mul(0x1b,0x1b) = %#x, want %#x", got, 0x145)
+	vectors := []struct {
+		left  uint64
+		right uint64
+		want  uint64
+	}{
+		{0x0000_0000_0000_0000, 0xffff_ffff_ffff_ffff, 0x0000_0000_0000_0000},
+		{0x0000_0000_0000_0001, 0xffff_ffff_ffff_ffff, 0xffff_ffff_ffff_ffff},
+		{0x0000_0000_0000_001b, 0x0000_0000_0000_001b, 0x0000_0000_0000_0145},
+		{0xffff_ffff_ffff_ffff, 0xffff_ffff_ffff_ffff, 0x5555_5555_5555_5513},
+		{0x8000_0000_0000_0000, 0x8000_0000_0000_0000, 0xc000_0000_0000_005a},
 	}
-	if got := Mul(^uint64(0), ^uint64(0)); got != 0x5555_5555_5555_5513 {
-		t.Fatalf("Mul(max,max) = %#x", got)
+	for _, vector := range vectors {
+		if got := Mul(vector.left, vector.right); got != vector.want {
+			t.Fatalf("Mul(%#x,%#x) = %#x, want %#x", vector.left, vector.right, got, vector.want)
+		}
 	}
 }
 

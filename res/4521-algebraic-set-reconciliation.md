@@ -410,10 +410,11 @@ arbitrary divergence. A value of $d \approx 100,000$ forces very wide
 first-round fan-out under a k = 32 bucket cap, which makes end-to-end extraction
 expensive even though per-bucket decode remains fast. The point is not that
 reconciliation becomes mathematically impossible, but that the baseline ~82,000
-figure reflects the MSC’s default operating point (not a hard algorithmic
-ceiling). Beyond that point, applications can still choose to spend more round
-budget or per-round capacity, while truly structural divergence should switch to
-frame/DAG alignment.
+figure, derived as 20 rounds × 4,096 aggregate capacity = 81,920, reflects the
+MSC’s default operating point (not a hard algorithmic ceiling). Beyond that
+point, applications can still choose to spend more round budget or per-round
+capacity, while truly structural divergence should switch to frame/DAG
+alignment.
 
 Non-normative implementation note: a peer can use the strata estimate to
 pre-split a first request into a wider antichain when it expects a large but
