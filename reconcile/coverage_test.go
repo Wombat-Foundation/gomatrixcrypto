@@ -3,6 +3,7 @@ package reconcile
 import (
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/binary"
 	"math/bits"
 	"reflect"
 	"strings"
@@ -39,6 +40,16 @@ func strataFromValues(values ...uint64) [StrataCount][StratumCapacity]uint64 {
 		_ = kernel.Insert(ElementHash{H64: value, H128: [16]byte{byte(value)}})
 	}
 	return *kernel.Strata()
+}
+
+func sketchBytes(sketch *SyndromeSketch) []byte {
+	bytes := make([]byte, 0, len(sketch.Coordinates)*8)
+	for _, coord := range sketch.Coordinates {
+		var tmp [8]byte
+		binary.LittleEndian.PutUint64(tmp[:], coord)
+		bytes = append(bytes, tmp[:]...)
+	}
+	return bytes
 }
 
 func TestElementHashAndEventIDs(t *testing.T) {
@@ -675,19 +686,7 @@ func TestDecodeBucketSketchesAndHelpers(t *testing.T) {
 	if err := success.Toggle(7); err != nil {
 		t.Fatal(err)
 	}
-	successBytes := make([]byte, 0, 16)
-	for _, coord := range success.Coordinates {
-		successBytes = append(successBytes,
-			byte(coord),
-			byte(coord>>8),
-			byte(coord>>16),
-			byte(coord>>24),
-			byte(coord>>32),
-			byte(coord>>40),
-			byte(coord>>48),
-			byte(coord>>56),
-		)
-	}
+	successBytes := sketchBytes(success)
 
 	failure, err := NewSyndromeSketch(2)
 	if err != nil {
@@ -698,19 +697,7 @@ func TestDecodeBucketSketchesAndHelpers(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	failureBytes := make([]byte, 0, 16)
-	for _, coord := range failure.Coordinates {
-		failureBytes = append(failureBytes,
-			byte(coord),
-			byte(coord>>8),
-			byte(coord>>16),
-			byte(coord>>24),
-			byte(coord>>32),
-			byte(coord>>40),
-			byte(coord>>48),
-			byte(coord>>56),
-		)
-	}
+	failureBytes := sketchBytes(failure)
 
 	encoded := append(successBytes, failureBytes...)
 	requests := []BucketRequest{
@@ -756,6 +743,105 @@ func TestDecodeBucketSketchesAndHelpers(t *testing.T) {
 	}
 	if _, ok := safeAdd(maxInt, 1); ok {
 		t.Fatal("safeAdd should overflow")
+	}
+}
+
+func TestDecodeBucketSketchesSharedBudgetExhaustion(t *testing.T) {
+	minCost := maxFactorWork / (MaxBucketedSketchCapacity / MaxBucketSketchCapacity)
+	var expensive *SyndromeSketch
+	var expensiveRoots []uint64
+	var expensiveCost int
+	seed := uint64(0x9e3779b97f4a7c15)
+
+	for attempt := 0; attempt < 256; attempt++ {
+		seed ^= seed << 7
+		seed ^= seed >> 9
+		seed ^= seed << 8
+
+		roots := make([]uint64, 0, MaxBucketSketchCapacity)
+		seen := make(map[uint64]struct{}, MaxBucketSketchCapacity)
+		state := seed
+		for len(roots) < MaxBucketSketchCapacity {
+			state = nextFactorParameter(state)
+			if state == 0 {
+				continue
+			}
+			if _, ok := seen[state]; ok {
+				continue
+			}
+			seen[state] = struct{}{}
+			roots = append(roots, state)
+		}
+
+		sketch, err := NewSyndromeSketch(MaxBucketSketchCapacity)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, root := range roots {
+			if err := sketch.Toggle(root); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		work := maxFactorWork
+		decodedRoots, err := decodeAndVerifySketch(sketch, MaxBucketSketchCapacity, &work)
+		if err != nil {
+			continue
+		}
+		cost := maxFactorWork - work
+		if cost > minCost {
+			expensive = sketch
+			expensiveRoots = decodedRoots
+			expensiveCost = cost
+			break
+		}
+	}
+	if expensive == nil {
+		t.Fatalf("failed to find a decodable sketch costing more than %d work", minCost)
+	}
+
+	successesBeforeFailure := maxFactorWork / expensiveCost
+	if successesBeforeFailure <= 0 {
+		t.Fatalf("expected at least one successful decode before exhaustion, cost=%d", expensiveCost)
+	}
+	requestCount := successesBeforeFailure + 1
+	if requestCount*MaxBucketSketchCapacity > MaxBucketedSketchCapacity {
+		t.Fatalf("request count %d exceeds bucket capacity limit for cost %d", requestCount, expensiveCost)
+	}
+
+	encodedOne := sketchBytes(expensive)
+	encoded := make([]byte, 0, len(encodedOne)*requestCount)
+	requests := make([]BucketRequest, 0, requestCount)
+	for i := 0; i < requestCount; i++ {
+		encoded = append(encoded, encodedOne...)
+		requests = append(requests, BucketRequest{
+			Depth:    8,
+			Prefix:   uint32(i),
+			Capacity: MaxBucketSketchCapacity,
+		})
+	}
+
+	batch, err := DecodeBucketSketches(encoded, requests)
+	if err != nil {
+		t.Fatalf("DecodeBucketSketches failed: %v", err)
+	}
+	if len(batch.SuccessfulBuckets) != successesBeforeFailure {
+		t.Fatalf("successful bucket count = %d, want %d", len(batch.SuccessfulBuckets), successesBeforeFailure)
+	}
+	if len(batch.FailedBuckets) != 1 {
+		t.Fatalf("failed bucket count = %d, want 1", len(batch.FailedBuckets))
+	}
+	for i, bucket := range batch.SuccessfulBuckets {
+		if bucket.Depth != 8 || bucket.Prefix != uint32(i) {
+			t.Fatalf("unexpected successful bucket metadata: %#v", bucket)
+		}
+		if !reflect.DeepEqual(bucket.Roots, expensiveRoots) {
+			t.Fatalf("successful bucket roots = %v, want %v", bucket.Roots, expensiveRoots)
+		}
+	}
+	wantFailed := FailedBucket{Depth: 8, Prefix: uint32(successesBeforeFailure)}
+	if batch.FailedBuckets[0] != wantFailed {
+		t.Fatalf("failed bucket = %#v, want %#v", batch.FailedBuckets[0], wantFailed)
 	}
 }
 
