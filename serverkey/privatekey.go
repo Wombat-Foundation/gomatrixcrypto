@@ -7,13 +7,14 @@ import (
 	"errors"
 	"io"
 
-	"gomatrixlib/fndsa512"
+	"github.com/Wombat-Foundation/gomatrixcrypto/fndsa512"
 
 	"golang.org/x/crypto/argon2"
 	"golang.org/x/crypto/chacha20poly1305"
 )
 
 const (
+	// EncryptedPrivateKeyAlgorithm identifies the encrypted private-key format.
 	EncryptedPrivateKeyAlgorithm = "tk.nutra.msc45xx.private-key.xchacha20poly1305-argon2id.v1"
 	privateKeyKDFAlgorithm       = "argon2id"
 	privateKeyAEADAlgorithm      = "xchacha20poly1305"
@@ -30,11 +31,16 @@ var ErrWeakPassphrase = errors.New("private key passphrase too short")
 
 // PrivateKeyEncryptionParams configures private-key encryption and re-wrapping.
 type PrivateKeyEncryptionParams struct {
-	Time      uint32
+	// Time is the Argon2id time cost parameter.
+	Time uint32
+	// MemoryKiB is the Argon2id memory cost parameter in kibibytes.
 	MemoryKiB uint32
-	Threads   uint8
-	Salt      []byte
-	Nonce     []byte
+	// Threads is the Argon2id parallelism parameter.
+	Threads uint8
+	// Salt is the raw KDF salt.
+	Salt []byte
+	// Nonce is the raw XChaCha20-Poly1305 nonce.
+	Nonce []byte
 }
 
 // DefaultPrivateKeyEncryptionParams returns the package's recommended KDF settings.
@@ -140,6 +146,7 @@ func ReencryptPrivateKey(rng io.Reader, encrypted map[string]any, oldPassphrase,
 	return EncryptPrivateKey(rng, privateKey, newPassphrase, params)
 }
 
+// validatePrivateKeyPassphrase validates private key passphrase constraints.
 func validatePrivateKeyPassphrase(passphrase []byte) error {
 	if len(passphrase) == 0 {
 		return ErrInvalidPassphrase
@@ -150,6 +157,7 @@ func validatePrivateKeyPassphrase(passphrase []byte) error {
 	return nil
 }
 
+// validatePrivateKeyEncryptionInputs checks key length and KDF params.
 func validatePrivateKeyEncryptionInputs(privateKey []byte, params PrivateKeyEncryptionParams) error {
 	if len(privateKey) != fndsa512.PrivateKeySize {
 		return fndsa512.ErrInvalidPrivateKey
@@ -160,6 +168,7 @@ func validatePrivateKeyEncryptionInputs(privateKey []byte, params PrivateKeyEncr
 	return nil
 }
 
+// privateKeyAEAD constructs an Argon2id + XChaCha20-Poly1305 AEAD cipher.
 func privateKeyAEAD(passphrase []byte, params PrivateKeyEncryptionParams) (cipher.AEAD, error) {
 	key := argon2.IDKey(passphrase, params.Salt, params.Time, params.MemoryKiB, params.Threads, privateKeyKeySize)
 	return chacha20poly1305.NewX(key)
@@ -167,6 +176,7 @@ func privateKeyAEAD(passphrase []byte, params PrivateKeyEncryptionParams) (ciphe
 
 var privateKeyAEADFn = privateKeyAEAD
 
+// privateKeyEncryptionParamsFromObject extracts KDF and AEAD encryption parameters from JSON.
 func privateKeyEncryptionParamsFromObject(encrypted map[string]any) (PrivateKeyEncryptionParams, error) {
 	rawKDF, ok := encrypted["kdf"].(map[string]any)
 	if !ok {

@@ -19,9 +19,12 @@ const (
 )
 
 var (
+	// ErrUnsupportedType reports a value that cannot be encoded canonically.
 	ErrUnsupportedType = errors.New("unsupported canonical json type")
-	ErrIntegerRange    = errors.New("canonical json integer out of range")
-	ErrInvalidString   = errors.New("canonical json string is not valid utf-8")
+	// ErrIntegerRange reports an integer outside the canonical JSON range.
+	ErrIntegerRange = errors.New("canonical json integer out of range")
+	// ErrInvalidString reports a string that is not valid UTF-8.
+	ErrInvalidString = errors.New("canonical json string is not valid utf-8")
 )
 
 // Canonical encodes v using the Matrix Canonical JSON rules used for signing:
@@ -35,6 +38,7 @@ func Canonical(v any) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+// appendValue recursively encodes v in Canonical JSON format.
 func appendValue(buf *bytes.Buffer, v reflect.Value) error {
 	if !v.IsValid() {
 		buf.WriteString("null")
@@ -89,6 +93,7 @@ func appendValue(buf *bytes.Buffer, v reflect.Value) error {
 	}
 }
 
+// appendInt encodes integer n if within allowed JSON integer range.
 func appendInt(buf *bytes.Buffer, n int64) error {
 	if n < minCanonicalInt || n > maxCanonicalInt {
 		return ErrIntegerRange
@@ -97,6 +102,7 @@ func appendInt(buf *bytes.Buffer, n int64) error {
 	return nil
 }
 
+// appendJSONNumber parses and encodes a json.Number.
 func appendJSONNumber(buf *bytes.Buffer, n json.Number) error {
 	s := n.String()
 	if strings.ContainsAny(s, ".eE") {
@@ -109,6 +115,7 @@ func appendJSONNumber(buf *bytes.Buffer, n json.Number) error {
 	return appendInt(buf, i)
 }
 
+// appendMap encodes map keys in sorted order with canonical values.
 func appendMap(buf *bytes.Buffer, v reflect.Value) error {
 	if v.Type().Key().Kind() != reflect.String {
 		return fmt.Errorf("%w: map key %s", ErrUnsupportedType, v.Type().Key())
@@ -137,6 +144,7 @@ func appendMap(buf *bytes.Buffer, v reflect.Value) error {
 	return nil
 }
 
+// appendString checks UTF-8 validity and writes a JSON-quoted string.
 func appendString(buf *bytes.Buffer, s string) error {
 	if !utf8.ValidString(s) {
 		return ErrInvalidString

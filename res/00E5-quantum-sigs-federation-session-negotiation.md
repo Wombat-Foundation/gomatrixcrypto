@@ -1,4 +1,4 @@
-# MSC 00E5: Post-quantum federation session authentication
+# MSC00E5: Post-quantum federation session authentication
 
 This draft defines the optional ML-KEM session-negotiation extension for the
 post-quantum federation authentication profile. It builds on the per-request

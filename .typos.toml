@@ -1,0 +1,12 @@
+[default.extend-words]
+OT = "OT"
+OTK = "OTK"
+OTKs = "OTKs"
+NAX = "NAX"
+fo = "fo"
+
+[default.extend-identifiers]
+BA = "BA"
+
+[files]
+extend-exclude = ["tests/critique_data/**", "tests/fixtures/**"]

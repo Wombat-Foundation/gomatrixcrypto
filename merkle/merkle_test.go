@@ -6,7 +6,7 @@ import (
 	"slices"
 	"testing"
 
-	"gomatrixlib/matrixjson"
+	"github.com/Wombat-Foundation/gomatrixcrypto/matrixjson"
 )
 
 func sampleFields() []Field {

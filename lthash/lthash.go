@@ -11,8 +11,11 @@ import (
 )
 
 const (
-	WordCount   = 1024
-	ByteSize    = WordCount * 2
+	// WordCount is the number of uint16 words in an LtHash16 state.
+	WordCount = 1024
+	// ByteSize is the byte length of a serialized LtHash16 state.
+	ByteSize = WordCount * 2
+	// ChecksumLen is the length of the LtHash16 checksum.
 	ChecksumLen = 32
 )
 
@@ -24,11 +27,15 @@ type Hash [WordCount]uint16
 
 // Entry identifies one state element in the lattice.
 type Entry struct {
+	// EventType is the Matrix event type.
 	EventType string
-	StateKey  string
-	EventID   string
+	// StateKey is the Matrix state key.
+	StateKey string
+	// EventID is the event identifier included in the accumulator.
+	EventID string
 }
 
+// truncateToU16Limit truncates string s to fit within a uint16 length.
 func truncateToU16Limit(s string) (string, uint16) {
 	if len(s) <= int(^uint16(0)) {
 		return s, uint16(len(s))
@@ -40,6 +47,7 @@ func truncateToU16Limit(s string) (string, uint16) {
 	return s[:end], uint16(end)
 }
 
+// seed generates the lattice seed vector for a state entry.
 func seed(eventType, stateKey, eventID string) Hash {
 	eventType, typeLen := truncateToU16Limit(eventType)
 	stateKey, stateKeyLen := truncateToU16Limit(stateKey)
@@ -68,12 +76,14 @@ func seed(eventType, stateKey, eventID string) Hash {
 	return out
 }
 
+// addSeed adds seed elementwise into h.
 func (h *Hash) addSeed(seed Hash) {
 	for i := range h {
 		h[i] += seed[i]
 	}
 }
 
+// subSeed subtracts seed elementwise from h.
 func (h *Hash) subSeed(seed Hash) {
 	for i := range h {
 		h[i] -= seed[i]

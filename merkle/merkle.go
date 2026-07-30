@@ -11,17 +11,21 @@ import (
 
 	"golang.org/x/crypto/sha3"
 
-	"gomatrixlib/matrixjson"
+	"github.com/Wombat-Foundation/gomatrixcrypto/matrixjson"
 )
 
 // HashSize is the byte length of every MSC4511 digest in this package.
 const HashSize = 32
 
 var (
-	ErrEmptyFieldName   = errors.New("merkle: empty field name")
+	// ErrEmptyFieldName reports an empty Merkle field name.
+	ErrEmptyFieldName = errors.New("merkle: empty field name")
+	// ErrInvalidFieldName reports a field name that is not valid UTF-8 or contains NUL.
 	ErrInvalidFieldName = errors.New("merkle: invalid field name")
-	ErrDuplicateField   = errors.New("merkle: duplicate field")
-	ErrNoLeaves         = errors.New("merkle: no leaves")
+	// ErrDuplicateField reports repeated field names in a Merkle input.
+	ErrDuplicateField = errors.New("merkle: duplicate field")
+	// ErrNoLeaves reports that Merkle root computation received no fields.
+	ErrNoLeaves = errors.New("merkle: no leaves")
 )
 
 var (
@@ -37,7 +41,9 @@ type Hash [HashSize]byte
 //
 // Value is encoded with Matrix Canonical JSON before hashing.
 type Field struct {
-	Name  string
+	// Name is the canonical field name committed into the leaf hash.
+	Name string
+	// Value is the field payload encoded with Matrix Canonical JSON.
 	Value any
 }
 
@@ -54,14 +60,22 @@ type leaf struct {
 // and verify the sending server's identity without disclosing the sender's
 // localpart.
 type Header struct {
-	RoomID          string
+	// RoomID is the Matrix room ID.
+	RoomID string
+	// SenderLocalpart is the localpart of the sender's Matrix ID.
 	SenderLocalpart string
-	SenderDomain    string
-	Type            string
-	StateKey        *string
-	Redacts         *string
-	Depth           int64
-	OriginServerTS  int64
+	// SenderDomain is the sender's homeserver domain.
+	SenderDomain string
+	// Type is the Matrix event type.
+	Type string
+	// StateKey is the optional Matrix state key.
+	StateKey *string
+	// Redacts is the optional redacted event ID.
+	Redacts *string
+	// Depth is the Matrix event depth.
+	Depth int64
+	// OriginServerTS is the origin server timestamp in milliseconds.
+	OriginServerTS int64
 }
 
 // leafHash computes SHA3-256("msc4511:leaf:v1" || field_name || "\x00" ||
@@ -89,6 +103,7 @@ func validateFieldName(fieldName string) error {
 	return nil
 }
 
+// fieldLeaf computes the leaf representation and hash for a field.
 func fieldLeaf(field Field) (leaf, error) {
 	if field.Name == "" {
 		return leaf{}, ErrEmptyFieldName
@@ -104,6 +119,7 @@ func fieldLeaf(field Field) (leaf, error) {
 	return leaf{Name: field.Name, CanonicalJSON: canonical, Hash: h}, nil
 }
 
+// leaves converts fields to leaf structures and sorts them by name.
 func leaves(fields []Field) ([]leaf, error) {
 	leaves := make([]leaf, len(fields))
 	for i, field := range fields {
@@ -136,6 +152,7 @@ func Root(fields []Field) (Hash, error) {
 	return rootFromLeaves(leaves)
 }
 
+// rootFromLeaves calculates the Merkle tree root from leaf nodes.
 func rootFromLeaves(leaves []leaf) (Hash, error) {
 	if len(leaves) == 0 {
 		return Hash{}, ErrNoLeaves
@@ -195,6 +212,7 @@ func EventID(eventRoot Hash) string {
 	return "$" + base64.RawURLEncoding.EncodeToString(eventRoot[:])
 }
 
+// merkleRoot computes the binary Merkle root hash of leaf hashes.
 func merkleRoot(hashes []Hash) Hash {
 	switch len(hashes) {
 	case 0:
@@ -213,6 +231,7 @@ func merkleRoot(hashes []Hash) Hash {
 	}
 }
 
+// largestPowerOfTwoLessThan returns the largest power of 2 strictly less than n.
 func largestPowerOfTwoLessThan(n int) int {
 	k := 1
 	for k<<1 < n {
@@ -221,10 +240,12 @@ func largestPowerOfTwoLessThan(n int) int {
 	return k
 }
 
+// innerHash computes the domain-separated internal Merkle node hash.
 func innerHash(left, right Hash) Hash {
 	return hash(nodeDST, left[:], right[:])
 }
 
+// hash computes SHA3-256 over the concatenation of parts.
 func hash(parts ...[]byte) Hash {
 	h := sha3.New256()
 	for _, part := range parts {

@@ -7,8 +7,8 @@ import (
 	"os"
 	"testing"
 
-	"gomatrixlib/fndsa512"
-	"gomatrixlib/serverkey"
+	"github.com/Wombat-Foundation/gomatrixcrypto/fndsa512"
+	"github.com/Wombat-Foundation/gomatrixcrypto/serverkey"
 )
 
 func TestReadInputFromFile(t *testing.T) {

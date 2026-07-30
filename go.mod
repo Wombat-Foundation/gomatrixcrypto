@@ -1,4 +1,4 @@
-module gomatrixlib
+module github.com/Wombat-Foundation/gomatrixcrypto
 
 go 1.25
 

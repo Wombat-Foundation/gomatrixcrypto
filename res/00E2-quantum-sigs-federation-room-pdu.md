@@ -1,4 +1,4 @@
-# MSC 00E2: Post-Quantum PDU Signatures for Federation (PQC Room Versions)
+# MSC00E2: Post-Quantum PDU Signatures for Federation (PQC Room Versions)
 
 Matrix PDU signing currently uses `ed25519`. Quantum computers can theoretically
 reverse engineer private keys using Shor's algorithm, breaking elliptic-curve
@@ -13,10 +13,10 @@ It builds directly on
 which defines FN-DSA server-key minting, key identifiers, self-signature
 requirements, notary observations, and advisory TLS provenance. Optional
 session-based transport authentication is defined separately in
-[MSC 00E5](./00E5-quantum-sigs-federation-session-negotiation.md). Readers
-should be familiar with the server-key minting and trust model before deploying
-this MSC. E2EE device and cross-signing key migration is addressed separately in
-[MSC 00EA](./00EA-quantum-sigs-e2ee.md).
+[MSC00E5](./00E5-quantum-sigs-federation-session-negotiation.md). Readers should
+be familiar with the server-key minting and trust model before deploying this
+MSC. E2EE device and cross-signing key migration is addressed separately in
+[MSC00EA](./00EA-quantum-sigs-e2ee.md).
 
 ## Proposal
 
@@ -172,7 +172,7 @@ for bandwidth and storage integrity monitoring.
 ### Federation Transport Enforcement
 
 The post-quantum server-key profile defines the `X-Matrix-PQC` header with
-advisory-but-verified semantics. MSC 00E5 defines the optional
+advisory-but-verified semantics. MSC00E5 defines the optional
 `X-Matrix-PQC-Session` equivalent. This MSC upgrades enforcement to be
 **room-scoped**, to avoid an indefinitely downgradeable transport layer while
 leaving legacy traffic untouched:
@@ -182,7 +182,7 @@ leaving legacy traffic untouched:
   `/make_join`, `/send_join`, `/make_leave`, `/send_leave`, `/invite`, `/state`,
   `/state_ids`, `/backfill`, `/get_missing_events`, or `/event` when the
   resolved event belongs to a PQC room), a valid `X-Matrix-PQC` header (or valid
-  `X-Matrix-PQC-Session` MAC, per MSC 00E5) MUST be present. Requests lacking
+  `X-Matrix-PQC-Session` MAC, per MSC00E5) MUST be present. Requests lacking
   valid PQC transport authentication MUST be rejected with HTTP
   `401 Unauthorized`.
 - **Mixed transactions:** For `PUT /_matrix/federation/v1/send/{txnId}`
@@ -357,8 +357,8 @@ The new room version does **not** change:
      servers must blindly trust the chain rather than verifying the
      cryptography.
   2. **Identity mutation DoS.** If signatures were part of the Event ID, any
-     intermediary server could fork the DAG by appending a spurious signature to
-     an event in transit — creating a mathematically distinct Event ID for
+     intermediary server could fork the DAG by appending a spurious signature
+     to an event in transit — creating a mathematically distinct Event ID for
      identical content. This is the exact class of attack that motivated the
      Room Version 3 redesign (MSC1659).
   3. **Co-signing paradox.** The `/send_join` protocol requires the resident
@@ -367,11 +367,12 @@ The new room version does **not** change:
      of the federation would compute different Event IDs for the same join
      event, permanently splintering the DAG.
   4. **DAG topology.** Matrix's DAG contains forks and merges. There is no
-     single linear canonical successor to cleanly anchor a signature commitment.
+     single linear canonical successor to cleanly anchor a signature
+     commitment.
 
   Matrix explicitly excludes signatures from the Event ID so that the DAG
-  commits to content, not authorship, by design (Room Version 3+). Changing this
-  would be a fundamental protocol redesign, not an optimization. The
+  commits to content, not authorship, by design (Room Version 3+). Changing
+  this would be a fundamental protocol redesign, not an optimization. The
   [`canonical_sha256`](#canonical-event-hash-canonical_sha256) field provides
   the useful subset of this idea — mutation detection — without touching event
   identity.
@@ -379,7 +380,7 @@ The new room version does **not** change:
 - **Extending Olm/Megolm to PQC.** Key agreement migration (Curve25519 → ML-KEM)
   is orthogonal and far more complex. Bundling would delay everything. Signature
   migration provides immediate protection against server impersonation; key
-  agreement (the HNDL concern) is addressed separately (see MSC 00EA).
+  agreement (the HNDL concern) is addressed separately (see MSC00EA).
 
 - **Alternative signature schemes (ML-DSA, SLH-DSA).** Discussed in MSC00E4,
   where the algorithm is selected. The per-event permanence argument weighs even
@@ -400,7 +401,7 @@ signature). The PQC room version is an ideal catalyst to adopt CBOR (MSC2432).
 ### HTTP Overhead
 
 Per-request transport overhead and its amortization via PQ KEM session
-negotiation are addressed in MSC 00E5; they are not room-version concerns.
+negotiation are addressed in MSC00E5; they are not room-version concerns.
 
 ## Security Considerations
 
@@ -429,7 +430,7 @@ negotiation are addressed in MSC 00E5; they are not room-version concerns.
   use audited, constant-time libraries.
 
 - **Downgrade attacks (E2EE).** E2EE downgrade risks are addressed in
-  [MSC 00EA](./00EA-quantum-sigs-e2ee.md).
+  [MSC00EA](./00EA-quantum-sigs-e2ee.md).
 
 - **Key compromise recovery.** Identical to Ed25519: rotate the key, publish the
   old key in `old_verify_keys` with `expired_ts` (subject to the MSC00E4 FN-DSA
@@ -486,7 +487,7 @@ constraint is specific to this MSC:
 - **[MSC00E4](./00E4-quantum-sigs-minting-server-keys.md):** Defines FN-DSA
   server-key minting, key identifiers, server key distribution and trust model,
   and notary provenance. This MSC cannot be accepted before MSC00E4.
-- **[MSC 00E5](./00E5-quantum-sigs-federation-session-negotiation.md):** Defines
+- **[MSC00E5](./00E5-quantum-sigs-federation-session-negotiation.md):** Defines
   optional session authentication that can replace per-request `X-Matrix-PQC`
   signatures where this MSC permits `X-Matrix-PQC-Session`.
 - **NIST FIPS 206 (FN-DSA):** Inherited via MSC00E4.
@@ -505,7 +506,7 @@ verification:
 - **No new endpoints.** Existing endpoints are extended in behavior only (PQC
   signature requirements, room-scoped header enforcement).
 - **E2EE backwards compatibility.** E2EE device and cross-signing key migration
-  is addressed in [MSC 00EA](./00EA-quantum-sigs-e2ee.md) and is fully
+  is addressed in [MSC00EA](./00EA-quantum-sigs-e2ee.md) and is fully
   backwards-compatible.
 
 ---
@@ -516,27 +517,27 @@ verification:
       [appropriate implementation(s)](https://spec.matrix.org/proposals/#implementing-a-proposal)
       specified in the MSC's PR description?
 - [ ] Are all MSCs that this MSC depends on already accepted? (Depends on MSC
-      00E4 and MSC 00E5.)
+      00E4 and MSC00E5.)
 - [x] For each endpoint that is introduced or modified:
   - [x] Have authentication requirements been specified? (Room-scoped PQC
         transport authentication on existing federation endpoints; no new
         endpoints.)
-  - [x] Have rate-limiting requirements been specified? (Unchanged from existing
-        federation endpoints.)
+  - [x] Have rate-limiting requirements been specified? (Unchanged from
+        existing federation endpoints.)
   - [x] Have guest access requirements been specified? (N/A — server-to-server
         API.)
   - [x] Are error responses specified?
-    - [x] Does each error case have a specified `errcode` (i.e. `M_FORBIDDEN`)
-          and HTTP status code? (`401 Unauthorized` for missing/invalid PQC
-          transport authentication on PQC-room traffic.)
-      - [x] If a new `errcode` is introduced, is it clear that it is new? (No
-            new errcodes.)
+    - [x] Does each error case have a specified `errcode` (i.e.
+          `M_FORBIDDEN`) and HTTP status code? (`401 Unauthorized` for
+          missing/invalid PQC transport authentication on PQC-room traffic.)
+      - [x] If a new `errcode` is introduced, is it clear that it is new?
+            (No new errcodes.)
   - [x] Are the
         [endpoint conventions](https://spec.matrix.org/latest/appendices/#conventions-for-matrix-apis)
         honoured?
     - [x] Do HTTP endpoints `use_underscores_like_this`?
-    - [x] Will the endpoint return unbounded data? If so, has pagination been
-          considered? (N/A.)
+    - [x] Will the endpoint return unbounded data? If so, has pagination
+          been considered? (N/A.)
     - [x] If the endpoint utilises pagination, is it consistent with
           [the appendices](https://spec.matrix.org/latest/appendices/#pagination)?
           (N/A.)
@@ -552,8 +553,8 @@ verification:
       Ideally, the first paragraph should be understandable by a non-technical
       audience.
 - [ ] All outstanding threads are resolved
-  - [ ] All feedback is incorporated into the proposal text itself, either as a
-        fix or noted as an alternative
+  - [ ] All feedback is incorporated into the proposal text itself, either as
+        a fix or noted as an alternative
 - [x] There is a dedicated "Security Considerations" section which detail any
       possible attacks/vulnerabilities this proposal may introduce, even if this
       is "None.". See [RFC3552](https://datatracker.ietf.org/doc/html/rfc3552)

@@ -1,4 +1,4 @@
-# MSC 00EA: Post-Quantum Digital Signatures for E2EE
+# MSC00EA: Post-Quantum Digital Signatures for E2EE
 
 Matrix device and cross-signing keys currently use `ed25519`. Quantum computers
 can theoretically reverse engineer private keys using Shor's algorithm, breaking
@@ -183,7 +183,7 @@ fallback.
 **What clients do NOT need to do:**
 
 - Verify or inspect the `signatures` object on timeline events (homeserver-only,
-  see MSC 00E2)
+  see MSC00E2)
 - Process `X-Matrix-PQC` headers (server-to-server transport, see MSC00E4)
 - Implement FN-DSA for Olm/Megolm key agreement (deferred to a separate MSC)
 
@@ -316,15 +316,15 @@ This proposal is fully backwards-compatible:
   - [ ] Have rate-limiting requirements been specified?
   - [ ] Have guest access requirements been specified?
   - [ ] Are error responses specified?
-    - [ ] Does each error case have a specified `errcode` (i.e. `M_FORBIDDEN`)
-          and HTTP status code?
+    - [ ] Does each error case have a specified `errcode` (i.e.
+          `M_FORBIDDEN`) and HTTP status code?
       - [ ] If a new `errcode` is introduced, is it clear that it is new?
   - [x] Are the
         [endpoint conventions](https://spec.matrix.org/latest/appendices/#conventions-for-matrix-apis)
         honoured?
     - [x] Do HTTP endpoints `use_underscores_like_this`?
-    - [x] Will the endpoint return unbounded data? If so, has pagination been
-          considered?
+    - [x] Will the endpoint return unbounded data? If so, has pagination
+          been considered?
     - [ ] If the endpoint utilises pagination, is it consistent with
           [the appendices](https://spec.matrix.org/latest/appendices/#pagination)?
 - [ ] Will the MSC require a new room version, and if so, has that been made
@@ -334,8 +334,8 @@ This proposal is fully backwards-compatible:
       Ideally, the first paragraph should be understandable by a non-technical
       audience.
 - [ ] All outstanding threads are resolved
-  - [ ] All feedback is incorporated into the proposal text itself, either as a
-        fix or noted as an alternative
+  - [ ] All feedback is incorporated into the proposal text itself, either as
+        a fix or noted as an alternative
 - [x] There is a dedicated "Security Considerations" section which detail any
       possible attacks/vulnerabilities this proposal may introduce, even if this
       is "None.". See [RFC3552](https://datatracker.ietf.org/doc/html/rfc3552)

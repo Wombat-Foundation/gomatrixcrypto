@@ -1,3 +1,4 @@
+// Command serverkey-demo demonstrates Matrix server-key generation and proof minting.
 package main
 
 import (
@@ -6,18 +7,30 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"slices"
 	"strings"
 	"time"
 
-	"gomatrixlib/cuckoo"
-	"gomatrixlib/cuckoo/meanminer"
-	"gomatrixlib/fndsa512"
-	"gomatrixlib/serverkey"
+	"github.com/Wombat-Foundation/gomatrixcrypto/cuckoo"
+	"github.com/Wombat-Foundation/gomatrixcrypto/cuckoo/meanminer"
+	"github.com/Wombat-Foundation/gomatrixcrypto/fndsa512"
+	"github.com/Wombat-Foundation/gomatrixcrypto/serverkey"
+
+	"golang.org/x/crypto/sha3"
 )
 
+// deterministicReader returns an io.Reader seeded with the provided string.
+func deterministicReader(seed string) io.Reader {
+	hash := sha3.NewShake256()
+	_, _ = hash.Write([]byte(seed))
+	return hash
+}
+
 const demoPoWProfileNote = "demo-only low-difficulty Cuckoo profile; not valid for production key minting"
+
+const maxProtocolMintingNonce = uint64(1<<32 - 1)
 
 type powProfile struct {
 	Algorithm string
@@ -26,23 +39,42 @@ type powProfile struct {
 	Note      string
 }
 
+// main is the entry point for the serverkey-demo command.
 func main() {
 	serverName := flag.String("server", "example.com", "Matrix server_name to bind into the self-signed key object")
 	validDays := flag.Int("valid-days", 7, "validity window in days")
+	validUntilTS := flag.Int64("valid-until-ts", 0, "explicit valid_until_ts in milliseconds; 0 derives from valid-days and current time")
 	profileName := flag.String("pow-profile", "demo", "PoW profile: demo, production, or custom")
 	edgeBits := flag.Uint("pow-edge-bits", 8, "Cuckoo edge bits; ignored by -pow-profile production")
 	proofSize := flag.Int("pow-proof-size", 4, "Cuckoo proof size; ignored by -pow-profile production")
 	powAlgorithm := flag.String("pow-algorithm", "", "minting proof algorithm for -pow-profile custom")
 	demoProfile := flag.Bool("pow-demo-profile", true, "mark -pow-profile custom output as demo-only")
 	maxNonce := flag.Uint("pow-max-nonce", 1<<12, "maximum edge nonce to search per minting nonce")
-	maxMintingNonce := flag.Uint64("pow-max-graph-nonce", 256, "maximum minting nonce attempts")
+	startMintingNonce := flag.Uint64("pow-start-graph-nonce", 0, "first graph nonce to try")
+	maxMintingNonce := flag.Uint64("pow-max-graph-nonce", 256, "exclusive graph-nonce limit")
 	privateKeyPassphraseEnv := flag.String("private-key-passphrase-env", "", "environment variable containing a passphrase for encrypted private-key output")
 	privateKeyPassphraseFile := flag.String("private-key-passphrase-file", "", "file containing a passphrase for encrypted private-key output")
+	keygenSeed := flag.String("keygen-seed", "", "ASCII seed for deterministic key generation; empty uses crypto/rand")
 	flag.Parse()
+
+	if err := validateMintingNonceRange(*startMintingNonce, *maxMintingNonce); err != nil {
+		fatal(err)
+	}
 
 	profile, err := configurePoWProfile(*profileName, *edgeBits, *proofSize, *powAlgorithm, *demoProfile)
 	if err != nil {
 		fatal(err)
+	}
+	if err := validateServerKeyProfile(profile); err != nil {
+		fatal(err)
+	}
+
+	if uint64(*maxNonce) > profile.Config.EdgeMask()+1 {
+		*maxNonce = uint(profile.Config.EdgeMask() + 1)
+	}
+
+	if profile.Algorithm == serverkey.ProductionProfile && !profile.Demo && *keygenSeed != "" {
+		fatal(fmt.Errorf("-keygen-seed is restricted to test/demo artifacts; production profile key generation requires cryptographically random system entropy"))
 	}
 
 	passphrase, err := privateKeyPassphrase(*privateKeyPassphraseEnv, *privateKeyPassphraseFile)
@@ -50,7 +82,11 @@ func main() {
 		fatal(err)
 	}
 
-	priv, pub, err := fndsa512.GenerateKey(nil)
+	var rng io.Reader
+	if *keygenSeed != "" {
+		rng = deterministicReader(*keygenSeed)
+	}
+	priv, pub, err := fndsa512.GenerateKey(rng)
 	if err != nil {
 		fatal(err)
 	}
@@ -62,18 +98,26 @@ func main() {
 		}
 	}
 
-	proof, keyID, err := solveMintingPoW(*serverName, pub, profile, uint32(*maxNonce), *maxMintingNonce)
+	proof, keyID, err := solveMintingPoW(*serverName, pub, profile, uint32(*maxNonce), *startMintingNonce, *maxMintingNonce)
 	if err != nil {
 		fatal(err)
 	}
 
-	validUntil := time.Now().Add(time.Duration(*validDays) * 24 * time.Hour).UnixMilli()
-	metadata := serverkey.FNDSAMetadata{
-		FIPS206Revision: serverkey.DefaultFIPSRevision,
-		Claims:          []string{"constant-time-keygen", "constant-time-signing"},
+	var validUntil int64
+	if *validUntilTS > 0 {
+		validUntil = *validUntilTS
+	} else {
+		validUntil = time.Now().Add(time.Duration(*validDays) * 24 * time.Hour).UnixMilli()
+	}
+	var metadata serverkey.FNDSAMetadata
+	if profile.Algorithm != serverkey.ProductionProfile {
+		metadata = serverkey.FNDSAMetadata{
+			FIPS206Revision: serverkey.DefaultFIPSRevision,
+			Claims:          []string{"constant-time-keygen", "constant-time-signing"},
+		}
 	}
 
-	obj, keyName, err := serverkey.NewSignedFNDSA(nil, *serverName, priv, pub, validUntil, metadata, proof)
+	obj, keyName, err := serverkey.NewSignedFNDSA(rng, *serverName, priv, pub, validUntil, metadata, proof)
 	if err != nil {
 		fatal(err)
 	}
@@ -112,7 +156,7 @@ func main() {
 	fmt.Printf("key_id: %s\n", keyID)
 	fmt.Printf("key_metadata_sha256: %s\n", metadataDigest)
 	fmt.Printf("server_key_package_sha256: %s\n", serverKeyPackageDigest)
-	fmt.Printf("pow_algorithm: %s\n", proof.Algorithm)
+	fmt.Printf("profile: %s\n", proof.Algorithm)
 	if profile.Note != "" {
 		fmt.Printf("pow_profile_note: %s\n", profile.Note)
 	}
@@ -131,6 +175,15 @@ func main() {
 	}
 }
 
+// validateMintingNonceRange validates an exclusive graph-nonce range.
+func validateMintingNonceRange(start, limit uint64) error {
+	if start > maxProtocolMintingNonce || limit > maxProtocolMintingNonce+1 || start > limit {
+		return fmt.Errorf("invalid graph nonce range [%d, %d): require uint32 nonces and start <= limit", start, limit)
+	}
+	return nil
+}
+
+// privateKeyPassphrase retrieves the passphrase from environment variable or file.
 func privateKeyPassphrase(envName, fileName string) ([]byte, error) {
 	if envName != "" && fileName != "" {
 		return nil, fmt.Errorf("use only one of -private-key-passphrase-env or -private-key-passphrase-file")
@@ -152,45 +205,72 @@ func privateKeyPassphrase(envName, fileName string) ([]byte, error) {
 	return nil, nil
 }
 
+// configurePoWProfile sets up and registers the requested PoW profile.
 func configurePoWProfile(name string, edgeBits uint, proofSize int, algorithm string, demo bool) (powProfile, error) {
+	var prof powProfile
 	switch name {
 	case "demo":
 		cfg := cuckoo.Config{EdgeBits: edgeBits, ProofSize: proofSize}
-		return powProfile{
+		prof = powProfile{
 			Algorithm: fmt.Sprintf("demo.cuckoo-cycle-%d-%d-sha3-256-cogen", cfg.ProofSize, cfg.EdgeBits),
 			Config:    cfg,
 			Demo:      true,
 			Note:      demoPoWProfileNote,
-		}, nil
+		}
 	case "production":
-		return powProfile{
+		prof = powProfile{
 			Algorithm: serverkey.ProductionPoW,
-			Config:    cuckoo.Config{EdgeBits: 29, ProofSize: 42},
+			Config:    serverkey.ProductionConfig(),
 			Demo:      false,
-		}, nil
+		}
 	case "custom":
 		if algorithm == "" {
 			return powProfile{}, fmt.Errorf("-pow-algorithm is required with -pow-profile custom")
 		}
-		profile := powProfile{
+		if algorithm == serverkey.ProductionProfile {
+			return powProfile{}, fmt.Errorf("-pow-algorithm %q is reserved for production profile", serverkey.ProductionProfile)
+		}
+		prof = powProfile{
 			Algorithm: algorithm,
 			Config:    cuckoo.Config{EdgeBits: edgeBits, ProofSize: proofSize},
 			Demo:      demo,
 		}
 		if demo {
-			profile.Note = demoPoWProfileNote
+			prof.Note = demoPoWProfileNote
 		}
-		return profile, nil
 	default:
 		return powProfile{}, fmt.Errorf("unknown -pow-profile %q", name)
 	}
+
+	if prof.Algorithm != serverkey.ProductionProfile && !serverkey.IsRegisteredProfile(prof.Algorithm) {
+		if err := serverkey.RegisterProfile(prof.Algorithm, prof.Config, 16); err != nil {
+			return powProfile{}, err
+		}
+	}
+	return prof, nil
 }
 
-func solveMintingPoW(serverName string, publicKey []byte, profile powProfile, maxNonce uint32, maxMintingNonce uint64) (serverkey.FNDSAMintingProof, string, error) {
+// validateServerKeyProfile validates that the profile is properly configured
+// and registered before generating a key or spending work mining a proof.
+func validateServerKeyProfile(profile powProfile) error {
+	if profile.Algorithm == "" {
+		return fmt.Errorf("invalid profile: algorithm name cannot be empty")
+	}
+	if !serverkey.IsRegisteredProfile(profile.Algorithm) {
+		return fmt.Errorf("unregistered server-key profile %q", profile.Algorithm)
+	}
+	return nil
+}
+
+// solveMintingPoW mines a valid Cuckoo Cycle proof for server-key minting.
+func solveMintingPoW(serverName string, publicKey []byte, profile powProfile, maxNonce uint32, startMintingNonce, maxMintingNonce uint64) (serverkey.FNDSAMintingProof, string, error) {
 	useMeanMiner := profile.Config.EdgeBits == 29 && profile.Config.ProofSize == 42 && meanminer.Available()
 
-	for nonce := uint64(0); nonce < maxMintingNonce; nonce++ {
-		seed, err := serverkey.GraphSeed(publicKey, serverName, nonce)
+	for nonce := startMintingNonce; nonce < maxMintingNonce; nonce++ {
+		if nonce > maxProtocolMintingNonce {
+			return serverkey.FNDSAMintingProof{}, "", fmt.Errorf("graph nonce %d exceeds uint32 limit", nonce)
+		}
+		seed, err := serverkey.GraphSeed(publicKey, serverName, profile.Algorithm, uint32(nonce))
 		if err != nil {
 			return serverkey.FNDSAMintingProof{}, "", err
 		}
@@ -226,7 +306,7 @@ func solveMintingPoW(serverName string, publicKey []byte, profile powProfile, ma
 
 		mintingProof := serverkey.FNDSAMintingProof{
 			Algorithm: profile.Algorithm,
-			Nonce:     nonce,
+			Nonce:     uint32(nonce),
 			Solution:  proof,
 		}
 		keyID, err := serverkey.KeyIDBase64(publicKey, serverName, mintingProof)
@@ -239,6 +319,7 @@ func solveMintingPoW(serverName string, publicKey []byte, profile powProfile, ma
 	return serverkey.FNDSAMintingProof{}, "", cuckoo.ErrNoSolution
 }
 
+// serverKeyPackageSHA256 computes the base64url-encoded SHA-256 hash of canonical JSON.
 func serverKeyPackageSHA256(obj map[string]any) (string, error) {
 	signingBytes, err := serverkey.SigningBytes(obj)
 	if err != nil {
@@ -248,6 +329,7 @@ func serverKeyPackageSHA256(obj map[string]any) (string, error) {
 	return base64.RawURLEncoding.EncodeToString(sum[:]), nil
 }
 
+// fatal prints an error message and terminates the process.
 func fatal(err error) {
 	fmt.Fprintln(os.Stderr, err)
 	os.Exit(1)

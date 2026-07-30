@@ -1,12 +1,13 @@
 // Package meanminer shells out to a prebuilt binary wrapping John Tromp's
-// reference "mean" (bucket-sort) Cuckoo Cycle solver — see solve_main.cpp
+// reference "mean" (bucket-sort) Cuckatoo Cycle solver — see solve_main.cpp
 // and external/cuckoo (vendored submodule) — for the one profile where a
 // pure-Go solver is too slow to be practical: EdgeBits=29, ProofSize=42
-// (tk.nutra.msc45xx.pow.cuckoo-cycle-42-29-sha256).
+// matching the current production server-key profile
+// (tk.nutra.msc45xx.serverkey.v1).
 //
 // The binary is built separately (run `make` in this directory) rather
 // than compiled in by `go build`, so this package is plain Go: no cgo, no
-// C++ toolchain required to build gomatrixlib itself. Callers should
+// C++ toolchain required to build gomatrixcrypto itself. Callers should
 // check Available() and fall back to cuckoo.FindProof when the binary
 // hasn't been built.
 package meanminer
@@ -49,6 +50,7 @@ func Available() bool {
 	return availableWithDeps(binaryPathForAvailable, statForAvailable)
 }
 
+// availableWithDeps checks if the external solver binary exists.
 func availableWithDeps(binaryPath binaryPathFunc, stat statFunc) bool {
 	bin, err := binaryPath()
 	if err != nil {
@@ -68,10 +70,12 @@ func Solve(seed []byte, nthreads int) (proof []uint32, ok bool, err error) {
 	return solveWithDeps(seed, nthreads, BinaryPath, runCommand)
 }
 
+// runCommand executes an external binary command.
 func runCommand(path string, args ...string) ([]byte, error) {
 	return exec.Command(path, args...).Output()
 }
 
+// solveWithDeps executes the solver binary using injected dependencies.
 func solveWithDeps(seed []byte, nthreads int, binaryPath binaryPathFunc, run commandRunner) (proof []uint32, ok bool, err error) {
 	if len(seed) != 32 {
 		return nil, false, fmt.Errorf("meanminer: seed must be 32 bytes, got %d", len(seed))
