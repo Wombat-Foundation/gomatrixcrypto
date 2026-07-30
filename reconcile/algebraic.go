@@ -284,29 +284,7 @@ func (s *SyndromeSketch) DecodeElements(maxElements int) ([]uint64, error) {
 	if maxElements <= 0 || maxElements > s.Capacity() || maxElements > MaxLocalSketchDecodeCapacity {
 		return nil, ErrInvalidSketchCapacity
 	}
-	decoded, err := decodePinSketch(s.Coordinates[:maxElements], maxElements, nil)
-	if err != nil {
-		return nil, err
-	}
-	// coverage:ignore
-	if containsZero(decoded) {
-		return nil, ErrDecodeFailure
-	}
-	check, err := NewSyndromeSketch(s.Capacity())
-	// coverage:ignore
-	if err != nil {
-		return nil, err
-	}
-	for _, element := range decoded {
-		// coverage:ignore
-		if err := check.Toggle(element); err != nil {
-			return nil, err
-		}
-	}
-	if !equalSketch(check, s) {
-		return nil, ErrDecodeFailure
-	}
-	return decoded, nil
+	return decodeAndVerifySketch(s, maxElements, nil)
 }
 
 // Encode serializes a sketch using unpadded URL-safe Base64.
@@ -347,6 +325,32 @@ func newSketchFromEncodedBytes(capacity int, bytes []byte) (*SyndromeSketch, err
 		coordinates[i] = binary.LittleEndian.Uint64(bytes[i*8:])
 	}
 	return &SyndromeSketch{Coordinates: coordinates}, nil
+}
+
+func decodeAndVerifySketch(s *SyndromeSketch, maxElements int, work *int) ([]uint64, error) {
+	decoded, err := decodePinSketch(s.Coordinates[:maxElements], maxElements, work)
+	if err != nil {
+		return nil, err
+	}
+	// coverage:ignore
+	if containsZero(decoded) {
+		return nil, ErrDecodeFailure
+	}
+	check, err := NewSyndromeSketch(s.Capacity())
+	// coverage:ignore
+	if err != nil {
+		return nil, err
+	}
+	for _, element := range decoded {
+		// coverage:ignore
+		if err := check.Toggle(element); err != nil {
+			return nil, err
+		}
+	}
+	if !equalSketch(check, s) {
+		return nil, ErrDecodeFailure
+	}
+	return decoded, nil
 }
 
 // DecodeDigest32 aliases MatrixEventDigest32 for symmetry with the Rust API.
