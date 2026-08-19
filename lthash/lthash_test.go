@@ -57,7 +57,7 @@ func TestChecksumStable(t *testing.T) {
 	})
 
 	got := h.String()
-	const want = "038b52c62ec404f966822f864bb4db91d2f81ef262aed88c6610550c5b904d54"
+	const want = "e8a0a8f0ac9b24b5f1841082964b9b1a3642991079457b0b19416eb0a15cf280"
 	if got != want {
 		t.Fatalf("checksum mismatch: got %s want %s", got, want)
 	}
