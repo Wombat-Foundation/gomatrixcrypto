@@ -2,8 +2,8 @@
 package lthash
 
 import (
+	"encoding/base64"
 	"encoding/binary"
-	"fmt"
 	"io"
 
 	"golang.org/x/crypto/blake2b"
@@ -130,8 +130,8 @@ func (h Hash) Checksum() [ChecksumLen]byte {
 	return blake2b.Sum256(bytes[:])
 }
 
-// String returns the hash checksum as lowercase hex.
+// String returns the hash checksum as unpadded base64url (the MSC4500 wire form).
 func (h Hash) String() string {
 	sum := h.Checksum()
-	return fmt.Sprintf("%x", sum[:])
+	return base64.RawURLEncoding.EncodeToString(sum[:])
 }
