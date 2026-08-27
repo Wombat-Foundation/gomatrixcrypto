@@ -47,13 +47,13 @@ func truncateToU16Limit(s string) (string, uint16) {
 	return s[:end], uint16(end)
 }
 
-// seed generates the lattice seed vector for a state entry.
-func seed(eventType, stateKey, eventID string) Hash {
+// seedWithDST generates a lattice seed vector for an element and domain tag.
+func seedWithDST(domain []byte, eventType, stateKey, eventID string) Hash {
 	eventType, typeLen := truncateToU16Limit(eventType)
 	stateKey, stateKeyLen := truncateToU16Limit(stateKey)
 
 	xof := sha3.NewShake256()
-	xof.Write(dst)
+	xof.Write(domain)
 
 	var lens [2]byte
 	binary.LittleEndian.PutUint16(lens[:], typeLen)
@@ -74,6 +74,11 @@ func seed(eventType, stateKey, eventID string) Hash {
 		out[i] = binary.LittleEndian.Uint16(buf[i*2:])
 	}
 	return out
+}
+
+// seed generates the lattice seed vector for a state entry.
+func seed(eventType, stateKey, eventID string) Hash {
+	return seedWithDST(dst, eventType, stateKey, eventID)
 }
 
 // addSeed adds seed elementwise into h.

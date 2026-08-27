@@ -5,6 +5,9 @@ STYLE_CYAN := $(shell tput setaf 6 2>/dev/null || printf '\033[36m')
 STYLE_RESET := $(shell tput sgr0 2>/dev/null || printf '\033[0m')
 
 GO ?= go
+# Staticcheck 2026.1 does not yet understand Go 1.27 export data. Keep lint
+# on the toolchain declared by go.mod while allowing callers to override it.
+LINT_GO_TOOLCHAIN ?= go1.25.0
 STATICCHECK ?= staticcheck
 GOLANGCI_LINT ?= golangci-lint
 VETFLAGS ?=
@@ -55,10 +58,10 @@ _cov/all: ## Run tests with coverage and print a summary for all packages, inclu
 
 .PHONY: lint
 lint:	## Run lint checks
-	$(GO) vet $(VETFLAGS) $(PKGS)
-	$(STATICCHECK) -checks=all $(STATICCHECKFLAGS) $(PKGS)
+	GOTOOLCHAIN=$(LINT_GO_TOOLCHAIN)+auto $(GO) vet $(VETFLAGS) $(PKGS)
+	GOTOOLCHAIN=$(LINT_GO_TOOLCHAIN)+auto $(STATICCHECK) -checks=all $(STATICCHECKFLAGS) $(PKGS)
 	# install with, i.e., `curl -sSfL https://golangci-lint.run/install.sh | sh -s -- -b "$$(go env GOPATH)/bin" v2.12.2`
-	$(GOLANGCI_LINT) run $(GOLANGCI_LINTFLAGS) $(PKGS)
+	GOTOOLCHAIN=$(LINT_GO_TOOLCHAIN)+auto $(GOLANGCI_LINT) run $(GOLANGCI_LINTFLAGS) $(PKGS)
 
 .PHONY: build
 build: ## Compile all packages
