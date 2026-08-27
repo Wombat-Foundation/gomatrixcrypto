@@ -82,7 +82,7 @@ func verifyCausalPath(terminalHash Hash, terminalCount uint64, terminalDepth int
 		default:
 			return false
 		}
-		curCount += step.Count
+		curCount = checkedCountSum(curCount, step.Count)
 		depth--
 	}
 	return curHash == root && curCount == count
@@ -114,13 +114,13 @@ func causalDescend(keys []Hash, depth int, target Hash) (nodeHash Hash, nodeCoun
 		rightHash, rightCount := subtreeRootCount(right, depth+1)
 		node := causalNode(depth, leftHash, leftCount, rightHash, rightCount)
 		path = append(leftPath, CausalProofStep{Side: "right", Hash: rightHash, Count: rightCount})
-		return node, leftCount + rightCount, path, kind, tDepth
+		return node, checkedCountSum(leftCount, rightCount), path, kind, tDepth
 	}
 	rightHash, rightCount, rightPath, kind, tDepth := causalDescend(right, depth+1, target)
 	leftHash, leftCount := subtreeRootCount(left, depth+1)
 	node := causalNode(depth, leftHash, leftCount, rightHash, rightCount)
 	path = append(rightPath, CausalProofStep{Side: "left", Hash: leftHash, Count: leftCount})
-	return node, leftCount + rightCount, path, kind, tDepth
+	return node, checkedCountSum(leftCount, rightCount), path, kind, tDepth
 }
 
 // subtreeRootCount is causalSubtreeRoot generalized to accept an empty key

@@ -143,5 +143,18 @@ func causalSubtreeRoot(keys []Hash, depth int) (Hash, uint64) {
 	if len(right) > 0 {
 		rightHash, rightCount = causalSubtreeRoot(right, depth+1)
 	}
-	return causalNode(depth, leftHash, leftCount, rightHash, rightCount), leftCount + rightCount
+	return causalNode(depth, leftHash, leftCount, rightHash, rightCount), checkedCountSum(leftCount, rightCount)
+}
+
+// checkedCountSum sums two subtree/sibling counts. The draft's "Room-version
+// validity" section mandates rejecting an overflowing count addition rather
+// than wrapping or saturating it; this panic is that rejection. In practice a
+// real causal set's population is always far below math.MaxUint64, so this
+// never actually fires.
+func checkedCountSum(a, b uint64) uint64 {
+	sum := a + b
+	if sum < a {
+		panic("msc4511 causal_set count overflow: MUST reject, not wrap or saturate")
+	}
+	return sum
 }
