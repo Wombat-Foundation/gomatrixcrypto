@@ -181,20 +181,20 @@ func RedactedContentHash(value any) (Hash, error) {
 	return ComponentHash("redacted_content", value)
 }
 
-// EphemeralContentHash computes the ephemeral_content_hash leaf for
+// RedactableContentHash computes the redactable_content_hash leaf for
 // MSC4511's content_hash split: the leaf hash of the event body fields that
 // redaction strips.
-func EphemeralContentHash(value any) (Hash, error) {
-	return ComponentHash("ephemeral_content", value)
+func RedactableContentHash(value any) (Hash, error) {
+	return ComponentHash("redactable_content", value)
 }
 
-// ContentHash combines redactedContentHash and ephemeralContentHash into the
+// ContentHash combines redactedContentHash and redactableContentHash into the
 // top-level content_hash component, per MSC4511's split-canonicalization
-// redaction fix: a server executing a redaction can drop the ephemeral
-// plaintext while retaining ephemeralContentHash, keeping content_hash (and
+// redaction fix: a server executing a redaction can drop the redactable
+// plaintext while retaining redactableContentHash, keeping content_hash (and
 // therefore event_root and the event ID) reconstructible.
-func ContentHash(redactedContentHash, ephemeralContentHash Hash) Hash {
-	return innerHash(redactedContentHash, ephemeralContentHash)
+func ContentHash(redactedContentHash, redactableContentHash Hash) Hash {
+	return innerHash(redactedContentHash, redactableContentHash)
 }
 
 // HeaderRoot computes event_header_root over room_id, sender_localpart,

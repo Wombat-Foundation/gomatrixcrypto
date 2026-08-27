@@ -81,20 +81,20 @@ func redactContent(content map[string]any, rule RedactionRule) map[string]any {
 }
 
 // SplitRedactionContent splits content into MSC4511's redacted_content (the
-// fields RedactionPreservedKeys(eventType) preserves) and ephemeral_content
-// (everything redaction strips). redacted and ephemeral partition content
+// fields RedactionPreservedKeys(eventType) preserves) and redactable_content
+// (everything redaction strips). redacted and redactable partition content
 // without overlap or loss: recombining their keys recovers content's key set.
-func SplitRedactionContent(content map[string]any, eventType string) (redacted, ephemeral map[string]any) {
+func SplitRedactionContent(content map[string]any, eventType string) (redacted, redactable map[string]any) {
 	rule := RedactionPreservedKeys(eventType)
 	redacted = redactContent(content, rule)
-	ephemeral = ephemeralRemainder(content, redacted)
-	return redacted, ephemeral
+	redactable = redactableRemainder(content, redacted)
+	return redacted, redactable
 }
 
-// ephemeralRemainder returns the content present in content but not
+// redactableRemainder returns the content present in content but not
 // preserved in redacted, recursing one level for the
 // third_party_invite-shaped nested-path case.
-func ephemeralRemainder(content, redacted map[string]any) map[string]any {
+func redactableRemainder(content, redacted map[string]any) map[string]any {
 	out := map[string]any{}
 	for key, value := range content {
 		preserved, ok := redacted[key]

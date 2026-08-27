@@ -1,8 +1,8 @@
 // Command redacted-event-vectors generates a complete, end-to-end MSC4511
-// event vector that exercises the redacted/ephemeral content_hash split
+// event vector that exercises the redacted/redactable content_hash split
 // across a redaction: the same event's event_root and event ID are computed
 // before and after redaction and shown to match, using only the retained
-// ephemeral_content_hash after the ephemeral plaintext is dropped.
+// redactable_content_hash after the redactable plaintext is dropped.
 package main
 
 import (
@@ -43,28 +43,28 @@ func main() {
 	must(err)
 
 	// --- Before redaction: content_hash over the full content split. ---
-	redactedContent, ephemeralContent := merkle.SplitRedactionContent(content, header.Type)
+	redactedContent, redactableContent := merkle.SplitRedactionContent(content, header.Type)
 	redactedContentHash, err := merkle.RedactedContentHash(redactedContent)
 	must(err)
-	ephemeralContentHashBefore, err := merkle.EphemeralContentHash(ephemeralContent)
+	redactableContentHashBefore, err := merkle.RedactableContentHash(redactableContent)
 	must(err)
-	contentHashBefore := merkle.ContentHash(redactedContentHash, ephemeralContentHashBefore)
+	contentHashBefore := merkle.ContentHash(redactedContentHash, redactableContentHashBefore)
 	eventRootBefore := merkle.EventRoot(prevEventsHash, authEventsHash, headerRoot, contentHashBefore, otherSignedFieldsHash)
 
-	// --- After redaction: ephemeral plaintext is dropped, but the server
-	// retains ephemeralContentHashBefore (a 32-byte value, not the censored
+	// --- After redaction: redactable plaintext is dropped, but the server
+	// retains redactableContentHashBefore (a 32-byte value, not the censored
 	// display_name) and recomputes the identical content_hash/event_root
 	// from redactedContent (still held) plus the retained hash. ---
-	retainedEphemeralHash := ephemeralContentHashBefore
-	contentHashAfter := merkle.ContentHash(redactedContentHash, retainedEphemeralHash)
+	retainedRedactableHash := redactableContentHashBefore
+	contentHashAfter := merkle.ContentHash(redactedContentHash, retainedRedactableHash)
 	eventRootAfter := merkle.EventRoot(prevEventsHash, authEventsHash, headerRoot, contentHashAfter, otherSignedFieldsHash)
 
 	fmt.Println("[msc4511-redacted-event-vector]")
 	fmt.Println("event_type =", header.Type)
 	fmt.Println("redacted_content =", redactedContent)
-	fmt.Println("ephemeral_content_before_redaction =", ephemeralContent)
+	fmt.Println("redactable_content_before_redaction =", redactableContent)
 	fmt.Println("redacted_content_hash_hex =", hex.EncodeToString(redactedContentHash[:]))
-	fmt.Println("ephemeral_content_hash_hex =", hex.EncodeToString(ephemeralContentHashBefore[:]))
+	fmt.Println("redactable_content_hash_hex =", hex.EncodeToString(redactableContentHashBefore[:]))
 	fmt.Println("content_hash_hex =", hex.EncodeToString(contentHashBefore[:]))
 	fmt.Println("event_root_before_redaction_hex =", hex.EncodeToString(eventRootBefore[:]))
 	fmt.Println("event_id_before_redaction =", merkle.EventID(eventRootBefore))
