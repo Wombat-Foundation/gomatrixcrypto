@@ -102,15 +102,21 @@ func (s *CausalSet) Count() uint64 {
 
 // Root computes the canonical sparse Merkle sum trie root for s.
 func (s *CausalSet) Root() Hash {
-	if len(s.keys) == 0 {
+	keys := s.keySlice()
+	if len(keys) == 0 {
 		return causalEmpty[0]
 	}
+	root, _ := causalSubtreeRoot(keys, 0)
+	return root
+}
+
+// keySlice returns s's member keys as a slice, in map iteration order.
+func (s *CausalSet) keySlice() []Hash {
 	keys := make([]Hash, 0, len(s.keys))
 	for k := range s.keys {
 		keys = append(keys, k)
 	}
-	root, _ := causalSubtreeRoot(keys, 0)
-	return root
+	return keys
 }
 
 // causalSubtreeRoot computes the (hash, count) of the subtree rooted at depth
