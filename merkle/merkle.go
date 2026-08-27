@@ -174,6 +174,29 @@ func ComponentHash(fieldName string, value any) (Hash, error) {
 	return leaf.Hash, nil
 }
 
+// RedactedContentHash computes the redacted_content_hash leaf for MSC4511's
+// content_hash split: the leaf hash of the event body fields that survive
+// redaction.
+func RedactedContentHash(value any) (Hash, error) {
+	return ComponentHash("redacted_content", value)
+}
+
+// EphemeralContentHash computes the ephemeral_content_hash leaf for
+// MSC4511's content_hash split: the leaf hash of the event body fields that
+// redaction strips.
+func EphemeralContentHash(value any) (Hash, error) {
+	return ComponentHash("ephemeral_content", value)
+}
+
+// ContentHash combines redactedContentHash and ephemeralContentHash into the
+// top-level content_hash component, per MSC4511's split-canonicalization
+// redaction fix: a server executing a redaction can drop the ephemeral
+// plaintext while retaining ephemeralContentHash, keeping content_hash (and
+// therefore event_root and the event ID) reconstructible.
+func ContentHash(redactedContentHash, ephemeralContentHash Hash) Hash {
+	return innerHash(redactedContentHash, ephemeralContentHash)
+}
+
 // HeaderRoot computes event_header_root over room_id, sender_localpart,
 // sender_domain, type, state_key, redacts, depth, and origin_server_ts.
 // Missing optional fields are null. sender_localpart and sender_domain are
