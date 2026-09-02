@@ -19,7 +19,7 @@ const (
 	ChecksumLen = 32
 )
 
-var dst = []byte("msc4500_lthash16_v1\x00")
+var dst = []byte("msc4500:lthash16:v1")
 var readFull = io.ReadFull
 
 // Hash is the 2048-byte LtHash16 lattice state.

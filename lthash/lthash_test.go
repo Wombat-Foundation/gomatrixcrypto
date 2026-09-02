@@ -57,7 +57,7 @@ func TestChecksumStable(t *testing.T) {
 	})
 
 	got := h.String()
-	const want = "6KCo8KybJLXxhBCClkubGjZCmRB5RXsLGUFusKFc8oA"
+	const want = "2lrdUeI2X8_GVxDIJBk-43OKIkuea0oTar62Xs5niaM"
 	if got != want {
 		t.Fatalf("checksum mismatch: got %s want %s", got, want)
 	}
@@ -97,8 +97,8 @@ func TestRedactionOverlayVectors(t *testing.T) {
 	var one RedactionOverlay
 	one.Insert("m.room.member", "@alice:example.org", "$state")
 	if got, want := one.Digest(), [ChecksumLen]byte{
-		69, 243, 113, 245, 224, 85, 213, 42, 145, 18, 212, 145, 211, 128, 87, 65,
-		242, 201, 250, 196, 142, 78, 66, 51, 101, 158, 98, 105, 6, 218, 254, 190,
+		173, 143, 238, 133, 116, 45, 142, 118, 230, 225, 87, 181, 99, 179, 124, 211,
+		229, 250, 118, 139, 173, 24, 157, 114, 159, 169, 20, 226, 222, 151, 119, 187,
 	}; got != want {
 		t.Fatalf("one-entry overlay digest mismatch: got %v want %v", got, want)
 	}
@@ -107,8 +107,8 @@ func TestRedactionOverlayVectors(t *testing.T) {
 	two.Insert("m.room.create", "", "$create")
 	two.Insert("m.room.member", "@alice:example.org", "$state")
 	if got, want := two.Digest(), [ChecksumLen]byte{
-		54, 140, 209, 168, 4, 44, 140, 28, 220, 20, 48, 207, 210, 180, 227, 77,
-		28, 8, 19, 140, 157, 131, 50, 182, 108, 137, 17, 37, 212, 109, 40, 231,
+		147, 118, 49, 59, 191, 183, 6, 103, 233, 36, 241, 248, 184, 93, 173, 224,
+		42, 114, 189, 236, 2, 122, 198, 19, 125, 159, 242, 122, 65, 4, 145, 97,
 	}; got != want {
 		t.Fatalf("two-entry overlay digest mismatch: got %v want %v", got, want)
 	}
@@ -116,8 +116,8 @@ func TestRedactionOverlayVectors(t *testing.T) {
 	var custom RedactionOverlay
 	custom.Insert("org.example.custom", "key", "$custom")
 	if got, want := custom.Digest(), [ChecksumLen]byte{
-		170, 247, 17, 119, 141, 227, 146, 115, 229, 232, 55, 1, 194, 64, 252, 131,
-		61, 17, 11, 81, 6, 9, 121, 44, 58, 85, 193, 228, 45, 47, 192, 70,
+		177, 21, 204, 101, 0, 30, 236, 16, 131, 10, 130, 158, 76, 21, 74, 94,
+		123, 206, 66, 97, 110, 243, 218, 53, 119, 208, 66, 214, 19, 58, 156, 66,
 	}; got != want {
 		t.Fatalf("custom overlay digest mismatch: got %v want %v", got, want)
 	}

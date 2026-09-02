@@ -2,7 +2,7 @@ package lthash
 
 import "encoding/base64"
 
-var redactionOverlayDST = []byte("msc4500_lthash16_redactions_v1\x00")
+var redactionOverlayDST = []byte("msc4500:redactions:v1")
 
 // RedactionOverlay is the MSC4500 accumulator for selected state events that
 // are effectively redacted at a DAG point. It uses the same tuple encoding and
