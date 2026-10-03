@@ -2,7 +2,7 @@ package lthash
 
 import "encoding/base64"
 
-var redactionOverlayDST = []byte("msc4500:redactions:v1")
+var redactionOverlayDST = []byte("msc4500:redactions:blake3:v1")
 
 // RedactionOverlay is the MSC4500 accumulator for selected state events that
 // are effectively redacted at a DAG point. It uses the same tuple encoding and
@@ -22,7 +22,7 @@ func (o *RedactionOverlay) Remove(eventType, stateKey, eventID string) {
 	subOverlaySeed(o, seedWithDST(redactionOverlayDST, eventType, stateKey, eventID))
 }
 
-// Digest returns the BLAKE2b-256 digest of the overlay lattice.
+// Digest returns the BLAKE3-256 digest of the overlay lattice.
 func (o RedactionOverlay) Digest() [ChecksumLen]byte {
 	h := Hash(o)
 	return h.Checksum()

@@ -6,8 +6,7 @@ import (
 	"encoding/binary"
 	"io"
 
-	"golang.org/x/crypto/blake2b"
-	"golang.org/x/crypto/sha3"
+	"github.com/zeebo/blake3"
 )
 
 const (
@@ -19,7 +18,11 @@ const (
 	ChecksumLen = 32
 )
 
-var dst = []byte("msc4500:lthash16:v1")
+// dst is the MSC4500 primary accumulator domain-separation tag. It is versioned
+// "blake3:v1" so digests from the BLAKE3 instantiation can never be confused
+// with the earlier SHAKE256 + BLAKE2b-256 profile.
+var dst = []byte("msc4500:lthash16:blake3:v1")
+
 var readFull = io.ReadFull
 
 // Hash is the 2048-byte LtHash16 lattice state.
@@ -48,11 +51,16 @@ func truncateToU16Limit(s string) (string, uint16) {
 }
 
 // seedWithDST generates a lattice seed vector for an element and domain tag.
+//
+// Element encoding (MSC4500 §1): dst || len(type) || type || len(state_key) ||
+// state_key || event_id, where each len() is an unsigned 16-bit little-endian
+// byte count. The buffer is expanded to 2048 bytes with the BLAKE3 XOF and
+// unpacked into little-endian 16-bit lanes.
 func seedWithDST(domain []byte, eventType, stateKey, eventID string) Hash {
 	eventType, typeLen := truncateToU16Limit(eventType)
 	stateKey, stateKeyLen := truncateToU16Limit(stateKey)
 
-	xof := sha3.NewShake256()
+	xof := blake3.New()
 	xof.Write(domain)
 
 	var lens [2]byte
@@ -65,7 +73,7 @@ func seedWithDST(domain []byte, eventType, stateKey, eventID string) Hash {
 	xof.Write([]byte(eventID))
 
 	var buf [ByteSize]byte
-	if _, err := readFull(xof, buf[:]); err != nil {
+	if _, err := readFull(xof.Digest(), buf[:]); err != nil {
 		panic(err)
 	}
 
@@ -129,10 +137,11 @@ func (h Hash) Bytes() [ByteSize]byte {
 	return out
 }
 
-// Checksum returns the BLAKE2b-256 checksum of the lattice state bytes.
+// Checksum returns the BLAKE3-256 digest of the lattice state bytes, which is
+// the MSC4500 wire digest (base64url unpadded via String).
 func (h Hash) Checksum() [ChecksumLen]byte {
 	bytes := h.Bytes()
-	return blake2b.Sum256(bytes[:])
+	return blake3.Sum256(bytes[:])
 }
 
 // String returns the hash checksum as unpadded base64url (the MSC4500 wire form).

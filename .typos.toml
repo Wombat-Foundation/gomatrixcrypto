@@ -8,6 +8,8 @@ Ue = "Ue"
 
 [default.extend-identifiers]
 BA = "BA"
+Ba = "Ba"
+td = "td"
 
 [files]
 extend-exclude = ["tests/critique_data/**", "tests/fixtures/**"]
