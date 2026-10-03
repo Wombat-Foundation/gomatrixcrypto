@@ -2,6 +2,7 @@ package lthash
 
 import (
 	"bytes"
+	"encoding/hex"
 	"testing"
 )
 
@@ -54,6 +55,20 @@ func TestResolutionInputsVector(t *testing.T) {
 	x.Insert(ResolutionInputRecord{EventID: "$e", EventType: "m.room.member", StateKey: "@a:x", AuthEvents: []string{"$b", "$a"}, StatePredecessors: []string{"$p"}})
 	x.Insert(ResolutionInputRecord{EventID: "$a", EventType: "m.room.create"})
 	if got, want := x.String(), "zDnrgYKfPuS6ztctVfakvKVx6rM7l8QVDUuGXcibrnE"; got != want {
+		t.Fatalf("got %s want %s", got, want)
+	}
+}
+
+// Normative vector from the MSC4500 proposal ("Sibling accumulators").
+func TestResolutionInputsProposalVector(t *testing.T) {
+	r := ResolutionInputRecord{EventID: "$event_1", EventType: "m.room.member", StateKey: "@alice:example.com"}
+	const wantRaw = "0800246576656e745f310d006d2e726f6f6d2e6d656d626572120040616c6963653a6578616d706c652e636f6d0000000000000000"
+	if got := hex.EncodeToString(r.Encode()); got != wantRaw {
+		t.Fatalf("raw element %s want %s", got, wantRaw)
+	}
+	var x ResolutionInputs
+	x.Insert(r)
+	if got, want := x.String(), "IGytaez3uh-Y5gPuZ7o2bZxlaufNhkXH558n-Unor_Y"; got != want {
 		t.Fatalf("got %s want %s", got, want)
 	}
 }
