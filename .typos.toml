@@ -5,11 +5,13 @@ OTKs = "OTKs"
 NAX = "NAX"
 fo = "fo"
 Ue = "Ue"
+Ba = "Ba"
+# base64url golden vectors in lthash/ (e.g. "0MOPtd797los_...") are opaque
+# wire bytes, not prose; typos must never rewrite them.
+Ptd = "Ptd"
 
 [default.extend-identifiers]
 BA = "BA"
-Ba = "Ba"
-td = "td"
 
 [files]
 extend-exclude = ["tests/critique_data/**", "tests/fixtures/**"]
