@@ -77,8 +77,7 @@ func TestBlake3Vectors(t *testing.T) {
 		t.Fatalf("s3 digest: got %s", got)
 	}
 
-	var back Hash
-	back = s3
+	back := s3
 	back.subSeed(seed3)
 	if got := b64u(back.Checksum()); got != "yeMXj6Fokw2iYonH8htoklFY5AwtcdDDnRGU_B79_2g" {
 		t.Fatalf("back digest: got %s", got)
