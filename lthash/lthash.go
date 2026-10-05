@@ -61,16 +61,28 @@ func seedWithDST(domain []byte, eventType, stateKey, eventID string) Hash {
 	stateKey, stateKeyLen := truncateToU16Limit(stateKey)
 
 	xof := blake3.New()
-	xof.Write(domain)
+	if _, err := xof.Write(domain); err != nil {
+		panic(err)
+	}
 
 	var lens [2]byte
 	binary.LittleEndian.PutUint16(lens[:], typeLen)
-	xof.Write(lens[:])
-	xof.Write([]byte(eventType))
+	if _, err := xof.Write(lens[:]); err != nil {
+		panic(err)
+	}
+	if _, err := xof.Write([]byte(eventType)); err != nil {
+		panic(err)
+	}
 	binary.LittleEndian.PutUint16(lens[:], stateKeyLen)
-	xof.Write(lens[:])
-	xof.Write([]byte(stateKey))
-	xof.Write([]byte(eventID))
+	if _, err := xof.Write(lens[:]); err != nil {
+		panic(err)
+	}
+	if _, err := xof.Write([]byte(stateKey)); err != nil {
+		panic(err)
+	}
+	if _, err := xof.Write([]byte(eventID)); err != nil {
+		panic(err)
+	}
 
 	var buf [ByteSize]byte
 	if _, err := readFull(xof.Digest(), buf[:]); err != nil {

@@ -69,8 +69,12 @@ type ResolutionInputs Hash
 
 func resolutionSeed(r ResolutionInputRecord) Hash {
 	xof := blake3.New()
-	xof.Write(resolutionInputsDST)
-	xof.Write(r.Encode())
+	if _, err := xof.Write(resolutionInputsDST); err != nil {
+		panic(err)
+	}
+	if _, err := xof.Write(r.Encode()); err != nil {
+		panic(err)
+	}
 
 	var buf [ByteSize]byte
 	if _, err := readFull(xof.Digest(), buf[:]); err != nil {
