@@ -57,7 +57,7 @@ func TestChecksumStable(t *testing.T) {
 	})
 
 	got := h.String()
-	const want = "6KCo8KybJLXxhBCClkubGjZCmRB5RXsLGUFusKFc8oA"
+	const want = "LND7Zwj84qCb46ZPsB9dYTYmhHU3iq_5ICMrJ0bz6yA"
 	if got != want {
 		t.Fatalf("checksum mismatch: got %s want %s", got, want)
 	}
@@ -91,4 +91,23 @@ func TestSeedPanicsOnReadFailure(t *testing.T) {
 	}()
 
 	_ = seed("m.room.create", "", "$a:example.org")
+}
+
+func TestRedactionOverlayOrderIndependentAndReversible(t *testing.T) {
+	var left, reordered RedactionOverlay
+	left.Insert("m.room.member", "@alice:example.org", "$state")
+	reordered.Insert("m.room.member", "@bob:example.org", "$other-state")
+	reordered.Insert("m.room.member", "@alice:example.org", "$state")
+
+	var expected RedactionOverlay
+	expected.Insert("m.room.member", "@alice:example.org", "$state")
+	expected.Insert("m.room.member", "@bob:example.org", "$other-state")
+	if reordered != expected {
+		t.Fatalf("overlay accumulation depends on insertion order")
+	}
+
+	reordered.Remove("m.room.member", "@bob:example.org", "$other-state")
+	if reordered != left {
+		t.Fatalf("overlay removal did not reverse insertion")
+	}
 }

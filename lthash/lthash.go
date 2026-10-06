@@ -6,8 +6,7 @@ import (
 	"encoding/binary"
 	"io"
 
-	"golang.org/x/crypto/blake2b"
-	"golang.org/x/crypto/sha3"
+	"github.com/zeebo/blake3"
 )
 
 const (
@@ -19,8 +18,21 @@ const (
 	ChecksumLen = 32
 )
 
-var dst = []byte("msc4500_lthash16_v1\x00")
+// dst is the MSC4500 primary accumulator domain-separation tag. It is versioned
+// "blake3:v1" so digests from the BLAKE3 instantiation can never be confused
+// with the earlier SHAKE256 + BLAKE2b-256 profile.
+var dst = []byte("msc4500:lthash16:blake3:v1")
+
 var readFull = io.ReadFull
+
+// mustWrite writes p to w, panicking on error. blake3's Hasher.Write never
+// returns a non-nil error, but going through io.Writer keeps the write path
+// written once and checkable.
+func mustWrite(w io.Writer, p []byte) {
+	if _, err := w.Write(p); err != nil {
+		panic(err)
+	}
+}
 
 // Hash is the 2048-byte LtHash16 lattice state.
 type Hash [WordCount]uint16
@@ -47,25 +59,33 @@ func truncateToU16Limit(s string) (string, uint16) {
 	return s[:end], uint16(end)
 }
 
-// seed generates the lattice seed vector for a state entry.
-func seed(eventType, stateKey, eventID string) Hash {
+// seedWithDST generates a lattice seed vector for an element and domain tag.
+//
+// Element encoding (MSC4500 §1): dst || len(type) || type || len(state_key) ||
+// state_key || event_id, where each len() is an unsigned 16-bit little-endian
+// byte count. The buffer is expanded to 2048 bytes with the BLAKE3 XOF and
+// unpacked into little-endian 16-bit lanes.
+// eventType and stateKey are truncated to at most 65535 bytes, preserving
+// character boundaries for valid UTF-8; eventID is included in full.
+// It panics if writing to or reading from the XOF fails.
+func seedWithDST(domain []byte, eventType, stateKey, eventID string) Hash {
 	eventType, typeLen := truncateToU16Limit(eventType)
 	stateKey, stateKeyLen := truncateToU16Limit(stateKey)
 
-	xof := sha3.NewShake256()
-	xof.Write(dst)
+	xof := blake3.New()
+	mustWrite(xof, domain)
 
 	var lens [2]byte
 	binary.LittleEndian.PutUint16(lens[:], typeLen)
-	xof.Write(lens[:])
-	xof.Write([]byte(eventType))
+	mustWrite(xof, lens[:])
+	mustWrite(xof, []byte(eventType))
 	binary.LittleEndian.PutUint16(lens[:], stateKeyLen)
-	xof.Write(lens[:])
-	xof.Write([]byte(stateKey))
-	xof.Write([]byte(eventID))
+	mustWrite(xof, lens[:])
+	mustWrite(xof, []byte(stateKey))
+	mustWrite(xof, []byte(eventID))
 
 	var buf [ByteSize]byte
-	if _, err := readFull(xof, buf[:]); err != nil {
+	if _, err := readFull(xof.Digest(), buf[:]); err != nil {
 		panic(err)
 	}
 
@@ -74,6 +94,11 @@ func seed(eventType, stateKey, eventID string) Hash {
 		out[i] = binary.LittleEndian.Uint16(buf[i*2:])
 	}
 	return out
+}
+
+// seed generates the lattice seed vector for a state entry.
+func seed(eventType, stateKey, eventID string) Hash {
+	return seedWithDST(dst, eventType, stateKey, eventID)
 }
 
 // addSeed adds seed elementwise into h.
@@ -124,10 +149,11 @@ func (h Hash) Bytes() [ByteSize]byte {
 	return out
 }
 
-// Checksum returns the BLAKE2b-256 checksum of the lattice state bytes.
+// Checksum returns the BLAKE3-256 digest of the lattice state bytes, which is
+// the MSC4500 wire digest (base64url unpadded via String).
 func (h Hash) Checksum() [ChecksumLen]byte {
 	bytes := h.Bytes()
-	return blake2b.Sum256(bytes[:])
+	return blake3.Sum256(bytes[:])
 }
 
 // String returns the hash checksum as unpadded base64url (the MSC4500 wire form).

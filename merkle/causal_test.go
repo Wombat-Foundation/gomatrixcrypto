@@ -51,6 +51,44 @@ func TestUnionEliminatesDuplicates(t *testing.T) {
 	}
 }
 
+func TestUnionMatchesRecursiveOracle(t *testing.T) {
+	var leftKeys, rightKeys []Hash
+	for i := 0; i < 24; i++ {
+		var k Hash
+		k[0] = byte(i * 3)
+		k[31] = byte(i + 1)
+		leftKeys = append(leftKeys, k)
+
+		var r Hash
+		r[0] = byte(i * 5)
+		r[31] = byte(0x80 + i)
+		rightKeys = append(rightKeys, r)
+	}
+
+	leftSet := EmptyCausalSet()
+	for _, k := range leftKeys {
+		leftSet = leftSet.Insert(k)
+	}
+	rightSet := EmptyCausalSet()
+	for _, k := range rightKeys {
+		rightSet = rightSet.Insert(k)
+	}
+	leftRoot, leftCount := leftSet.Root(), leftSet.Count()
+
+	union := leftSet.Union(rightSet)
+	wantRoot, wantCount := causalSubtreeRoot(append(append([]Hash(nil), leftKeys...), rightKeys...), 0)
+	if union.Root() != wantRoot || union.Count() != wantCount {
+		t.Fatalf("union root/count = %x/%d, want %x/%d", union.Root(), union.Count(), wantRoot, wantCount)
+	}
+
+	if leftSet.Root() != leftRoot || leftSet.Count() != leftCount {
+		t.Fatal("union mutated the left operand")
+	}
+	if self := leftSet.Union(leftSet); self.Root() != leftRoot || self.Count() != leftCount {
+		t.Fatalf("self-union = %x/%d, want %x/%d", self.Root(), self.Count(), leftRoot, leftCount)
+	}
+}
+
 func TestContainsInclusionAndNonInclusion(t *testing.T) {
 	a, b := causalTestKey(0xa1), causalTestKey(0xb2)
 	s := EmptyCausalSet().Insert(a)
@@ -60,6 +98,92 @@ func TestContainsInclusionAndNonInclusion(t *testing.T) {
 	}
 	if s.Contains(b) {
 		t.Fatal("expected non-inclusion for b")
+	}
+}
+
+func TestCausalSetMatchesRecursiveOracle(t *testing.T) {
+	keys := make([]Hash, 0, 32)
+	for i := 0; i < 32; i++ {
+		var k Hash
+		k[0] = byte(i * 7)
+		k[31] = byte(i*13 + 1)
+		keys = append(keys, k)
+	}
+
+	set := EmptyCausalSet()
+	for _, k := range keys {
+		set = set.Insert(k)
+	}
+
+	wantRoot, wantCount := causalSubtreeRoot(keys, 0)
+	if set.Root() != wantRoot || set.Count() != wantCount {
+		t.Fatalf("cached root/count = %x/%d, want %x/%d", set.Root(), set.Count(), wantRoot, wantCount)
+	}
+
+	for _, k := range keys {
+		path, root, count, ok := set.InclusionProof(k)
+		if !ok || root != wantRoot || count != wantCount {
+			t.Fatalf("InclusionProof(%x) root/count/ok = %x/%d/%v", k, root, count, ok)
+		}
+		if !VerifyCausalInclusion(k, path, root, count) {
+			t.Fatalf("VerifyCausalInclusion(%x) failed", k)
+		}
+	}
+
+	var outside Hash
+	outside[0] = 0xAA
+	if set.Contains(outside) {
+		t.Fatal("test key unexpectedly in set")
+	}
+	path, terminalDepth, root, count, ok := set.NonInclusionProof(outside)
+	if !ok || root != wantRoot || count != wantCount {
+		t.Fatalf("NonInclusionProof root/count/ok = %x/%d/%v", root, count, ok)
+	}
+	if !VerifyCausalNonInclusion(terminalDepth, path, root, count) {
+		t.Fatal("VerifyCausalNonInclusion failed")
+	}
+}
+
+func TestCheckedCountSumPanicsOnOverflow(t *testing.T) {
+	if got := checkedCountSum(2, 3); got != 5 {
+		t.Fatalf("checkedCountSum(2, 3) = %d, want 5", got)
+	}
+	defer func() {
+		if recover() == nil {
+			t.Fatal("expected checkedCountSum to panic on overflow")
+		}
+	}()
+	checkedCountSum(^uint64(0), 1)
+}
+
+func TestVerifyCausalInclusionRejectsOverflow(t *testing.T) {
+	set := EmptyCausalSet().Insert(causalTestKey(0xa1))
+	path, root, count, ok := set.InclusionProof(causalTestKey(0xa1))
+	if !ok {
+		t.Fatal("expected inclusion proof")
+	}
+	for i := range path {
+		path[i].Count = ^uint64(0)
+	}
+	if VerifyCausalInclusion(causalTestKey(0xa1), path, root, count) {
+		t.Fatal("overflowing inclusion proof must be rejected, not accepted")
+	}
+}
+
+func TestVerifyCausalNonInclusionRejectsOverflow(t *testing.T) {
+	set := EmptyCausalSet().Insert(causalTestKey(0xa1))
+	path, terminalDepth, root, count, ok := set.NonInclusionProof(causalTestKey(0xb2))
+	if !ok {
+		t.Fatal("expected non-inclusion proof")
+	}
+	if len(path) < 2 {
+		t.Fatalf("test needs at least two proof steps, got %d", len(path))
+	}
+	for i := range path {
+		path[i].Count = ^uint64(0)
+	}
+	if VerifyCausalNonInclusion(terminalDepth, path, root, count) {
+		t.Fatal("overflowing non-inclusion proof must be rejected, not accepted")
 	}
 }
 

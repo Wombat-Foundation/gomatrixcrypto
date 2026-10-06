@@ -1,7 +1,6 @@
 package reconcile
 
 import (
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
 	"math/bits"
@@ -59,7 +58,7 @@ func TestElementHashAndEventIDs(t *testing.T) {
 	}
 
 	hash := FromDigest32(digest)
-	if got, want := hash.H128, ([16]byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}); got != want {
+	if got, want := hash.H128, ([16]byte{16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31}); got != want {
 		t.Fatalf("H128 = %x, want %x", got, want)
 	}
 	if got, want := hash.H64, uint64(0x0001020304050607); got != want {
@@ -92,14 +91,8 @@ func TestElementHashAndEventIDs(t *testing.T) {
 		}
 	}
 
-	legacyID := "$opaque:example.org"
-	legacyDigest := sha256.Sum256([]byte(legacyID))
-	got, err := MatrixEventDigest32(legacyID, Legacy)
-	if err != nil {
-		t.Fatalf("legacy digest failed: %v", err)
-	}
-	if got != legacyDigest {
-		t.Fatalf("legacy digest mismatch")
+	if _, err := MatrixEventDigest32("$opaque:example.org", Legacy); err != ErrUnsupportedRoomVersion {
+		t.Fatalf("expected ErrUnsupportedRoomVersion for legacy event IDs, got %v", err)
 	}
 
 	if _, err := MatrixEventDigest32("not-an-event-id", V4Plus); err != ErrInvalidEventID {
@@ -126,6 +119,66 @@ func TestElementHashAndEventIDs(t *testing.T) {
 	}
 	if _, ok := trimSigil("abc"); ok {
 		t.Fatal("trimSigil accepted invalid sigil")
+	}
+}
+
+func TestMSC4521ElementHashVectors(t *testing.T) {
+	fbv3 := [32]byte{}
+	for i := range fbv3 {
+		fbv3[i] = 0xfb
+	}
+	v4 := [32]byte{}
+	v4[7] = 0x2a
+	zero := [32]byte{}
+
+	vectors := []struct {
+		name   string
+		digest [32]byte
+		format EventIDFormat
+		h128   [16]byte
+		h64    uint64
+	}{
+		{
+			name:   "V3 [0xfb;32]",
+			digest: fbv3,
+			format: V3,
+			h128:   [16]byte{0xfb, 0xfb, 0xfb, 0xfb, 0xfb, 0xfb, 0xfb, 0xfb, 0xfb, 0xfb, 0xfb, 0xfb, 0xfb, 0xfb, 0xfb, 0xfb},
+			h64:    0xfbfbfbfbfbfbfbfb,
+		},
+		{
+			name:   "V4+ [0x00;7] ++ [0x2a] ++ [0x00;24]",
+			digest: v4,
+			format: V4Plus,
+			h128:   [16]byte{},
+			h64:    0x2a,
+		},
+		{
+			name:   "V4+ all-zero",
+			digest: zero,
+			format: V4Plus,
+			h128:   [16]byte{},
+			h64:    1,
+		},
+	}
+
+	for _, vector := range vectors {
+		t.Run(vector.name, func(t *testing.T) {
+			hash := FromDigest32(vector.digest)
+			if hash.H128 != vector.h128 {
+				t.Fatalf("H128 = %x, want %x", hash.H128, vector.h128)
+			}
+			if hash.H64 != vector.h64 {
+				t.Fatalf("H64 = %#x, want %#x", hash.H64, vector.h64)
+			}
+			id := eventIDFromDigest32(vector.digest, vector.format)
+			fromID, err := FromMatrixEventID(id, vector.format)
+			if err != nil {
+				t.Fatalf("FromMatrixEventID(%q, %v): %v", id, vector.format, err)
+			}
+			if fromID != hash {
+				t.Fatalf("event-ID derivation = %+v, want %+v", fromID, hash)
+			}
+		})
 	}
 }
 
@@ -974,6 +1027,34 @@ func TestMatrixAndPinSketchHelperBranches(t *testing.T) {
 	}
 }
 
+func toggleTestStratum(strata *[StrataCount][StratumCapacity]uint64, value uint64) {
+	if value == 0 {
+		panic("test stratum values must be non-zero")
+	}
+	var kernel ResidentKernel
+	if err := kernel.Insert(ElementHash{H64: value, H128: [16]byte{byte(value)}}); err != nil {
+		panic(err)
+	}
+	source := kernel.Strata()
+	for i := range strata {
+		for j := range strata[i] {
+			strata[i][j] ^= source[i][j]
+		}
+	}
+}
+
+func populateTestStratum(strata *[StrataCount][StratumCapacity]uint64, stratum int, values ...uint64) {
+	if stratum < 0 || stratum >= StrataCount {
+		panic("test stratum index out of range")
+	}
+	for _, value := range values {
+		if value == 0 || value&1 == 0 {
+			panic("test stratum values must be non-zero and odd")
+		}
+		toggleTestStratum(strata, value<<uint(stratum))
+	}
+}
+
 func TestEstimateDeltaRustCases(t *testing.T) {
 	local := strataFromValues()
 	remote := local
@@ -985,34 +1066,54 @@ func TestEstimateDeltaRustCases(t *testing.T) {
 		t.Fatalf("EstimateDelta empty remote = %d %v %v", got, ok, err)
 	}
 
+	// Exact tail: every stratum decodes, so the estimate is the exact cardinality.
 	remote = strataFromValues(1, 2, 4, 8, 3, 5)
-	if got, ok, err := EstimateDelta(&local, &remote); err != nil || !ok || got != 16 {
-		t.Fatalf("EstimateDelta sparse tail = %d %v %v", got, ok, err)
+	if got, ok, err := EstimateDelta(&local, &remote); err != nil || !ok || got != 6 {
+		t.Fatalf("EstimateDelta exact tail = %d %v %v", got, ok, err)
+	}
+
+	// Low-confidence tail: stratum 0 overflows and the estimate extrapolates
+	// from the empty decoded tail, flooring at StratumCapacity+1.
+	remote = strataFromValues(1, 3, 5, 7, 9, 11, 13, 15, 17)
+	if got, ok, err := EstimateDelta(&local, &remote); err != nil || !ok || got != 18 {
+		t.Fatalf("EstimateDelta low-confidence tail = %d %v %v", got, ok, err)
+	}
+}
+
+func TestEstimateStrataReferenceCases(t *testing.T) {
+	var local [StrataCount][StratumCapacity]uint64
+	remote := local
+
+	if got, err := EstimateStrata(&local, &remote); err != nil || got != (StrataEstimate{}) {
+		t.Fatalf("EstimateStrata identical = %+v %v", got, err)
+	}
+
+	remote = strataFromValues(1, 2, 4, 8, 3, 5)
+	if got, err := EstimateStrata(&local, &remote); err != nil || got != (StrataEstimate{Delta: 6}) {
+		t.Fatalf("EstimateStrata exact tail = %+v %v", got, err)
 	}
 
 	remote = strataFromValues(1, 3, 5, 7, 9, 11, 13, 15, 17)
-	if got, ok, err := EstimateDelta(&local, &remote); err != nil || !ok || got != (uint64(8)<<31) {
-		t.Fatalf("EstimateDelta sparse failure = %d %v %v", got, ok, err)
+	if got, err := EstimateStrata(&local, &remote); err != nil || got != (StrataEstimate{Delta: 18, LowConfidence: true}) {
+		t.Fatalf("EstimateStrata stratum-0 overflow = %+v %v", got, err)
 	}
 
-	var undecodableLocal, undecodableRemote [StrataCount][StratumCapacity]uint64
-	foundUndecodable := false
-	seed := uint64(0x9e3779b97f4a7c15)
-	for attempt := 0; attempt < 256; attempt++ {
-		seed ^= seed << 7
-		seed ^= seed >> 9
-		seed ^= seed << 8
-		for i := 0; i < StratumCapacity; i++ {
-			seed = nextFactorParameter(seed)
-			undecodableRemote[StrataCount-1][i] = seed
-		}
-		if got, ok, err := EstimateDelta(&undecodableLocal, &undecodableRemote); err == nil && ok && got == (uint64(8)<<31) {
-			foundUndecodable = true
-			break
-		}
+	// Overflow of the sparsest stratum is unmeasurable and saturates.
+	var sparseSaturated [StrataCount][StratumCapacity]uint64
+	populateTestStratum(&sparseSaturated, StrataCount-1, 1, 3, 5, 7, 9, 11, 13, 15, 17)
+	if got, err := EstimateStrata(&local, &sparseSaturated); err != nil || got != (StrataEstimate{Delta: SaturatedDeltaEstimate, LowConfidence: true}) {
+		t.Fatalf("EstimateStrata highest-stratum overflow = %+v %v", got, err)
 	}
-	if !foundUndecodable {
-		t.Fatal("failed to provoke undecodable EstimateDelta fallback")
+
+	// A non-empty decoded tail below the failed stratum scales by 2^r.
+	var lowestDecoded [StrataCount][StratumCapacity]uint64
+	populateTestStratum(&lowestDecoded, 7, 1, 3, 5, 7, 9)
+	populateTestStratum(&lowestDecoded, 6, 1, 3, 5, 7, 9)
+	populateTestStratum(&lowestDecoded, 5, 1, 3, 5, 7, 9)
+	populateTestStratum(&lowestDecoded, 4, 1, 3, 5, 7, 9)
+	populateTestStratum(&lowestDecoded, 3, 1, 3, 5, 7, 9, 11, 13, 15, 17)
+	if got, err := EstimateStrata(&local, &lowestDecoded); err != nil || got != (StrataEstimate{Delta: 320, LowConfidence: true}) {
+		t.Fatalf("EstimateStrata lowest-decoded stratum = %+v %v", got, err)
 	}
 }
 

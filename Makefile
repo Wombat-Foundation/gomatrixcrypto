@@ -5,6 +5,10 @@ STYLE_CYAN := $(shell tput setaf 6 2>/dev/null || printf '\033[36m')
 STYLE_RESET := $(shell tput sgr0 2>/dev/null || printf '\033[0m')
 
 GO ?= go
+# Staticcheck 2026.1 does not yet understand Go 1.27 export data. Keep lint on
+# the toolchain declared by go.mod while allowing callers to override it.
+GO_LANGUAGE_VERSION := $(shell awk '$$1 == "go" { print $$2; exit }' go.mod)
+LINT_GO_TOOLCHAIN ?= go$(GO_LANGUAGE_VERSION).0
 STATICCHECK ?= staticcheck
 GOLANGCI_LINT ?= golangci-lint
 VETFLAGS ?=
@@ -30,10 +34,20 @@ help: ## Show available targets
 	@grep -hE '^[a-zA-Z0-9_\/-]+:[[:space:]]*## .*$$' $(MAKEFILE_LIST) \
 		| awk 'BEGIN {FS = ":[[:space:]]*## "}; {printf "$(STYLE_CYAN)%-12s$(STYLE_RESET) %s\n", $$1, $$2}'
 
+
+
+.PHONY: all
+all: format tidy lint cov build
+
+
 .PHONY: format
 format: ## Format Go source files and run pre-commit hooks
 	$(GO) fmt $(PKGS)
 	pre-commit run --all-files
+
+.PHONY: tidy
+tidy: ## Tidy module dependencies
+	$(GO) mod tidy
 
 .PHONY: test
 test: ## Run the test suite (library packages only, excludes cmd/)
@@ -55,10 +69,12 @@ _cov/all: ## Run tests with coverage and print a summary for all packages, inclu
 
 .PHONY: lint
 lint:	## Run lint checks
-	$(GO) vet $(VETFLAGS) $(PKGS)
-	$(STATICCHECK) -checks=all $(STATICCHECKFLAGS) $(PKGS)
+	GOTOOLCHAIN=$(LINT_GO_TOOLCHAIN)+auto $(GO) vet $(VETFLAGS) $(PKGS)
+	GOTOOLCHAIN=$(LINT_GO_TOOLCHAIN)+auto $(STATICCHECK) -checks=all $(STATICCHECKFLAGS) $(PKGS)
 	# install with, i.e., `curl -sSfL https://golangci-lint.run/install.sh | sh -s -- -b "$$(go env GOPATH)/bin" v2.12.2`
-	$(GOLANGCI_LINT) run $(GOLANGCI_LINTFLAGS) $(PKGS)
+	GOTOOLCHAIN=$(LINT_GO_TOOLCHAIN)+auto $(GOLANGCI_LINT) run $(GOLANGCI_LINTFLAGS) $(PKGS)
+
+
 
 .PHONY: build
 build: ## Compile all packages
@@ -78,9 +94,7 @@ production-minting-vector: meanminer ## Regenerate vector (SERVER, NONCE, MINTIN
 	@printf 'build: %s\n' '$(GIT_DESCRIBE)'
 	$(GO) run ./cmd/minting-vectors -server-name $(SERVER) -threads $(MINTING_THREADS) -start-nonce $(NONCE) -max-nonce $(MINTING_MAX_NONCE) -output $(MINTING_VECTOR_OUTPUT)
 
-.PHONY: tidy
-tidy: ## Tidy module dependencies
-	$(GO) mod tidy
+
 
 .PHONY: clean
 clean: ## Remove generated coverage and bin artifacts
