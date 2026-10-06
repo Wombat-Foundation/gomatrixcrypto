@@ -34,10 +34,20 @@ help: ## Show available targets
 	@grep -hE '^[a-zA-Z0-9_\/-]+:[[:space:]]*## .*$$' $(MAKEFILE_LIST) \
 		| awk 'BEGIN {FS = ":[[:space:]]*## "}; {printf "$(STYLE_CYAN)%-12s$(STYLE_RESET) %s\n", $$1, $$2}'
 
+
+
+.PHONY: all
+all: format tidy lint cov build
+
+
 .PHONY: format
 format: ## Format Go source files and run pre-commit hooks
 	$(GO) fmt $(PKGS)
 	pre-commit run --all-files
+
+.PHONY: tidy
+tidy: ## Tidy module dependencies
+	$(GO) mod tidy
 
 .PHONY: test
 test: ## Run the test suite (library packages only, excludes cmd/)
@@ -64,6 +74,8 @@ lint:	## Run lint checks
 	# install with, i.e., `curl -sSfL https://golangci-lint.run/install.sh | sh -s -- -b "$$(go env GOPATH)/bin" v2.12.2`
 	GOTOOLCHAIN=$(LINT_GO_TOOLCHAIN)+auto $(GOLANGCI_LINT) run $(GOLANGCI_LINTFLAGS) $(PKGS)
 
+
+
 .PHONY: build
 build: ## Compile all packages
 	$(GO) build $(PKGS)
@@ -82,9 +94,7 @@ production-minting-vector: meanminer ## Regenerate vector (SERVER, NONCE, MINTIN
 	@printf 'build: %s\n' '$(GIT_DESCRIBE)'
 	$(GO) run ./cmd/minting-vectors -server-name $(SERVER) -threads $(MINTING_THREADS) -start-nonce $(NONCE) -max-nonce $(MINTING_MAX_NONCE) -output $(MINTING_VECTOR_OUTPUT)
 
-.PHONY: tidy
-tidy: ## Tidy module dependencies
-	$(GO) mod tidy
+
 
 .PHONY: clean
 clean: ## Remove generated coverage and bin artifacts
