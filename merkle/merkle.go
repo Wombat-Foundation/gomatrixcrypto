@@ -103,6 +103,8 @@ func validateFieldName(fieldName string) error {
 }
 
 // fieldLeaf computes the leaf representation and hash for a field.
+// It returns ErrEmptyFieldName for an empty name, ErrInvalidFieldName for
+// invalid UTF-8 or NUL in the name, and propagates matrixjson.Canonical errors.
 func fieldLeaf(field Field) (leaf, error) {
 	if field.Name == "" {
 		return leaf{}, ErrEmptyFieldName
@@ -183,6 +185,8 @@ func RedactedContentHash(value any) (Hash, error) {
 // RedactableContentHash computes the redactable_content_hash leaf for
 // MSC4511's content_hash split: the leaf hash of the event body fields that
 // redaction strips.
+// The caller supplies the already separated content. A nil value hashes as
+// canonical JSON null. Canonical JSON encoding errors are returned unchanged.
 func RedactableContentHash(value any) (Hash, error) {
 	return ComponentHash("redactable_content", value)
 }

@@ -38,9 +38,9 @@ type ResolutionInputRecord struct {
 //
 // Each len is uint16le. An ID list is uint32le(count) followed by its IDs in
 // bytewise ascending order, each as uint16le(length) || id. A field or ID
-// longer than the uint16le length prefix can represent is rejected with
+// longer than 65535 bytes is rejected with an error wrapping
 // ErrResolutionInputTooLong rather than truncated, which would let distinct
-// inputs encode identically.
+// inputs encode identically. ID lists are not modified or deduplicated.
 func (r ResolutionInputRecord) Encode() ([]byte, error) {
 	var out bytes.Buffer
 	for _, s := range []string{r.EventID, r.EventType, r.StateKey} {
@@ -57,6 +57,9 @@ func (r ResolutionInputRecord) Encode() ([]byte, error) {
 	return out.Bytes(), nil
 }
 
+// putString appends s with a uint16le byte-length prefix. If s exceeds 65535
+// bytes, it leaves out unchanged and returns an error wrapping
+// ErrResolutionInputTooLong.
 func putString(out *bytes.Buffer, s string) error {
 	if len(s) > int(^uint16(0)) {
 		return fmt.Errorf("%w: %d bytes", ErrResolutionInputTooLong, len(s))
@@ -68,6 +71,9 @@ func putString(out *bytes.Buffer, s string) error {
 	return nil
 }
 
+// putIDs appends a uint32le count and length-prefixed IDs in bytewise ascending
+// order, retaining duplicates and leaving ids unchanged. It propagates
+// putString errors; out retains the count and any IDs already written.
 func putIDs(out *bytes.Buffer, ids []string) error {
 	sorted := append([]string(nil), ids...)
 	sort.Strings(sorted)
@@ -88,6 +94,9 @@ func putIDs(out *bytes.Buffer, ids []string) error {
 // record exactly once, however many paths reach it.
 type ResolutionInputs Hash
 
+// resolutionSeed derives the resolution-input lattice seed from r's encoding.
+// It returns a zero Hash and any Encode error, and panics if writing to or
+// reading from the XOF fails.
 func resolutionSeed(r ResolutionInputRecord) (Hash, error) {
 	encoded, err := r.Encode()
 	if err != nil {
@@ -111,6 +120,7 @@ func resolutionSeed(r ResolutionInputRecord) (Hash, error) {
 
 // Insert adds one labelled input record. It reports ErrResolutionInputTooLong
 // if a field or ID exceeds the encoding's uint16le length prefix.
+// On error, the accumulator is unchanged.
 func (o *ResolutionInputs) Insert(r ResolutionInputRecord) error {
 	s, err := resolutionSeed(r)
 	if err != nil {
@@ -125,6 +135,7 @@ func (o *ResolutionInputs) Insert(r ResolutionInputRecord) error {
 // Remove subtracts one previously inserted record. It reports
 // ErrResolutionInputTooLong if a field or ID exceeds the encoding's uint16le
 // length prefix.
+// It does not check membership. On error, the accumulator is unchanged.
 func (o *ResolutionInputs) Remove(r ResolutionInputRecord) error {
 	s, err := resolutionSeed(r)
 	if err != nil {

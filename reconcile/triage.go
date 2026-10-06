@@ -103,7 +103,10 @@ type StrataEstimate struct {
 // the exact cardinality. If a stratum overflows, the result is marked
 // [StrataEstimate.LowConfidence]. When even the sparsest residual stratum
 // overflows, no tail can be decoded and [SaturatedDeltaEstimate] is returned;
-// otherwise the estimate is extrapolated from the decoded tail.
+// otherwise the estimate is max(T, StratumCapacity+1) * 2^r, saturating at
+// the maximum uint64. ErrDecodeFailure produces this fallback with no error;
+// other decoder errors, including ErrBudgetExhausted, return a zero estimate
+// and the error unchanged.
 func EstimateStrata(
 	local *[StrataCount][StratumCapacity]uint64,
 	remote *[StrataCount][StratumCapacity]uint64,
@@ -148,6 +151,7 @@ func EstimateStrata(
 }
 
 // saturatingShifted returns value << shift, saturating to the maximum uint64.
+// A negative shift or zero value returns zero.
 func saturatingShifted(value uint64, shift int) uint64 {
 	// coverage:ignore
 	if shift < 0 {

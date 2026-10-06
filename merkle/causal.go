@@ -148,6 +148,7 @@ func (s *CausalSet) Insert(key Hash) *CausalSet {
 
 // Union returns the set union of s and other, eliminating duplicates, as
 // required for a multi-predecessor merge event's causal_set transition.
+// A nil or empty other returns s; neither operand is modified.
 func (s *CausalSet) Union(other *CausalSet) *CausalSet {
 	if other == nil || other.root == nil {
 		return s
@@ -263,11 +264,8 @@ func causalSubtreeRoot(keys []Hash, depth int) (Hash, uint64) {
 	return causalNode(depth, leftHash, leftCount, rightHash, rightCount), checkedCountSum(leftCount, rightCount)
 }
 
-// checkedCountSum sums two subtree/sibling counts. The draft's "Room-version
-// validity" section mandates rejecting an overflowing count addition rather
-// than wrapping or saturating it; this panic is that rejection. In practice a
-// real causal set's population is always far below math.MaxUint64, so this
-// never actually fires.
+// checkedCountSum sums two subtree counts, panicking if the sum exceeds the
+// maximum uint64.
 func checkedCountSum(a, b uint64) uint64 {
 	sum := a + b
 	if sum < a {

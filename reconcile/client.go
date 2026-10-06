@@ -111,6 +111,13 @@ type ClientAction struct {
 }
 
 // SelectAction decides the next protocol step from local and remote state.
+// It selects extremity diff for a frame mismatch or unknown remote extremity,
+// then checks for matching digests and counts to report synchronization.
+// Otherwise, estimator errors, a delta at least SaturatedDeltaEstimate, or a
+// delta above the configured gate select extremity diff; remaining cases
+// request bucket sketches. The delta is at least the absolute count difference.
+// Low-confidence estimates remain usable. Positive concurrencyHeadroom adds
+// event capacity before bucket limits are applied; nonpositive values are ignored.
 func (c ReconciliationClient) SelectAction(local *ResidentKernel, remote RemoteDigest, concurrencyHeadroom int) ClientAction {
 	if !remote.FrameMatches || remote.HasUnknownExtremity {
 		return ClientAction{Type: ActionExtremityDiff}

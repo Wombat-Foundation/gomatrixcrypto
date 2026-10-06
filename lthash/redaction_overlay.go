@@ -13,11 +13,14 @@ var redactionOverlayDST = []byte("msc4500:redactions:blake3:v1")
 type RedactionOverlay Hash
 
 // Insert adds one effectively redacted selected state event.
+// eventType and stateKey are truncated to at most 65535 bytes, preserving
+// character boundaries for valid UTF-8; eventID is included in full.
 func (o *RedactionOverlay) Insert(eventType, stateKey, eventID string) {
 	addOverlaySeed(o, seedWithDST(redactionOverlayDST, eventType, stateKey, eventID))
 }
 
 // Remove subtracts one previously inserted overlay entry.
+// It uses the same field truncation as Insert and does not check membership.
 func (o *RedactionOverlay) Remove(eventType, stateKey, eventID string) {
 	subOverlaySeed(o, seedWithDST(redactionOverlayDST, eventType, stateKey, eventID))
 }
@@ -34,12 +37,14 @@ func (o RedactionOverlay) String() string {
 	return base64.RawURLEncoding.EncodeToString(sum[:])
 }
 
+// addOverlaySeed adds seed to o elementwise modulo 2^16.
 func addOverlaySeed(o *RedactionOverlay, seed Hash) {
 	for i := range o {
 		o[i] += seed[i]
 	}
 }
 
+// subOverlaySeed subtracts seed from o elementwise modulo 2^16.
 func subOverlaySeed(o *RedactionOverlay, seed Hash) {
 	for i := range o {
 		o[i] -= seed[i]

@@ -65,6 +65,9 @@ func truncateToU16Limit(s string) (string, uint16) {
 // state_key || event_id, where each len() is an unsigned 16-bit little-endian
 // byte count. The buffer is expanded to 2048 bytes with the BLAKE3 XOF and
 // unpacked into little-endian 16-bit lanes.
+// eventType and stateKey are truncated to at most 65535 bytes, preserving
+// character boundaries for valid UTF-8; eventID is included in full.
+// It panics if writing to or reading from the XOF fails.
 func seedWithDST(domain []byte, eventType, stateKey, eventID string) Hash {
 	eventType, typeLen := truncateToU16Limit(eventType)
 	stateKey, stateKeyLen := truncateToU16Limit(stateKey)

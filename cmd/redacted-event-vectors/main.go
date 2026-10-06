@@ -12,6 +12,8 @@ import (
 	"github.com/Wombat-Foundation/gomatrixcrypto/merkle"
 )
 
+// main prints a redaction-stable event vector and proof checks to standard
+// output, panicking on hashing or header-proof errors.
 func main() {
 	header := merkle.Header{
 		RoomID:          "!room:example.org",

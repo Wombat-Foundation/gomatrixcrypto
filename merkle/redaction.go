@@ -82,8 +82,11 @@ func redactContent(content map[string]any, rule RedactionRule) map[string]any {
 
 // SplitRedactionContent splits content into MSC4511's redacted_content (the
 // fields RedactionPreservedKeys(eventType) preserves) and redactable_content
-// (everything redaction strips). redacted and redactable partition content
-// without overlap or loss: recombining their keys recovers content's key set.
+// (the remainder). A partially preserved nested object can appear in both maps.
+// Within such an object, nil values absent from the preserved object are omitted
+// from the remainder. The input is not modified, but copied values may share nested data.
+// Comparisons of preserved values can panic for non-comparable values such as
+// slices, including values nested in maps.
 func SplitRedactionContent(content map[string]any, eventType string) (redacted, redactable map[string]any) {
 	rule := RedactionPreservedKeys(eventType)
 	redacted = redactContent(content, rule)
@@ -94,6 +97,8 @@ func SplitRedactionContent(content map[string]any, eventType string) (redacted, 
 // redactableRemainder returns the content present in content but not
 // preserved in redacted, recursing one level for the
 // third_party_invite-shaped nested-path case.
+// Missing nested keys compare as nil, so corresponding nil values are omitted.
+// Comparing non-comparable values such as slices can panic.
 func redactableRemainder(content, redacted map[string]any) map[string]any {
 	out := map[string]any{}
 	for key, value := range content {

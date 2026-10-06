@@ -95,6 +95,8 @@ func VerifyCausalNonInclusion(terminalDepth int, path []CausalProofStep, root Ha
 // verifyCausalPath recomputes a causal trie root from a terminal node
 // (either a causal_leaf and count 1, or a canonical empty hash and count 0)
 // by applying path's siblings from the terminal depth up to the root.
+// It reports whether both root and count match, returning false for a path
+// length mismatch, an invalid sibling side, or a uint64 count overflow.
 func verifyCausalPath(terminalHash Hash, terminalCount uint64, terminalDepth int, path []CausalProofStep, root Hash, count uint64) bool {
 	if len(path) != terminalDepth {
 		return false
