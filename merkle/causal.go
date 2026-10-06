@@ -52,75 +52,186 @@ func causalBit(key Hash, d int) int {
 	return int((key[byteIdx] >> uint(bitIdx)) & 1)
 }
 
+// causalTreeNode is one node of the persistent causal trie. A nil node is a
+// canonical empty subtree; its hash at depth d is causalEmpty[d]. Non-nil
+// nodes cache their subtree's (hash, count) so root and proof construction
+// never recompute over the key set.
+//
+// Nodes are treated as immutable: an insertion rebuilds only the nodes along
+// one key's 256-level path and shares every untouched subtree with the prior
+// set, so a set is never mutated in place and can be shared freely.
+type causalTreeNode struct {
+	hash  Hash
+	count uint64
+	left  *causalTreeNode
+	right *causalTreeNode
+}
+
+// causalChildHashCount returns the cached (hash, count) of child at depth,
+// falling back to the canonical empty subtree when child is nil.
+func causalChildHashCount(child *causalTreeNode, depth int) (Hash, uint64) {
+	if child == nil {
+		return causalEmpty[depth], 0
+	}
+	return child.hash, child.count
+}
+
+// causalInsert returns a new subtree containing node's keys plus key, and
+// reports whether key was newly added. It path-copies the O(CausalDepth)
+// nodes along key's path and shares all other subtrees with node.
+func causalInsert(node *causalTreeNode, depth int, key Hash) (*causalTreeNode, bool) {
+	if depth == CausalDepth {
+		if node != nil {
+			// A 256-bit prefix fully identifies a key, so an occupied leaf
+			// here is the same key: a duplicate insert.
+			return node, false
+		}
+		return &causalTreeNode{hash: causalLeaf(key), count: 1}, true
+	}
+
+	var left, right *causalTreeNode
+	if node != nil {
+		left, right = node.left, node.right
+	}
+
+	if causalBit(key, depth) == 0 {
+		nextLeft, added := causalInsert(left, depth+1, key)
+		if !added {
+			return node, false
+		}
+		left = nextLeft
+	} else {
+		nextRight, added := causalInsert(right, depth+1, key)
+		if !added {
+			return node, false
+		}
+		right = nextRight
+	}
+
+	leftHash, leftCount := causalChildHashCount(left, depth+1)
+	rightHash, rightCount := causalChildHashCount(right, depth+1)
+	return &causalTreeNode{
+		hash:  causalNode(depth, leftHash, leftCount, rightHash, rightCount),
+		count: checkedCountSum(leftCount, rightCount),
+		left:  left,
+		right: right,
+	}, true
+}
+
 // CausalSet is an immutable population of event-ID keys committed by a
 // persistent 256-level sparse Merkle sum trie, as defined by MSC4511's causal
 // sparse Merkle sum trie.
+//
+// The trie is persistent: mutation returns a new set that shares every
+// untouched subtree with the old one, so building an n-key set costs
+// O(n · CausalDepth) node allocations and O(1) monotonic memory growth, while
+// Root is O(1) and inclusion/non-inclusion proofs are O(CausalDepth).
 type CausalSet struct {
-	keys map[Hash]struct{}
+	root *causalTreeNode
 }
 
 // EmptyCausalSet returns the canonical empty causal set: root causalEmpty[0],
 // count 0.
 func EmptyCausalSet() *CausalSet {
-	return &CausalSet{keys: map[Hash]struct{}{}}
+	return &CausalSet{}
 }
 
 // Insert returns a new CausalSet containing every key in s plus key. Insert
 // is a no-op (returns an equal set) if key is already a member.
 func (s *CausalSet) Insert(key Hash) *CausalSet {
-	next := make(map[Hash]struct{}, len(s.keys)+1)
-	for k := range s.keys {
-		next[k] = struct{}{}
+	root, added := causalInsert(s.root, 0, key)
+	if !added {
+		return s
 	}
-	next[key] = struct{}{}
-	return &CausalSet{keys: next}
+	return &CausalSet{root: root}
 }
 
 // Union returns the set union of s and other, eliminating duplicates, as
 // required for a multi-predecessor merge event's causal_set transition.
 func (s *CausalSet) Union(other *CausalSet) *CausalSet {
-	next := make(map[Hash]struct{}, len(s.keys)+len(other.keys))
-	for k := range s.keys {
-		next[k] = struct{}{}
+	if other == nil || other.root == nil {
+		return s
 	}
-	for k := range other.keys {
-		next[k] = struct{}{}
+	next := s
+	other.walkLeaves(func(key Hash) {
+		next = next.Insert(key)
+	})
+	return next
+}
+
+// walkLeaves calls fn for every key in s, in left-to-right (bit-lexicographic)
+// order.
+func (s *CausalSet) walkLeaves(fn func(Hash)) {
+	var prefix Hash
+	var walk func(node *causalTreeNode, depth int)
+	walk = func(node *causalTreeNode, depth int) {
+		if node == nil {
+			return
+		}
+		if depth == CausalDepth {
+			fn(prefix)
+			return
+		}
+		byteIdx := depth / 8
+		bit := byte(1) << uint(7-(depth%8))
+		prefix[byteIdx] &^= bit
+		walk(node.left, depth+1)
+		prefix[byteIdx] |= bit
+		walk(node.right, depth+1)
+		prefix[byteIdx] &^= bit
 	}
-	return &CausalSet{keys: next}
+	walk(s.root, 0)
 }
 
 // Contains reports whether key is a member of s.
 func (s *CausalSet) Contains(key Hash) bool {
-	_, ok := s.keys[key]
-	return ok
+	node := s.root
+	for depth := 0; depth < CausalDepth; depth++ {
+		if node == nil {
+			return false
+		}
+		if causalBit(key, depth) == 0 {
+			node = node.left
+		} else {
+			node = node.right
+		}
+	}
+	return node != nil
 }
 
 // Count returns the number of distinct keys committed by s.
 func (s *CausalSet) Count() uint64 {
-	return uint64(len(s.keys))
+	if s.root == nil {
+		return 0
+	}
+	return s.root.count
 }
 
 // Root computes the canonical sparse Merkle sum trie root for s.
 func (s *CausalSet) Root() Hash {
-	keys := s.keySlice()
-	if len(keys) == 0 {
+	if s.root == nil {
 		return causalEmpty[0]
 	}
-	root, _ := causalSubtreeRoot(keys, 0)
-	return root
+	return s.root.hash
 }
 
-// keySlice returns s's member keys as a slice, in map iteration order.
-func (s *CausalSet) keySlice() []Hash {
-	keys := make([]Hash, 0, len(s.keys))
-	for k := range s.keys {
-		keys = append(keys, k)
+// causalSiblingStep packages the sibling subtree child (at depth childDepth)
+// as a proof step, falling back to the canonical empty subtree when nil.
+func causalSiblingStep(child *causalTreeNode, childDepth int, side string) CausalProofStep {
+	hash, count := causalChildHashCount(child, childDepth)
+	return CausalProofStep{Side: side, Hash: hash, Count: count}
+}
+
+// reverseCausalPath reverses path in place from root-to-leaf to leaf-to-root.
+func reverseCausalPath(path []CausalProofStep) {
+	for i, j := 0, len(path)-1; i < j; i, j = i+1, j-1 {
+		path[i], path[j] = path[j], path[i]
 	}
-	return keys
 }
 
 // causalSubtreeRoot computes the (hash, count) of the subtree rooted at depth
-// that contains exactly the given non-empty key set.
+// that contains exactly the given non-empty key set. It is the recursive
+// reference construction; CausalSet maintains the same nodes incrementally.
 func causalSubtreeRoot(keys []Hash, depth int) (Hash, uint64) {
 	if depth == CausalDepth {
 		// Exactly one key must remain: a 256-bit prefix fully identifies a

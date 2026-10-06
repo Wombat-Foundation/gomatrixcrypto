@@ -122,6 +122,66 @@ func TestElementHashAndEventIDs(t *testing.T) {
 	}
 }
 
+func TestMSC4521ElementHashVectors(t *testing.T) {
+	fbv3 := [32]byte{}
+	for i := range fbv3 {
+		fbv3[i] = 0xfb
+	}
+	v4 := [32]byte{}
+	v4[7] = 0x2a
+	zero := [32]byte{}
+
+	vectors := []struct {
+		name   string
+		digest [32]byte
+		format EventIDFormat
+		h128   [16]byte
+		h64    uint64
+	}{
+		{
+			name:   "V3 [0xfb;32]",
+			digest: fbv3,
+			format: V3,
+			h128:   [16]byte{0xfb, 0xfb, 0xfb, 0xfb, 0xfb, 0xfb, 0xfb, 0xfb, 0xfb, 0xfb, 0xfb, 0xfb, 0xfb, 0xfb, 0xfb, 0xfb},
+			h64:    0xfbfbfbfbfbfbfbfb,
+		},
+		{
+			name:   "V4+ [0x00;7] ++ [0x2a] ++ [0x00;24]",
+			digest: v4,
+			format: V4Plus,
+			h128:   [16]byte{},
+			h64:    0x2a,
+		},
+		{
+			name:   "V4+ all-zero",
+			digest: zero,
+			format: V4Plus,
+			h128:   [16]byte{},
+			h64:    1,
+		},
+	}
+
+	for _, vector := range vectors {
+		t.Run(vector.name, func(t *testing.T) {
+			hash := FromDigest32(vector.digest)
+			if hash.H128 != vector.h128 {
+				t.Fatalf("H128 = %x, want %x", hash.H128, vector.h128)
+			}
+			if hash.H64 != vector.h64 {
+				t.Fatalf("H64 = %#x, want %#x", hash.H64, vector.h64)
+			}
+			id := eventIDFromDigest32(vector.digest, vector.format)
+			fromID, err := FromMatrixEventID(id, vector.format)
+			if err != nil {
+				t.Fatalf("FromMatrixEventID(%q, %v): %v", id, vector.format, err)
+			}
+			if fromID != hash {
+				t.Fatalf("event-ID derivation = %+v, want %+v", fromID, hash)
+			}
+		})
+	}
+}
+
 func TestRoomAccumulatorAndResiduals(t *testing.T) {
 	var left, right RoomAccumulator
 	first := ElementHash{H128: [16]byte{1}, H64: 11}

@@ -48,9 +48,8 @@ type Field struct {
 }
 
 type leaf struct {
-	Name          string
-	CanonicalJSON []byte
-	Hash          Hash
+	Name string
+	Hash Hash
 }
 
 // Header contains the MSC4511 event_header_root fields.
@@ -116,7 +115,7 @@ func fieldLeaf(field Field) (leaf, error) {
 	if err != nil {
 		return leaf{}, err
 	}
-	return leaf{Name: field.Name, CanonicalJSON: canonical, Hash: h}, nil
+	return leaf{Name: field.Name, Hash: h}, nil
 }
 
 // leaves converts fields to leaf structures and sorts them by name.

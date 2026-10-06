@@ -63,6 +63,49 @@ func TestContainsInclusionAndNonInclusion(t *testing.T) {
 	}
 }
 
+func TestCausalSetMatchesRecursiveOracle(t *testing.T) {
+	keys := make([]Hash, 0, 32)
+	for i := 0; i < 32; i++ {
+		var k Hash
+		k[0] = byte(i * 7)
+		k[31] = byte(i*13 + 1)
+		keys = append(keys, k)
+	}
+
+	set := EmptyCausalSet()
+	for _, k := range keys {
+		set = set.Insert(k)
+	}
+
+	wantRoot, wantCount := causalSubtreeRoot(keys, 0)
+	if set.Root() != wantRoot || set.Count() != wantCount {
+		t.Fatalf("cached root/count = %x/%d, want %x/%d", set.Root(), set.Count(), wantRoot, wantCount)
+	}
+
+	for _, k := range keys {
+		path, root, count, ok := set.InclusionProof(k)
+		if !ok || root != wantRoot || count != wantCount {
+			t.Fatalf("InclusionProof(%x) root/count/ok = %x/%d/%v", k, root, count, ok)
+		}
+		if !VerifyCausalInclusion(k, path, root, count) {
+			t.Fatalf("VerifyCausalInclusion(%x) failed", k)
+		}
+	}
+
+	var outside Hash
+	outside[0] = 0xAA
+	if set.Contains(outside) {
+		t.Fatal("test key unexpectedly in set")
+	}
+	path, terminalDepth, root, count, ok := set.NonInclusionProof(outside)
+	if !ok || root != wantRoot || count != wantCount {
+		t.Fatalf("NonInclusionProof root/count/ok = %x/%d/%v", root, count, ok)
+	}
+	if !VerifyCausalNonInclusion(terminalDepth, path, root, count) {
+		t.Fatal("VerifyCausalNonInclusion failed")
+	}
+}
+
 func TestSingleMemberRootMatchesLeafConstruction(t *testing.T) {
 	a := causalTestKey(0xa1)
 	s := EmptyCausalSet().Insert(a)

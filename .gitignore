@@ -8,6 +8,7 @@
 # IDE stuff
 .idea/
 /*.md
+.tmp/
 
 # Go build/test artifacts
 *.test
