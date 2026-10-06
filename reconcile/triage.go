@@ -82,7 +82,7 @@ func ValidateBucketRequests(requests []BucketRequest) error {
 const SaturatedDeltaEstimate = uint64(8) << 31
 
 // overCapacityDeltaFloor is the minimum cardinality implied by an
-// over-capacity stratum-0 decode failure.
+// over-capacity decode failure.
 const overCapacityDeltaFloor = uint64(StratumCapacity) + 1
 
 // StrataEstimate is the structured result of the strata estimator.
