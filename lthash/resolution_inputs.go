@@ -4,12 +4,18 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/binary"
+	"errors"
+	"fmt"
 	"sort"
 
 	"github.com/zeebo/blake3"
 )
 
 var resolutionInputsDST = []byte("msc4500:resolution_inputs:blake3:v1")
+
+// ErrResolutionInputTooLong reports a resolution-input field or ID that does
+// not fit the uint16le length prefix MSC4500's record encoding requires.
+var ErrResolutionInputTooLong = errors.New("lthash: resolution input exceeds 65535 bytes")
 
 // ResolutionInputRecord is one labelled element of the MSC4500 resolution-input
 // set I(P): an event together with its outgoing auth_events and
@@ -31,34 +37,49 @@ type ResolutionInputRecord struct {
 //	state_key || auth_events || state_predecessors
 //
 // Each len is uint16le. An ID list is uint32le(count) followed by its IDs in
-// bytewise ascending order, each as uint16le(length) || id.
-func (r ResolutionInputRecord) Encode() []byte {
+// bytewise ascending order, each as uint16le(length) || id. A field or ID
+// longer than the uint16le length prefix can represent is rejected with
+// ErrResolutionInputTooLong rather than truncated, which would let distinct
+// inputs encode identically.
+func (r ResolutionInputRecord) Encode() ([]byte, error) {
 	var out bytes.Buffer
-	putString(&out, r.EventID)
-	putString(&out, r.EventType)
-	putString(&out, r.StateKey)
-	putIDs(&out, r.AuthEvents)
-	putIDs(&out, r.StatePredecessors)
-	return out.Bytes()
+	for _, s := range []string{r.EventID, r.EventType, r.StateKey} {
+		if err := putString(&out, s); err != nil {
+			return nil, err
+		}
+	}
+	if err := putIDs(&out, r.AuthEvents); err != nil {
+		return nil, err
+	}
+	if err := putIDs(&out, r.StatePredecessors); err != nil {
+		return nil, err
+	}
+	return out.Bytes(), nil
 }
 
-func putString(out *bytes.Buffer, s string) {
-	s, n := truncateToU16Limit(s)
+func putString(out *bytes.Buffer, s string) error {
+	if len(s) > int(^uint16(0)) {
+		return fmt.Errorf("%w: %d bytes", ErrResolutionInputTooLong, len(s))
+	}
 	var l [2]byte
-	binary.LittleEndian.PutUint16(l[:], n)
+	binary.LittleEndian.PutUint16(l[:], uint16(len(s)))
 	out.Write(l[:])
 	out.WriteString(s)
+	return nil
 }
 
-func putIDs(out *bytes.Buffer, ids []string) {
+func putIDs(out *bytes.Buffer, ids []string) error {
 	sorted := append([]string(nil), ids...)
 	sort.Strings(sorted)
 	var c [4]byte
 	binary.LittleEndian.PutUint32(c[:], uint32(len(sorted)))
 	out.Write(c[:])
 	for _, id := range sorted {
-		putString(out, id)
+		if err := putString(out, id); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 // ResolutionInputs is the MSC4500 diagnostic accumulator over the labelled
@@ -67,14 +88,15 @@ func putIDs(out *bytes.Buffer, ids []string) {
 // record exactly once, however many paths reach it.
 type ResolutionInputs Hash
 
-func resolutionSeed(r ResolutionInputRecord) Hash {
+func resolutionSeed(r ResolutionInputRecord) (Hash, error) {
+	encoded, err := r.Encode()
+	if err != nil {
+		return Hash{}, err
+	}
+
 	xof := blake3.New()
-	if _, err := xof.Write(resolutionInputsDST); err != nil {
-		panic(err)
-	}
-	if _, err := xof.Write(r.Encode()); err != nil {
-		panic(err)
-	}
+	mustWrite(xof, resolutionInputsDST)
+	mustWrite(xof, encoded)
 
 	var buf [ByteSize]byte
 	if _, err := readFull(xof.Digest(), buf[:]); err != nil {
@@ -84,23 +106,34 @@ func resolutionSeed(r ResolutionInputRecord) Hash {
 	for i := range out {
 		out[i] = binary.LittleEndian.Uint16(buf[i*2:])
 	}
-	return out
+	return out, nil
 }
 
-// Insert adds one labelled input record.
-func (o *ResolutionInputs) Insert(r ResolutionInputRecord) {
-	s := resolutionSeed(r)
+// Insert adds one labelled input record. It reports ErrResolutionInputTooLong
+// if a field or ID exceeds the encoding's uint16le length prefix.
+func (o *ResolutionInputs) Insert(r ResolutionInputRecord) error {
+	s, err := resolutionSeed(r)
+	if err != nil {
+		return err
+	}
 	for i := range o {
 		o[i] += s[i]
 	}
+	return nil
 }
 
-// Remove subtracts one previously inserted record.
-func (o *ResolutionInputs) Remove(r ResolutionInputRecord) {
-	s := resolutionSeed(r)
+// Remove subtracts one previously inserted record. It reports
+// ErrResolutionInputTooLong if a field or ID exceeds the encoding's uint16le
+// length prefix.
+func (o *ResolutionInputs) Remove(r ResolutionInputRecord) error {
+	s, err := resolutionSeed(r)
+	if err != nil {
+		return err
+	}
 	for i := range o {
 		o[i] -= s[i]
 	}
+	return nil
 }
 
 // Digest returns the BLAKE3-256 digest of the lattice.

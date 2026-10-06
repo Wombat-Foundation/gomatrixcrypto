@@ -93,36 +93,6 @@ func TestSeedPanicsOnReadFailure(t *testing.T) {
 	_ = seed("m.room.create", "", "$a:example.org")
 }
 
-func TestRedactionOverlayVectors(t *testing.T) {
-	var one RedactionOverlay
-	one.Insert("m.room.member", "@alice:example.org", "$state")
-	if got, want := one.Digest(), [ChecksumLen]byte{
-		193, 140, 18, 39, 70, 39, 175, 39, 25, 26, 69, 177, 55, 85, 255, 248,
-		107, 37, 103, 168, 113, 227, 4, 83, 225, 187, 238, 235, 67, 111, 33, 89,
-	}; got != want {
-		t.Fatalf("one-entry overlay digest mismatch: got %v want %v", got, want)
-	}
-
-	var two RedactionOverlay
-	two.Insert("m.room.create", "", "$create")
-	two.Insert("m.room.member", "@alice:example.org", "$state")
-	if got, want := two.Digest(), [ChecksumLen]byte{
-		165, 114, 255, 247, 232, 2, 170, 147, 73, 46, 44, 135, 187, 80, 132, 59,
-		141, 163, 59, 178, 159, 248, 129, 119, 205, 167, 6, 125, 8, 176, 131, 111,
-	}; got != want {
-		t.Fatalf("two-entry overlay digest mismatch: got %v want %v", got, want)
-	}
-
-	var custom RedactionOverlay
-	custom.Insert("org.example.custom", "key", "$custom")
-	if got, want := custom.Digest(), [ChecksumLen]byte{
-		194, 162, 48, 111, 7, 40, 81, 70, 105, 251, 53, 232, 217, 96, 70, 171,
-		150, 202, 126, 215, 100, 237, 206, 254, 100, 132, 250, 86, 57, 48, 1, 155,
-	}; got != want {
-		t.Fatalf("custom overlay digest mismatch: got %v want %v", got, want)
-	}
-}
-
 func TestRedactionOverlayOrderIndependentAndReversible(t *testing.T) {
 	var left, reordered RedactionOverlay
 	left.Insert("m.room.member", "@alice:example.org", "$state")

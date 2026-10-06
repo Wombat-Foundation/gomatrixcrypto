@@ -187,6 +187,15 @@ func RedactableContentHash(value any) (Hash, error) {
 	return ComponentHash("redactable_content", value)
 }
 
+// EphemeralContentHash forwards to RedactableContentHash.
+//
+// Deprecated: MSC4511 renamed the leaf tag from "ephemeral_content" to
+// "redactable_content"; use RedactableContentHash. This alias exists only so
+// callers of the former name keep compiling.
+func EphemeralContentHash(value any) (Hash, error) {
+	return RedactableContentHash(value)
+}
+
 // ContentHash combines redactedContentHash and redactableContentHash into the
 // top-level content_hash component, per MSC4511's split-canonicalization
 // redaction fix: a server executing a redaction can drop the redactable

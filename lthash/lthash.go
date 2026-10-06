@@ -25,6 +25,15 @@ var dst = []byte("msc4500:lthash16:blake3:v1")
 
 var readFull = io.ReadFull
 
+// mustWrite writes p to w, panicking on error. blake3's Hasher.Write never
+// returns a non-nil error, but going through io.Writer keeps the write path
+// written once and checkable.
+func mustWrite(w io.Writer, p []byte) {
+	if _, err := w.Write(p); err != nil {
+		panic(err)
+	}
+}
+
 // Hash is the 2048-byte LtHash16 lattice state.
 type Hash [WordCount]uint16
 
@@ -61,28 +70,16 @@ func seedWithDST(domain []byte, eventType, stateKey, eventID string) Hash {
 	stateKey, stateKeyLen := truncateToU16Limit(stateKey)
 
 	xof := blake3.New()
-	if _, err := xof.Write(domain); err != nil {
-		panic(err)
-	}
+	mustWrite(xof, domain)
 
 	var lens [2]byte
 	binary.LittleEndian.PutUint16(lens[:], typeLen)
-	if _, err := xof.Write(lens[:]); err != nil {
-		panic(err)
-	}
-	if _, err := xof.Write([]byte(eventType)); err != nil {
-		panic(err)
-	}
+	mustWrite(xof, lens[:])
+	mustWrite(xof, []byte(eventType))
 	binary.LittleEndian.PutUint16(lens[:], stateKeyLen)
-	if _, err := xof.Write(lens[:]); err != nil {
-		panic(err)
-	}
-	if _, err := xof.Write([]byte(stateKey)); err != nil {
-		panic(err)
-	}
-	if _, err := xof.Write([]byte(eventID)); err != nil {
-		panic(err)
-	}
+	mustWrite(xof, lens[:])
+	mustWrite(xof, []byte(stateKey))
+	mustWrite(xof, []byte(eventID))
 
 	var buf [ByteSize]byte
 	if _, err := readFull(xof.Digest(), buf[:]); err != nil {

@@ -106,6 +106,49 @@ func TestCausalSetMatchesRecursiveOracle(t *testing.T) {
 	}
 }
 
+func TestCheckedCountSumPanicsOnOverflow(t *testing.T) {
+	if got := checkedCountSum(2, 3); got != 5 {
+		t.Fatalf("checkedCountSum(2, 3) = %d, want 5", got)
+	}
+	defer func() {
+		if recover() == nil {
+			t.Fatal("expected checkedCountSum to panic on overflow")
+		}
+	}()
+	checkedCountSum(^uint64(0), 1)
+}
+
+func TestVerifyCausalInclusionRejectsOverflow(t *testing.T) {
+	set := EmptyCausalSet().Insert(causalTestKey(0xa1))
+	path, root, count, ok := set.InclusionProof(causalTestKey(0xa1))
+	if !ok {
+		t.Fatal("expected inclusion proof")
+	}
+	for i := range path {
+		path[i].Count = ^uint64(0)
+	}
+	if VerifyCausalInclusion(causalTestKey(0xa1), path, root, count) {
+		t.Fatal("overflowing inclusion proof must be rejected, not accepted")
+	}
+}
+
+func TestVerifyCausalNonInclusionRejectsOverflow(t *testing.T) {
+	set := EmptyCausalSet().Insert(causalTestKey(0xa1))
+	path, terminalDepth, root, count, ok := set.NonInclusionProof(causalTestKey(0xb2))
+	if !ok {
+		t.Fatal("expected non-inclusion proof")
+	}
+	if len(path) < 2 {
+		t.Fatalf("test needs at least two proof steps, got %d", len(path))
+	}
+	for i := range path {
+		path[i].Count = ^uint64(0)
+	}
+	if VerifyCausalNonInclusion(terminalDepth, path, root, count) {
+		t.Fatal("overflowing non-inclusion proof must be rejected, not accepted")
+	}
+}
+
 func TestSingleMemberRootMatchesLeafConstruction(t *testing.T) {
 	a := causalTestKey(0xa1)
 	s := EmptyCausalSet().Insert(a)
