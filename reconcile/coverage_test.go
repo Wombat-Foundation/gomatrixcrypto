@@ -1028,8 +1028,13 @@ func TestMatrixAndPinSketchHelperBranches(t *testing.T) {
 }
 
 func toggleTestStratum(strata *[StrataCount][StratumCapacity]uint64, value uint64) {
+	if value == 0 {
+		panic("test stratum values must be non-zero")
+	}
 	var kernel ResidentKernel
-	_ = kernel.Insert(ElementHash{H64: value, H128: [16]byte{byte(value)}})
+	if err := kernel.Insert(ElementHash{H64: value, H128: [16]byte{byte(value)}}); err != nil {
+		panic(err)
+	}
 	source := kernel.Strata()
 	for i := range strata {
 		for j := range strata[i] {
@@ -1039,7 +1044,13 @@ func toggleTestStratum(strata *[StrataCount][StratumCapacity]uint64, value uint6
 }
 
 func populateTestStratum(strata *[StrataCount][StratumCapacity]uint64, stratum int, values ...uint64) {
+	if stratum < 0 || stratum >= StrataCount {
+		panic("test stratum index out of range")
+	}
 	for _, value := range values {
+		if value == 0 || value&1 == 0 {
+			panic("test stratum values must be non-zero and odd")
+		}
 		toggleTestStratum(strata, value<<uint(stratum))
 	}
 }

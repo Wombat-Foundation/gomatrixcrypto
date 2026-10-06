@@ -89,8 +89,9 @@ const overCapacityDeltaFloor = uint64(StratumCapacity) + 1
 type StrataEstimate struct {
 	// Delta is the estimated symmetric-difference cardinality.
 	Delta uint64
-	// LowConfidence reports that decoding stopped at an over-capacity stratum
-	// and the delta was extrapolated from the already-decoded tail.
+	// LowConfidence reports that decoding stopped at an over-capacity stratum.
+	// For a residual sparsest-stratum overflow, Delta is saturated; otherwise
+	// it is extrapolated from the already-decoded tail.
 	LowConfidence bool
 }
 
@@ -99,9 +100,10 @@ type StrataEstimate struct {
 // Starting at the sparsest stratum it decodes the longest consecutive tail. If
 // `r` is the lowest decoded stratum and `T` the decoded tail cardinality,
 // `T * 2^r` estimates the complete difference; decoding every stratum yields
-// the exact cardinality. If even the sparsest residual stratum overflows the
-// estimate is extrapolated from the decoded tail and marked
-// [StrataEstimate.LowConfidence].
+// the exact cardinality. If a stratum overflows, the result is marked
+// [StrataEstimate.LowConfidence]. When even the sparsest residual stratum
+// overflows, no tail can be decoded and [SaturatedDeltaEstimate] is returned;
+// otherwise the estimate is extrapolated from the decoded tail.
 func EstimateStrata(
 	local *[StrataCount][StratumCapacity]uint64,
 	remote *[StrataCount][StratumCapacity]uint64,

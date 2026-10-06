@@ -5,12 +5,10 @@ STYLE_CYAN := $(shell tput setaf 6 2>/dev/null || printf '\033[36m')
 STYLE_RESET := $(shell tput sgr0 2>/dev/null || printf '\033[0m')
 
 GO ?= go
-# Staticcheck 2026.1 does not yet understand Go 1.27 export data. Pin lint to a
-# specific Go 1.25 toolchain while allowing callers to override it. GOTOOLCHAIN
-# requires a full patch version (go1.25 is a language version, not a toolchain),
-# so this may download go1.25.0 when no matching toolchain is installed; set
-# LINT_GO_TOOLCHAIN=local to use the active toolchain instead.
-LINT_GO_TOOLCHAIN ?= go1.25.0
+# Staticcheck 2026.1 does not yet understand Go 1.27 export data. Keep lint on
+# the toolchain declared by go.mod while allowing callers to override it.
+GO_LANGUAGE_VERSION := $(shell awk '$$1 == "go" { print $$2; exit }' go.mod)
+LINT_GO_TOOLCHAIN ?= go$(GO_LANGUAGE_VERSION).0
 STATICCHECK ?= staticcheck
 GOLANGCI_LINT ?= golangci-lint
 VETFLAGS ?=
