@@ -5,9 +5,9 @@
 .DS_Store
 *.swp
 
-# IDE stuff
+# IDE & top-level stuff
 .idea/
-/*.md
+/pr.*.md
 .tmp/
 
 # Go build/test artifacts

@@ -152,35 +152,41 @@ func (s *CausalSet) Union(other *CausalSet) *CausalSet {
 	if other == nil || other.root == nil {
 		return s
 	}
-	next := s
-	other.walkLeaves(func(key Hash) {
-		next = next.Insert(key)
-	})
-	return next
+	if s.root == nil {
+		return other
+	}
+	return &CausalSet{root: causalUnion(s.root, other.root, 0)}
 }
 
-// walkLeaves calls fn for every key in s, in left-to-right (bit-lexicographic)
-// order.
-func (s *CausalSet) walkLeaves(fn func(Hash)) {
-	var prefix Hash
-	var walk func(node *causalTreeNode, depth int)
-	walk = func(node *causalTreeNode, depth int) {
-		if node == nil {
-			return
-		}
-		if depth == CausalDepth {
-			fn(prefix)
-			return
-		}
-		byteIdx := depth / 8
-		bit := byte(1) << uint(7-(depth%8))
-		prefix[byteIdx] &^= bit
-		walk(node.left, depth+1)
-		prefix[byteIdx] |= bit
-		walk(node.right, depth+1)
-		prefix[byteIdx] &^= bit
+// causalUnion structurally merges two subtries. Where one side is the
+// canonical empty subtree the other side is shared directly, so the cost is
+// proportional to the nodes the two sets do not already share rather than to
+// re-hashing every key of one set into the other.
+func causalUnion(a, b *causalTreeNode, depth int) *causalTreeNode {
+	if a == nil {
+		return b
 	}
-	walk(s.root, 0)
+	if b == nil {
+		return a
+	}
+	if a == b {
+		return a
+	}
+	if depth == CausalDepth {
+		// A 256-bit prefix identifies one key, so two occupied leaves here
+		// are the same key; either node represents it.
+		return a
+	}
+	left := causalUnion(a.left, b.left, depth+1)
+	right := causalUnion(a.right, b.right, depth+1)
+	leftHash, leftCount := causalChildHashCount(left, depth+1)
+	rightHash, rightCount := causalChildHashCount(right, depth+1)
+	return &causalTreeNode{
+		hash:  causalNode(depth, leftHash, leftCount, rightHash, rightCount),
+		count: checkedCountSum(leftCount, rightCount),
+		left:  left,
+		right: right,
+	}
 }
 
 // Contains reports whether key is a member of s.

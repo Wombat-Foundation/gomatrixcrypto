@@ -6,6 +6,10 @@ import (
 	"testing"
 )
 
+// causalRootSink keeps benchmark results observable so the compiler cannot
+// dead-code-eliminate the timed calls.
+var causalRootSink Hash
+
 func benchmarkFields(n int) []Field {
 	fields := make([]Field, n)
 	for i := range fields {
@@ -70,7 +74,7 @@ func BenchmarkCausalRoot256(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = set.Root()
+		causalRootSink = set.Root()
 	}
 }
 

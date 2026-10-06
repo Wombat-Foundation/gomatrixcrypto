@@ -51,6 +51,44 @@ func TestUnionEliminatesDuplicates(t *testing.T) {
 	}
 }
 
+func TestUnionMatchesRecursiveOracle(t *testing.T) {
+	var leftKeys, rightKeys []Hash
+	for i := 0; i < 24; i++ {
+		var k Hash
+		k[0] = byte(i * 3)
+		k[31] = byte(i + 1)
+		leftKeys = append(leftKeys, k)
+
+		var r Hash
+		r[0] = byte(i * 5)
+		r[31] = byte(0x80 + i)
+		rightKeys = append(rightKeys, r)
+	}
+
+	leftSet := EmptyCausalSet()
+	for _, k := range leftKeys {
+		leftSet = leftSet.Insert(k)
+	}
+	rightSet := EmptyCausalSet()
+	for _, k := range rightKeys {
+		rightSet = rightSet.Insert(k)
+	}
+	leftRoot, leftCount := leftSet.Root(), leftSet.Count()
+
+	union := leftSet.Union(rightSet)
+	wantRoot, wantCount := causalSubtreeRoot(append(append([]Hash(nil), leftKeys...), rightKeys...), 0)
+	if union.Root() != wantRoot || union.Count() != wantCount {
+		t.Fatalf("union root/count = %x/%d, want %x/%d", union.Root(), union.Count(), wantRoot, wantCount)
+	}
+
+	if leftSet.Root() != leftRoot || leftSet.Count() != leftCount {
+		t.Fatal("union mutated the left operand")
+	}
+	if self := leftSet.Union(leftSet); self.Root() != leftRoot || self.Count() != leftCount {
+		t.Fatalf("self-union = %x/%d, want %x/%d", self.Root(), self.Count(), leftRoot, leftCount)
+	}
+}
+
 func TestContainsInclusionAndNonInclusion(t *testing.T) {
 	a, b := causalTestKey(0xa1), causalTestKey(0xb2)
 	s := EmptyCausalSet().Insert(a)
