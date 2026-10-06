@@ -77,13 +77,38 @@ func ValidateBucketRequests(requests []BucketRequest) error {
 	return nil
 }
 
-// EstimateDelta estimates the symmetric difference from the resident strata.
-func EstimateDelta(
+// SaturatedDeltaEstimate is the estimator's saturated sentinel, returned when
+// even the sparsest residual stratum overflows.
+const SaturatedDeltaEstimate = uint64(8) << 31
+
+// overCapacityDeltaFloor is the minimum cardinality implied by an
+// over-capacity stratum-0 decode failure.
+const overCapacityDeltaFloor = uint64(StratumCapacity) + 1
+
+// StrataEstimate is the structured result of the strata estimator.
+type StrataEstimate struct {
+	// Delta is the estimated symmetric-difference cardinality.
+	Delta uint64
+	// LowConfidence reports that decoding stopped at an over-capacity stratum
+	// and the delta was extrapolated from the already-decoded tail.
+	LowConfidence bool
+}
+
+// EstimateStrata estimates the symmetric difference from the resident strata.
+//
+// Starting at the sparsest stratum it decodes the longest consecutive tail. If
+// `r` is the lowest decoded stratum and `T` the decoded tail cardinality,
+// `T * 2^r` estimates the complete difference; decoding every stratum yields
+// the exact cardinality. If even the sparsest residual stratum overflows the
+// estimate is extrapolated from the decoded tail and marked
+// [StrataEstimate.LowConfidence].
+func EstimateStrata(
 	local *[StrataCount][StratumCapacity]uint64,
 	remote *[StrataCount][StratumCapacity]uint64,
-) (uint64, bool, error) {
-	const fallbackEstimate = uint64(8) << 31
+) (StrataEstimate, error) {
 	work := maxFactorWork
+	var decodedTail uint64
+	lowestDecoded := -1
 
 	for stratum := StrataCount - 1; stratum >= 0; stratum-- {
 		var residual [StratumCapacity]uint64
@@ -93,32 +118,72 @@ func EstimateDelta(
 		roots, err := decodePinSketch(residual[:], StratumCapacity, &work)
 		if err != nil {
 			// coverage:ignore
-			if errors.Is(err, ErrBudgetExhausted) {
-				return 0, false, nil
+			if !errors.Is(err, ErrDecodeFailure) {
+				return StrataEstimate{}, err
 			}
-			// coverage:ignore
-			if errors.Is(err, ErrDecodeFailure) {
-				return fallbackEstimate, true, nil
+			if lowestDecoded < 0 && stratum == StrataCount-1 {
+				return StrataEstimate{Delta: SaturatedDeltaEstimate, LowConfidence: true}, nil
 			}
-			return 0, false, err
-		}
-		cardinality := uint64(len(roots))
-		if cardinality == 0 {
-			continue
-		}
-		if stratum == 31 {
-			if cardinality > ^uint64(0)>>31 {
-				return fallbackEstimate, true, nil
+			scaled := stratum
+			if lowestDecoded >= 0 {
+				scaled = lowestDecoded
 			}
-			return cardinality << 31, true, nil
+			tail := decodedTail
+			if tail < overCapacityDeltaFloor {
+				tail = overCapacityDeltaFloor
+			}
+			return StrataEstimate{Delta: saturatingShifted(tail, scaled), LowConfidence: true}, nil
 		}
-		shift := uint(stratum + 1)
-		if cardinality > ^uint64(0)>>shift {
-			return fallbackEstimate, true, nil
-		}
-		return cardinality << shift, true, nil
+		decodedTail += uint64(len(roots))
+		lowestDecoded = stratum
 	}
-	return 0, true, nil
+
+	// coverage:ignore
+	if lowestDecoded < 0 {
+		return StrataEstimate{}, nil
+	}
+	return StrataEstimate{Delta: saturatingShifted(decodedTail, lowestDecoded)}, nil
+}
+
+// saturatingShifted returns value << shift, saturating to the maximum uint64.
+func saturatingShifted(value uint64, shift int) uint64 {
+	// coverage:ignore
+	if shift < 0 {
+		return 0
+	}
+	// coverage:ignore
+	if shift >= 64 {
+		if value == 0 {
+			return 0
+		}
+		return ^uint64(0)
+	}
+	factor := uint64(1) << uint(shift)
+	if value > ^uint64(0)/factor {
+		return ^uint64(0)
+	}
+	return value * factor
+}
+
+// EstimateDelta estimates the symmetric difference from the resident strata.
+//
+// This is the compatibility form of [EstimateStrata]: the returned bool reports
+// whether an estimate is available. Budget exhaustion is reported as
+// (0, false, nil); other errors are returned unchanged. Callers that need the
+// low-confidence signal should use [EstimateStrata].
+func EstimateDelta(
+	local *[StrataCount][StratumCapacity]uint64,
+	remote *[StrataCount][StratumCapacity]uint64,
+) (uint64, bool, error) {
+	estimate, err := EstimateStrata(local, remote)
+	// coverage:ignore
+	if err != nil {
+		if errors.Is(err, ErrBudgetExhausted) {
+			return 0, false, nil
+		}
+		return 0, false, err
+	}
+	return estimate.Delta, true, nil
 }
 
 // DecodeBucketSketches decodes concatenated bucket sketches.

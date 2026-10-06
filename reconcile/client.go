@@ -120,12 +120,13 @@ func (c ReconciliationClient) SelectAction(local *ResidentKernel, remote RemoteD
 	}
 
 	countDelta := absDiffU64(local.accumulator.Count, remote.KnownEventCount)
-	estimatedDelta := countDelta
-	// coverage:ignore
-	if value, ok, err := EstimateDelta(local.Strata(), &remote.Strata); err == nil {
-		if ok && value > estimatedDelta {
-			estimatedDelta = value
-		}
+	estimate, err := EstimateStrata(local.Strata(), &remote.Strata)
+	if err != nil {
+		return ClientAction{Type: ActionExtremityDiff}
+	}
+	estimatedDelta := maxU64(estimate.Delta, countDelta)
+	if estimatedDelta >= SaturatedDeltaEstimate {
+		return ClientAction{Type: ActionExtremityDiff}
 	}
 
 	if c.gateThreshold != nil && estimatedDelta > *c.gateThreshold {

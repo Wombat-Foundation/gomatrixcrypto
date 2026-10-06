@@ -1027,6 +1027,23 @@ func TestMatrixAndPinSketchHelperBranches(t *testing.T) {
 	}
 }
 
+func toggleTestStratum(strata *[StrataCount][StratumCapacity]uint64, value uint64) {
+	var kernel ResidentKernel
+	_ = kernel.Insert(ElementHash{H64: value, H128: [16]byte{byte(value)}})
+	source := kernel.Strata()
+	for i := range strata {
+		for j := range strata[i] {
+			strata[i][j] ^= source[i][j]
+		}
+	}
+}
+
+func populateTestStratum(strata *[StrataCount][StratumCapacity]uint64, stratum int, values ...uint64) {
+	for _, value := range values {
+		toggleTestStratum(strata, value<<uint(stratum))
+	}
+}
+
 func TestEstimateDeltaRustCases(t *testing.T) {
 	local := strataFromValues()
 	remote := local
@@ -1038,34 +1055,54 @@ func TestEstimateDeltaRustCases(t *testing.T) {
 		t.Fatalf("EstimateDelta empty remote = %d %v %v", got, ok, err)
 	}
 
+	// Exact tail: every stratum decodes, so the estimate is the exact cardinality.
 	remote = strataFromValues(1, 2, 4, 8, 3, 5)
-	if got, ok, err := EstimateDelta(&local, &remote); err != nil || !ok || got != 16 {
-		t.Fatalf("EstimateDelta sparse tail = %d %v %v", got, ok, err)
+	if got, ok, err := EstimateDelta(&local, &remote); err != nil || !ok || got != 6 {
+		t.Fatalf("EstimateDelta exact tail = %d %v %v", got, ok, err)
+	}
+
+	// Low-confidence tail: stratum 0 overflows and the estimate extrapolates
+	// from the empty decoded tail, flooring at StratumCapacity+1.
+	remote = strataFromValues(1, 3, 5, 7, 9, 11, 13, 15, 17)
+	if got, ok, err := EstimateDelta(&local, &remote); err != nil || !ok || got != 18 {
+		t.Fatalf("EstimateDelta low-confidence tail = %d %v %v", got, ok, err)
+	}
+}
+
+func TestEstimateStrataReferenceCases(t *testing.T) {
+	var local [StrataCount][StratumCapacity]uint64
+	remote := local
+
+	if got, err := EstimateStrata(&local, &remote); err != nil || got != (StrataEstimate{}) {
+		t.Fatalf("EstimateStrata identical = %+v %v", got, err)
+	}
+
+	remote = strataFromValues(1, 2, 4, 8, 3, 5)
+	if got, err := EstimateStrata(&local, &remote); err != nil || got != (StrataEstimate{Delta: 6}) {
+		t.Fatalf("EstimateStrata exact tail = %+v %v", got, err)
 	}
 
 	remote = strataFromValues(1, 3, 5, 7, 9, 11, 13, 15, 17)
-	if got, ok, err := EstimateDelta(&local, &remote); err != nil || !ok || got != (uint64(8)<<31) {
-		t.Fatalf("EstimateDelta sparse failure = %d %v %v", got, ok, err)
+	if got, err := EstimateStrata(&local, &remote); err != nil || got != (StrataEstimate{Delta: 18, LowConfidence: true}) {
+		t.Fatalf("EstimateStrata stratum-0 overflow = %+v %v", got, err)
 	}
 
-	var undecodableLocal, undecodableRemote [StrataCount][StratumCapacity]uint64
-	foundUndecodable := false
-	seed := uint64(0x9e3779b97f4a7c15)
-	for attempt := 0; attempt < 256; attempt++ {
-		seed ^= seed << 7
-		seed ^= seed >> 9
-		seed ^= seed << 8
-		for i := 0; i < StratumCapacity; i++ {
-			seed = nextFactorParameter(seed)
-			undecodableRemote[StrataCount-1][i] = seed
-		}
-		if got, ok, err := EstimateDelta(&undecodableLocal, &undecodableRemote); err == nil && ok && got == (uint64(8)<<31) {
-			foundUndecodable = true
-			break
-		}
+	// Overflow of the sparsest stratum is unmeasurable and saturates.
+	var sparseSaturated [StrataCount][StratumCapacity]uint64
+	populateTestStratum(&sparseSaturated, StrataCount-1, 1, 3, 5, 7, 9, 11, 13, 15, 17)
+	if got, err := EstimateStrata(&local, &sparseSaturated); err != nil || got != (StrataEstimate{Delta: SaturatedDeltaEstimate, LowConfidence: true}) {
+		t.Fatalf("EstimateStrata highest-stratum overflow = %+v %v", got, err)
 	}
-	if !foundUndecodable {
-		t.Fatal("failed to provoke undecodable EstimateDelta fallback")
+
+	// A non-empty decoded tail below the failed stratum scales by 2^r.
+	var lowestDecoded [StrataCount][StratumCapacity]uint64
+	populateTestStratum(&lowestDecoded, 7, 1, 3, 5, 7, 9)
+	populateTestStratum(&lowestDecoded, 6, 1, 3, 5, 7, 9)
+	populateTestStratum(&lowestDecoded, 5, 1, 3, 5, 7, 9)
+	populateTestStratum(&lowestDecoded, 4, 1, 3, 5, 7, 9)
+	populateTestStratum(&lowestDecoded, 3, 1, 3, 5, 7, 9, 11, 13, 15, 17)
+	if got, err := EstimateStrata(&local, &lowestDecoded); err != nil || got != (StrataEstimate{Delta: 320, LowConfidence: true}) {
+		t.Fatalf("EstimateStrata lowest-decoded stratum = %+v %v", got, err)
 	}
 }
 
