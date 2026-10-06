@@ -104,27 +104,3 @@ func TestContentHashSupportsNullRedactableContent(t *testing.T) {
 		t.Fatal("content_hash did not mix in redacted_content_hash")
 	}
 }
-
-func TestEphemeralContentHashPreservesLegacyTag(t *testing.T) {
-	value := map[string]any{"displayname": "Alice"}
-
-	legacy, err := EphemeralContentHash(value)
-	if err != nil {
-		t.Fatal(err)
-	}
-	want, err := ComponentHash("ephemeral_content", value)
-	if err != nil {
-		t.Fatal(err)
-	}
-	redactable, err := RedactableContentHash(value)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if legacy != want {
-		t.Fatal("EphemeralContentHash does not preserve the legacy field tag")
-	}
-	if legacy == redactable {
-		t.Fatal("legacy and renamed content tags produced the same hash")
-	}
-}

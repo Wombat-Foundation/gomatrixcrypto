@@ -191,16 +191,6 @@ func RedactableContentHash(value any) (Hash, error) {
 	return ComponentHash("redactable_content", value)
 }
 
-// EphemeralContentHash computes the v1 MSC4511 leaf tag for the redactable
-// content component. Keep this path for existing event roots that committed
-// the original "ephemeral_content" field name.
-//
-// Deprecated: use RedactableContentHash for the renamed field tag when
-// constructing a version that explicitly adopts it.
-func EphemeralContentHash(value any) (Hash, error) {
-	return ComponentHash("ephemeral_content", value)
-}
-
 // ContentHash combines redactedContentHash and redactableContentHash into the
 // top-level content_hash component, per MSC4511's split-canonicalization
 // redaction fix: a server executing a redaction can drop the redactable
