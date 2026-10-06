@@ -36,9 +36,10 @@ type EventIDFormat int
 
 const (
 	// Legacy is the room versions 1 and 2 event-ID binding. This
-	// implementation does not support it: selecting Legacy returns
-	// ErrUnsupportedRoomVersion from MatrixEventDigest32 and
-	// FromMatrixEventID.
+	// implementation does not support it: MatrixEventDigest32 and
+	// FromMatrixEventID return ErrUnsupportedRoomVersion for a well-formed
+	// legacy event ID, after the same sigil validation as the other formats
+	// (an ID without a leading "$" yields ErrInvalidEventID first).
 	Legacy EventIDFormat = iota
 	// V3 uses the room version 3 event-ID binding.
 	V3
