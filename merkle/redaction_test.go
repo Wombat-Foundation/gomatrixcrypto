@@ -14,6 +14,22 @@ func TestSplitRedactionContentAllRuleYieldsEmptyRedactable(t *testing.T) {
 	}
 }
 
+func TestSplitRedactionContentSupportsArrayValues(t *testing.T) {
+	content := map[string]any{
+		"creator": "@alice:example.com",
+		"allow":   []any{"!room:example.com"},
+	}
+
+	redacted, redactable := SplitRedactionContent(content, "m.room.create")
+
+	if !deepEqual(redacted, content) {
+		t.Fatalf("redacted = %v, want %v", redacted, content)
+	}
+	if len(redactable) != 0 {
+		t.Fatalf("redactable = %v, want empty", redactable)
+	}
+}
+
 func TestSplitRedactionContentNoneRuleYieldsEmptyRedacted(t *testing.T) {
 	content := map[string]any{"body": "hello", "msgtype": "m.text"}
 	redacted, redactable := SplitRedactionContent(content, "m.room.message")
