@@ -17,17 +17,18 @@ const MaxLocalSketchDecodeCapacity = MaxSketchCapacity
 const eventHashEncodedLen = 43
 
 var (
-	ErrInvalidEventID        = errors.New("InvalidEventID")
-	ErrInvalidBase64         = errors.New("InvalidBase64")
-	ErrInvalidDigestLength   = errors.New("InvalidDigestLength")
-	ErrInvalidSketchCapacity = errors.New("InvalidSketchCapacity")
-	ErrInvalidSketchLength   = errors.New("InvalidSketchLength")
-	ErrDecodeFailure         = errors.New("DecodeFailure")
-	ErrBudgetExhausted       = errors.New("BudgetExhausted")
-	ErrZeroShortIdentifier   = errors.New("ZeroShortIdentifier")
-	ErrInvalidBucketIndex    = errors.New("InvalidBucketIndex")
-	ErrCountOverflow         = errors.New("CountOverflow")
-	ErrCountUnderflow        = errors.New("CountUnderflow")
+	ErrInvalidEventID         = errors.New("InvalidEventID")
+	ErrInvalidBase64          = errors.New("InvalidBase64")
+	ErrInvalidDigestLength    = errors.New("InvalidDigestLength")
+	ErrInvalidSketchCapacity  = errors.New("InvalidSketchCapacity")
+	ErrInvalidSketchLength    = errors.New("InvalidSketchLength")
+	ErrDecodeFailure          = errors.New("DecodeFailure")
+	ErrBudgetExhausted        = errors.New("BudgetExhausted")
+	ErrZeroShortIdentifier    = errors.New("ZeroShortIdentifier")
+	ErrInvalidBucketIndex     = errors.New("InvalidBucketIndex")
+	ErrCountOverflow          = errors.New("CountOverflow")
+	ErrCountUnderflow         = errors.New("CountUnderflow")
+	ErrUnsupportedRoomVersion = errors.New("UnsupportedRoomVersion")
 )
 
 // EventIDFormat selects the Matrix event-ID binding.
@@ -44,7 +45,7 @@ const (
 
 // ElementHash is the pair of MSC0500 digest truncations.
 type ElementHash struct {
-	// H128 is the first 128 bits of the canonical digest, in network byte order.
+	// H128 is the last 128 bits of the canonical digest, in network byte order.
 	H128 [16]byte
 	// H64 is the first non-zero 64-bit chunk of the canonical digest.
 	H64 uint64
@@ -53,7 +54,7 @@ type ElementHash struct {
 // FromDigest32 derives the profile truncations from a canonical 32-byte digest.
 func FromDigest32(digest [32]byte) ElementHash {
 	var wide [16]byte
-	copy(wide[:], digest[:16])
+	copy(wide[:], digest[16:])
 
 	h64 := uint64(1)
 	for i := 0; i < 4; i++ {
@@ -83,15 +84,15 @@ func MatrixEventDigest32(eventID string, format EventIDFormat) ([32]byte, error)
 	if !ok {
 		return out, ErrInvalidEventID
 	}
-	if format != Legacy && len(encoded) > eventHashEncodedLen {
+	if format == Legacy {
+		return out, ErrUnsupportedRoomVersion
+	}
+	if len(encoded) > eventHashEncodedLen {
 		return out, ErrInvalidBase64
 	}
 
 	var digest []byte
 	switch format {
-	case Legacy:
-		sum := sha256.Sum256([]byte(eventID))
-		digest = sum[:]
 	case V3:
 		var err error
 		digest, err = base64.RawStdEncoding.DecodeString(encoded)

@@ -1,7 +1,6 @@
 package reconcile
 
 import (
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
 	"math/bits"
@@ -59,7 +58,7 @@ func TestElementHashAndEventIDs(t *testing.T) {
 	}
 
 	hash := FromDigest32(digest)
-	if got, want := hash.H128, ([16]byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}); got != want {
+	if got, want := hash.H128, ([16]byte{16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31}); got != want {
 		t.Fatalf("H128 = %x, want %x", got, want)
 	}
 	if got, want := hash.H64, uint64(0x0001020304050607); got != want {
@@ -92,14 +91,8 @@ func TestElementHashAndEventIDs(t *testing.T) {
 		}
 	}
 
-	legacyID := "$opaque:example.org"
-	legacyDigest := sha256.Sum256([]byte(legacyID))
-	got, err := MatrixEventDigest32(legacyID, Legacy)
-	if err != nil {
-		t.Fatalf("legacy digest failed: %v", err)
-	}
-	if got != legacyDigest {
-		t.Fatalf("legacy digest mismatch")
+	if _, err := MatrixEventDigest32("$opaque:example.org", Legacy); err != ErrUnsupportedRoomVersion {
+		t.Fatalf("expected ErrUnsupportedRoomVersion for legacy event IDs, got %v", err)
 	}
 
 	if _, err := MatrixEventDigest32("not-an-event-id", V4Plus); err != ErrInvalidEventID {
