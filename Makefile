@@ -8,7 +8,9 @@ GO ?= go
 # Staticcheck 2026.1 does not yet understand Go 1.27 export data. Keep lint on
 # the toolchain declared by go.mod while allowing callers to override it.
 GO_LANGUAGE_VERSION := $(shell awk '$$1 == "go" { print $$2; exit }' go.mod)
-LINT_GO_TOOLCHAIN ?= go$(GO_LANGUAGE_VERSION).0
+# go.mod may declare a bare (go 1.25) or patch-level (go 1.25.3) directive.
+# Toolchain names always carry a patch component, so add ".0" only when absent.
+LINT_GO_TOOLCHAIN ?= go$(shell printf '%s\n' '$(GO_LANGUAGE_VERSION)' | awk -F. '{ print (NF < 3 ? $$0 ".0" : $$0) }')
 STATICCHECK ?= staticcheck
 GOLANGCI_LINT ?= golangci-lint
 VETFLAGS ?=
@@ -37,6 +39,7 @@ help: ## Show available targets
 
 
 .PHONY: all
+all: ## Run format, tidy, lint, coverage, and build
 all: format tidy lint cov build
 
 
