@@ -39,15 +39,7 @@ type AESCTRHash Hash
 // The framing is identical to [seedWithDST]; only the expansion primitive
 // changes. It panics if writing the frame or reading the key fails.
 func seedAESCTR(eventType, stateKey, eventID string) Hash {
-	// key = BLAKE3-256(dst || element): the prefix of the same XOF stream
-	// seedWithDST expands, cut to the cipher's key size.
-	xof := blake3.New()
-	writeElement(xof, dstAESCTR, eventType, stateKey, eventID)
-
-	var key [32]byte
-	if _, err := xof.Digest().Read(key[:]); err != nil {
-		panic(err)
-	}
+	key := aesctrKey(eventType, stateKey, eventID)
 
 	var buf [ByteSize]byte
 	expandAES256Element(&key, buf[:])
@@ -57,6 +49,19 @@ func seedAESCTR(eventType, stateKey, eventID string) Hash {
 		out[i] = binary.LittleEndian.Uint16(buf[i*2:])
 	}
 	return out
+}
+
+// aesctrKey derives the AES key from the same framed BLAKE3 input used by
+// seedAESCTR. The first 32 bytes of the BLAKE3 XOF stream are the key.
+func aesctrKey(eventType, stateKey, eventID string) [32]byte {
+	xof := blake3.New()
+	writeElement(xof, dstAESCTR, eventType, stateKey, eventID)
+
+	var key [32]byte
+	if _, err := xof.Digest().Read(key[:]); err != nil {
+		panic(err)
+	}
+	return key
 }
 
 // Insert adds one entry to the accumulator.

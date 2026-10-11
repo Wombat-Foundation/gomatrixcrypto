@@ -3,8 +3,6 @@ package lthash
 import (
 	"encoding/binary"
 	"testing"
-
-	"github.com/zeebo/blake3"
 )
 
 // benchEntry is one representative state element for the insert benchmarks.
@@ -43,10 +41,7 @@ func BenchmarkAESCTRInsertStdlib(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		xof := blake3.New()
-		writeElement(xof, dstAESCTR, benchEntry.EventType, benchEntry.StateKey, benchEntry.EventID)
-		var key [32]byte
-		_, _ = xof.Digest().Read(key[:])
+		key := aesctrKey(benchEntry.EventType, benchEntry.StateKey, benchEntry.EventID)
 		var buf [ByteSize]byte
 		expandAES256Stdlib(&key, buf[:])
 		var seed Hash

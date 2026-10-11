@@ -71,11 +71,9 @@ func TestAES256ElementMatchesStdlib(t *testing.T) {
 	}
 }
 
-// TestAES256StdlibFallbackMatchesHardware exercises the non-AES-NI path
-// against the assembly one, so machines without the instruction still agree
-// with machines that have it. hasAESNI is flipped rather than simulated so the
-// dispatch in expandAES256Element is covered too.
-func TestAES256StdlibFallbackMatchesHardware(t *testing.T) {
+// TestAES256StdlibMatchesElement compares the portable expansion with the
+// normal dispatch path on this architecture.
+func TestAES256StdlibMatchesElement(t *testing.T) {
 	key := seededKey(0xc0ffee)
 	var hardware, portable [ByteSize]byte
 	expandAES256Element(&key, hardware[:])
@@ -84,7 +82,6 @@ func TestAES256StdlibFallbackMatchesHardware(t *testing.T) {
 		t.Fatalf("fallback diverges from AES-NI at byte %d",
 			firstDiff(hardware[:], portable[:]))
 	}
-
 }
 
 func TestAES256KeyScheduleMatchesStdlib(t *testing.T) {
