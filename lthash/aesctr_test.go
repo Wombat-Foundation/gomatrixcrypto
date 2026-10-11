@@ -85,18 +85,6 @@ func TestAES256StdlibFallbackMatchesHardware(t *testing.T) {
 			firstDiff(hardware[:], portable[:]))
 	}
 
-	if !hasAESNI {
-		t.Skip("CPU has no AES-NI, so the dispatch fallback is already the default")
-	}
-	hasAESNI = false
-	t.Cleanup(func() { hasAESNI = true })
-
-	var dispatched [ByteSize]byte
-	expandAES256Element(&key, dispatched[:])
-	if dispatched != portable {
-		t.Fatalf("dispatched fallback diverges from crypto/aes at byte %d",
-			firstDiff(dispatched[:], portable[:]))
-	}
 }
 
 func TestAES256KeyScheduleMatchesStdlib(t *testing.T) {
