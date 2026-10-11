@@ -2,7 +2,7 @@
 
 package lthash
 
-import "github.com/klauspost/cpuid/v2"
+import "golang.org/x/sys/cpu"
 
 // aes256CtrExpandAsm encrypts nblocks blocks: out[i] = AES-256(rk, ctr[i]).
 //
@@ -10,7 +10,7 @@ import "github.com/klauspost/cpuid/v2"
 func aes256CtrExpandAsm(rk *byte, ctr *byte, out *byte, nblocks int)
 
 // hasAESNI reports whether this CPU can run the AES-NI block loop.
-var hasAESNI = cpuid.CPU.Has(cpuid.AESNI)
+var hasAESNI = cpu.X86.HasAES
 
 // aesHardwareExpand runs the AES-NI block loop when the CPU has it. The round
 // keys are a stack array; //go:noescape on the assembly keeps them there.
