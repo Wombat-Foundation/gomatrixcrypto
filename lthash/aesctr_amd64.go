@@ -1,3 +1,5 @@
+//go:build amd64 && !purego
+
 package lthash
 
 import "github.com/klauspost/cpuid/v2"

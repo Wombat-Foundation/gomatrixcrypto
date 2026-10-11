@@ -1,3 +1,5 @@
+//go:build amd64 && !purego
+
 #include "textflag.h"
 
 // func aes256CtrExpandAsm(rk *byte, ctr *byte, out *byte, nblocks int)

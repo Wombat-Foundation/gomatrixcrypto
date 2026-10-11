@@ -11,7 +11,8 @@ import (
 // hashed to a 32-byte BLAKE3 key, and the 2048-byte seed is the CTR keystream
 // block i = AES-256(key, be128(i)) for i in [0, 128). It is a drop-in
 // replacement for the BLAKE3 XOF in [seedWithDST], under its own domain tag,
-// so the two accumulator families can never produce the same digests.
+// which keeps the element inputs for the two accumulator profiles disjoint;
+// it does not rule out collisions between their final digests.
 
 const (
 	// aesKeyBytes is an AES-256 round-key schedule: 15 keys x 16 bytes, each

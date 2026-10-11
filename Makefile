@@ -39,6 +39,7 @@ help: ## Show available targets
 
 
 .PHONY: all
+.NOTPARALLEL: all
 all: ## Run format, tidy, lint, coverage, and build
 all: format tidy lint cov build
 
@@ -78,7 +79,7 @@ bench: ## Run benchmarks (BENCH regexp, BENCHFLAGS configurable; library package
 	$(GO) test -run '^$$' -bench '$(BENCH)' $(BENCHFLAGS) $(LIBPKGS)
 
 .PHONY: lint
-lint:## Run lint checks
+lint: ## Run lint checks
 	GOTOOLCHAIN=$(LINT_GO_TOOLCHAIN)+auto $(GO) vet $(VETFLAGS) $(PKGS)
 	GOTOOLCHAIN=$(LINT_GO_TOOLCHAIN)+auto $(STATICCHECK) -checks=all $(STATICCHECKFLAGS) $(PKGS)
 	# install with, i.e., `curl -sSfL https://golangci-lint.run/install.sh | sh -s -- -b "$$(go env GOPATH)/bin" v2.12.2`
