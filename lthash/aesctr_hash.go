@@ -10,8 +10,10 @@ import (
 // dstAESCTR is the MSC4500 primary accumulator domain tag for the AES-256-CTR
 // instantiation. It is the same tag rezzy's expansion_backends.rs uses
 // (DST_AES_CTR), so both implementations derive identical seeds; the
-// ":aes-ctr:v1" suffix keeps these digests from ever matching the BLAKE3
-// profile's.
+// ":aes-ctr:v1" suffix separates this profile's element inputs from the
+// BLAKE3 profile's. It does not guarantee distinct collapsed digests: both
+// profiles checksum only the lattice bytes, so their empty accumulators have
+// the same checksum.
 var dstAESCTR = []byte("msc4500:lthash16:aes-ctr:v1")
 
 // AESCTRHash is the MSC4500 primary accumulator expanded element-for-element
@@ -22,9 +24,9 @@ var dstAESCTR = []byte("msc4500:lthash16:aes-ctr:v1")
 // serialized lattice — and differs only in how each element is expanded: the
 // frame is hashed with BLAKE3 to a 32-byte key, and the 2048-byte seed is the
 // AES-256 CTR keystream for counters 0..127. The distinct domain tag keeps the
-// two profiles' element inputs disjoint, so a digest from one profile is never
-// a digest produced by the other; it does not by itself prove two distinct
-// element sets cannot collide.
+// two profiles' element inputs disjoint; it does not make their collapsed
+// digests distinct (empty accumulators share a checksum) and does not by
+// itself prove two distinct element sets cannot collide.
 //
 // Callers must not mix the two: the value carries no record of which
 // expansion produced it.
