@@ -108,7 +108,7 @@ func resolutionSeed(r ResolutionInputRecord) (Hash, error) {
 	mustWrite(xof, encoded)
 
 	var buf [ByteSize]byte
-	if _, err := readFull(xof.Digest(), buf[:]); err != nil {
+	if _, err := xof.Digest().Read(buf[:]); err != nil {
 		panic(err)
 	}
 	var out Hash

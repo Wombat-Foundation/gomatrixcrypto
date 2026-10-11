@@ -4,7 +4,6 @@ package lthash
 import (
 	"encoding/base64"
 	"encoding/binary"
-	"io"
 
 	"github.com/zeebo/blake3"
 )
@@ -23,13 +22,13 @@ const (
 // with the earlier SHAKE256 + BLAKE2b-256 profile.
 var dst = []byte("msc4500:lthash16:blake3:v1")
 
-var readFull = io.ReadFull
-
-// mustWrite writes p to w, panicking on error. blake3's Hasher.Write never
-// returns a non-nil error, but going through io.Writer keeps the write path
-// written once and checkable.
-func mustWrite(w io.Writer, p []byte) {
-	if _, err := w.Write(p); err != nil {
+// mustWrite writes p to h, panicking on error. blake3's Hasher.Write never
+// returns a non-nil error, but keeping the check in one place keeps the write
+// path checkable. The hasher argument is concrete rather than io.Writer so the
+// compiler can devirtualize the write and keep p off the heap: an interface
+// here would push every frame buffer of a seed onto the heap.
+func mustWrite(h *blake3.Hasher, p []byte) {
+	if _, err := h.Write(p); err != nil {
 		panic(err)
 	}
 }
@@ -59,20 +58,16 @@ func truncateToU16Limit(s string) (string, uint16) {
 	return s[:end], uint16(end)
 }
 
-// seedWithDST generates a lattice seed vector for an element and domain tag.
+// writeElement writes the MSC4500 element frame for domain to xof.
 //
 // Element encoding (MSC4500 §1): dst || len(type) || type || len(state_key) ||
 // state_key || event_id, where each len() is an unsigned 16-bit little-endian
-// byte count. The buffer is expanded to 2048 bytes with the BLAKE3 XOF and
-// unpacked into little-endian 16-bit lanes.
-// eventType and stateKey are truncated to at most 65535 bytes, preserving
-// character boundaries for valid UTF-8; eventID is included in full.
-// It panics if writing to or reading from the XOF fails.
-func seedWithDST(domain []byte, eventType, stateKey, eventID string) Hash {
+// byte count. eventType and stateKey are truncated to at most 65535 bytes,
+// preserving character boundaries for valid UTF-8; eventID is included in full.
+func writeElement(xof *blake3.Hasher, domain []byte, eventType, stateKey, eventID string) {
 	eventType, typeLen := truncateToU16Limit(eventType)
 	stateKey, stateKeyLen := truncateToU16Limit(stateKey)
 
-	xof := blake3.New()
 	mustWrite(xof, domain)
 
 	var lens [2]byte
@@ -83,9 +78,24 @@ func seedWithDST(domain []byte, eventType, stateKey, eventID string) Hash {
 	mustWrite(xof, lens[:])
 	mustWrite(xof, []byte(stateKey))
 	mustWrite(xof, []byte(eventID))
+}
+
+// seedWithDST generates a lattice seed vector for an element and domain tag.
+//
+// The frame written by [writeElement] is expanded to 2048 bytes with the
+// BLAKE3 XOF and unpacked into little-endian 16-bit lanes. The seed buffer and
+// the XOF reader stay on the stack: blake3's Digest.Read fills the whole
+// buffer and never errors, so a direct call keeps the insert path
+// allocation-free (an io.Reader seam here would push the 2048-byte buffer onto
+// the heap). The error check stays as a guard against swapping that reader for
+// one that can fail.
+// It panics if writing the frame or reading from the XOF fails.
+func seedWithDST(domain []byte, eventType, stateKey, eventID string) Hash {
+	xof := blake3.New()
+	writeElement(xof, domain, eventType, stateKey, eventID)
 
 	var buf [ByteSize]byte
-	if _, err := readFull(xof.Digest(), buf[:]); err != nil {
+	if _, err := xof.Digest().Read(buf[:]); err != nil {
 		panic(err)
 	}
 
