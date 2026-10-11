@@ -148,11 +148,14 @@ func TestSeedAESCTRKeyIsBLAKE3OfFrame(t *testing.T) {
 // TestAESCTRVector pins the accumulator digest so changes to the domain tag,
 // framing, or expansion surface as a test failure instead of silently
 // changing room digests. The value was cross-validated against
-// gamesguru/rezzy commit 7b79c42; reproduce it with:
-// REZZY_ROOT=/path/to/rezzy CARGO_TARGET_DIR=/tmp/lthash-rust-target cargo run --offline --manifest-path lthash/testdata/aesctr-rust-crosscheck/Cargo.toml
-// Rust prints 2f958238a47bca7d6ee38fcb561195aedb634b1ab980b09bc16502b347aad624.
-// Its harness decodes each seed as little-endian u16 lanes, adds modulo 2^16,
-// serializes those lanes little-endian, then applies BLAKE3-256 collapse.
+// against gamesguru/rezzy commit 7b79c42's
+// benches/math/expansion_backends.rs::expand_aes_ctr. The one-off harness
+// printed raw digest
+// 2f958238a47bca7d6ee38fcb561195aedb634b1ab980b09bc16502b347aad624 using:
+// CARGO_TARGET_DIR=/tmp/lthash-rust-crosscheck-target cargo run --offline --manifest-path /tmp/lthash-rust-crosscheck/Cargo.toml
+// It unpacks little-endian u16 lanes, adds modulo 2^16, serializes lanes
+// little-endian, and applies BLAKE3-256 collapse. Rerun that reference check
+// before changing this pin.
 func TestAESCTRVector(t *testing.T) {
 	entries := []Entry{
 		{EventType: "m.room.create", EventID: "$a"},
