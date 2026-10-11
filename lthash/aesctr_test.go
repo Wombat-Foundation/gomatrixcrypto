@@ -145,9 +145,10 @@ func TestSeedAESCTRKeyIsBLAKE3OfFrame(t *testing.T) {
 	}
 }
 
-// TestAESCTRVector pins the accumulator digest so a change in the domain tag,
-// the framing, or the expansion shows up as a test failure rather than as
-// silently different room digests.
+// TestAESCTRVector pins this implementation's accumulator output for
+// regression detection. The digest is not cross-validated against rezzy's Rust
+// implementation; the external vector coverage is limited to the AES
+// keystream test above.
 func TestAESCTRVector(t *testing.T) {
 	entries := []Entry{
 		{EventType: "m.room.create", EventID: "$a"},
