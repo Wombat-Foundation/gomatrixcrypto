@@ -51,3 +51,17 @@ func BenchmarkAESCTRInsertStdlib(b *testing.B) {
 		(*Hash)(&aesCTRSink).addSeed(seed)
 	}
 }
+
+var (
+	benchKey [32]byte
+	benchBuf [ByteSize]byte
+)
+
+// BenchmarkAES256ExpandStdlib times only the portable crypto/aes expansion.
+func BenchmarkAES256ExpandStdlib(b *testing.B) {
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		expandAES256Stdlib(&benchKey, benchBuf[:])
+	}
+}

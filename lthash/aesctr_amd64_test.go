@@ -21,3 +21,16 @@ func TestAES256ForcedFallback(t *testing.T) {
 			firstDiff(got[:], want[:]))
 	}
 }
+
+// BenchmarkAES256ExpandHardware isolates AES-NI expansion, including key
+// schedule setup, and skips when the current processor cannot run the asm.
+func BenchmarkAES256ExpandHardware(b *testing.B) {
+	if !hasAESNI {
+		b.Skip("CPU has no AES-NI")
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		expandAES256Element(&benchKey, benchBuf[:])
+	}
+}

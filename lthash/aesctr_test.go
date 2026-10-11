@@ -145,10 +145,10 @@ func TestSeedAESCTRKeyIsBLAKE3OfFrame(t *testing.T) {
 	}
 }
 
-// TestAESCTRVector pins this implementation's accumulator output for
-// regression detection. The digest is not cross-validated against rezzy's Rust
-// implementation; the external vector coverage is limited to the AES
-// keystream test above.
+// TestAESCTRVector pins the accumulator output for regression detection. It
+// was cross-validated against rezzy's Rust implementation at
+// gamesguru/rezzy commit 7b79c42, using expansion_backends::expand_aes_ctr
+// with these same entries and a BLAKE3 collapse.
 func TestAESCTRVector(t *testing.T) {
 	entries := []Entry{
 		{EventType: "m.room.create", EventID: "$a"},
