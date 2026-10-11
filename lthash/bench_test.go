@@ -53,8 +53,9 @@ func BenchmarkAESCTRInsertStdlib(b *testing.B) {
 }
 
 var (
-	benchKey [32]byte
-	benchBuf [ByteSize]byte
+	benchKey          [32]byte
+	benchBuf          [ByteSize]byte
+	checksumBenchSink [ChecksumLen]byte
 )
 
 // BenchmarkAES256ExpandStdlib times only the portable crypto/aes expansion.
@@ -63,5 +64,18 @@ func BenchmarkAES256ExpandStdlib(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		expandAES256Stdlib(&benchKey, benchBuf[:])
+	}
+}
+
+// BenchmarkChecksum measures the BLAKE3 collapse over one serialized lattice.
+func BenchmarkChecksum(b *testing.B) {
+	var state Hash
+	for i := range state {
+		state[i] = uint16(i * 251)
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		checksumBenchSink = state.Checksum()
 	}
 }

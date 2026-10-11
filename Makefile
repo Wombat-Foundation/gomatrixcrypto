@@ -70,8 +70,15 @@ _cov/all: ## Run tests with coverage and print a summary for all packages, inclu
 	$(GO) test -coverprofile=$(COVERPROFILE) $(PKGS)
 	$(GO) tool cover -func=$(COVERPROFILE)
 
+BENCH ?= .
+BENCHFLAGS ?= -benchmem -count=10
+
+.PHONY: bench
+bench: ## Run benchmarks (BENCH regexp, BENCHFLAGS configurable; library packages only)
+	$(GO) test -run '^$$' -bench '$(BENCH)' $(BENCHFLAGS) $(LIBPKGS)
+
 .PHONY: lint
-lint:	## Run lint checks
+lint:## Run lint checks
 	GOTOOLCHAIN=$(LINT_GO_TOOLCHAIN)+auto $(GO) vet $(VETFLAGS) $(PKGS)
 	GOTOOLCHAIN=$(LINT_GO_TOOLCHAIN)+auto $(STATICCHECK) -checks=all $(STATICCHECKFLAGS) $(PKGS)
 	# install with, i.e., `curl -sSfL https://golangci-lint.run/install.sh | sh -s -- -b "$$(go env GOPATH)/bin" v2.12.2`

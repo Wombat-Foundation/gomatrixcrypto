@@ -145,10 +145,14 @@ func TestSeedAESCTRKeyIsBLAKE3OfFrame(t *testing.T) {
 	}
 }
 
-// TestAESCTRVector pins the accumulator output for regression detection. It
-// was cross-validated against rezzy's Rust implementation at
-// gamesguru/rezzy commit 7b79c42, using expansion_backends::expand_aes_ctr
-// with these same entries and a BLAKE3 collapse.
+// TestAESCTRVector pins the accumulator digest so changes to the domain tag,
+// framing, or expansion surface as a test failure instead of silently
+// changing room digests. The value was cross-validated against
+// gamesguru/rezzy commit 7b79c42; reproduce it with:
+// REZZY_ROOT=/path/to/rezzy CARGO_TARGET_DIR=/tmp/lthash-rust-target cargo run --offline --manifest-path lthash/testdata/aesctr-rust-crosscheck/Cargo.toml
+// Rust prints 2f958238a47bca7d6ee38fcb561195aedb634b1ab980b09bc16502b347aad624.
+// Its harness decodes each seed as little-endian u16 lanes, adds modulo 2^16,
+// serializes those lanes little-endian, then applies BLAKE3-256 collapse.
 func TestAESCTRVector(t *testing.T) {
 	entries := []Entry{
 		{EventType: "m.room.create", EventID: "$a"},
