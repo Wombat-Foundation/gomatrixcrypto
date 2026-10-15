@@ -8,6 +8,9 @@ const MaxBucketedSketchCapacity = 4096
 // MaxBucketSketchCapacity is the maximum extraction capacity assigned to one bucket.
 const MaxBucketSketchCapacity = 32
 
+// MaxOverflowBucketCapacity is the optional per-bucket extraction capacity.
+const MaxOverflowBucketCapacity = 256
+
 // BucketRequest describes one localized sketch request.
 type BucketRequest struct {
 	// Depth is the binary-tree depth of the request.
@@ -16,6 +19,14 @@ type BucketRequest struct {
 	Prefix uint32
 	// Capacity is the extraction capacity requested for this bucket.
 	Capacity int
+	// Overflow opts this bucket into the larger negotiated overflow ceiling.
+	Overflow bool
+}
+
+// WithOverflow opts this request into the overflow capacity range.
+func (r BucketRequest) WithOverflow() BucketRequest {
+	r.Overflow = true
+	return r
 }
 
 // BucketDecodeSuccess captures one independently decoded bucket.
@@ -46,11 +57,24 @@ type BucketDecodeBatch struct {
 
 // ValidateBucketRequests checks capacity limits and antichain ordering.
 func ValidateBucketRequests(requests []BucketRequest) error {
+	return validateBucketRequests(requests, MaxBucketSketchCapacity)
+}
+
+// ValidateOverflowBucketRequests accepts requests using the overflow ceiling.
+func ValidateOverflowBucketRequests(requests []BucketRequest) error {
+	return validateBucketRequests(requests, MaxOverflowBucketCapacity)
+}
+
+func validateBucketRequests(requests []BucketRequest, maxCapacity int) error {
 	totalCapacity := 0
 	var previousEnd uint64
 
 	for _, req := range requests {
-		if req.Capacity <= 0 || req.Capacity > MaxBucketSketchCapacity {
+		limit := MaxBucketSketchCapacity
+		if req.Overflow {
+			limit = maxCapacity
+		}
+		if req.Capacity <= 0 || req.Capacity > limit {
 			return ErrInvalidSketchCapacity
 		}
 		if req.Depth > 32 {
@@ -77,13 +101,43 @@ func ValidateBucketRequests(requests []BucketRequest) error {
 	return nil
 }
 
-// EstimateDelta estimates the symmetric difference from the resident strata.
-func EstimateDelta(
+// SaturatedDeltaEstimate is the estimator's saturated sentinel, returned when
+// even the sparsest residual stratum overflows.
+const SaturatedDeltaEstimate = uint64(8) << 31
+
+// overCapacityDeltaFloor is the minimum cardinality implied by an
+// over-capacity decode failure.
+const overCapacityDeltaFloor = uint64(StratumCapacity) + 1
+
+// StrataEstimate is the structured result of the strata estimator.
+type StrataEstimate struct {
+	// Delta is the estimated symmetric-difference cardinality.
+	Delta uint64
+	// LowConfidence reports that decoding stopped at an over-capacity stratum.
+	// For a residual sparsest-stratum overflow, Delta is saturated; otherwise
+	// it is extrapolated from the already-decoded tail.
+	LowConfidence bool
+}
+
+// EstimateStrata estimates the symmetric difference from the resident strata.
+//
+// Starting at the sparsest stratum it decodes the longest consecutive tail. If
+// `r` is the lowest decoded stratum and `T` the decoded tail cardinality,
+// `T * 2^r` estimates the complete difference; decoding every stratum yields
+// the exact cardinality. If a stratum overflows, the result is marked
+// [StrataEstimate.LowConfidence]. When even the sparsest residual stratum
+// overflows, no tail can be decoded and [SaturatedDeltaEstimate] is returned;
+// otherwise the estimate is max(T, StratumCapacity+1) * 2^r, saturating at
+// the maximum uint64. ErrDecodeFailure produces this fallback with no error;
+// other decoder errors, including ErrBudgetExhausted, return a zero estimate
+// and the error unchanged.
+func EstimateStrata(
 	local *[StrataCount][StratumCapacity]uint64,
 	remote *[StrataCount][StratumCapacity]uint64,
-) (uint64, bool, error) {
-	const fallbackEstimate = uint64(8) << 31
+) (StrataEstimate, error) {
 	work := maxFactorWork
+	var decodedTail uint64
+	lowestDecoded := -1
 
 	for stratum := StrataCount - 1; stratum >= 0; stratum-- {
 		var residual [StratumCapacity]uint64
@@ -93,38 +147,94 @@ func EstimateDelta(
 		roots, err := decodePinSketch(residual[:], StratumCapacity, &work)
 		if err != nil {
 			// coverage:ignore
-			if errors.Is(err, ErrBudgetExhausted) {
-				return 0, false, nil
+			if !errors.Is(err, ErrDecodeFailure) {
+				return StrataEstimate{}, err
 			}
-			// coverage:ignore
-			if errors.Is(err, ErrDecodeFailure) {
-				return fallbackEstimate, true, nil
+			if lowestDecoded < 0 && stratum == StrataCount-1 {
+				return StrataEstimate{Delta: SaturatedDeltaEstimate, LowConfidence: true}, nil
 			}
-			return 0, false, err
-		}
-		cardinality := uint64(len(roots))
-		if cardinality == 0 {
-			continue
-		}
-		if stratum == 31 {
-			if cardinality > ^uint64(0)>>31 {
-				return fallbackEstimate, true, nil
+			scaled := stratum
+			if lowestDecoded >= 0 {
+				scaled = lowestDecoded
 			}
-			return cardinality << 31, true, nil
+			tail := decodedTail
+			if tail < overCapacityDeltaFloor {
+				tail = overCapacityDeltaFloor
+			}
+			return StrataEstimate{Delta: saturatingShifted(tail, scaled), LowConfidence: true}, nil
 		}
-		shift := uint(stratum + 1)
-		if cardinality > ^uint64(0)>>shift {
-			return fallbackEstimate, true, nil
-		}
-		return cardinality << shift, true, nil
+		decodedTail += uint64(len(roots))
+		lowestDecoded = stratum
 	}
-	return 0, true, nil
+
+	// coverage:ignore
+	if lowestDecoded < 0 {
+		return StrataEstimate{}, nil
+	}
+	return StrataEstimate{Delta: saturatingShifted(decodedTail, lowestDecoded)}, nil
+}
+
+// saturatingShifted returns value << shift, saturating to the maximum uint64.
+// A negative shift or zero value returns zero.
+func saturatingShifted(value uint64, shift int) uint64 {
+	// coverage:ignore
+	if shift < 0 {
+		return 0
+	}
+	// coverage:ignore
+	if shift >= 64 {
+		if value == 0 {
+			return 0
+		}
+		return ^uint64(0)
+	}
+	factor := uint64(1) << uint(shift)
+	if value > ^uint64(0)/factor {
+		return ^uint64(0)
+	}
+	return value * factor
+}
+
+// EstimateDelta estimates the symmetric difference from the resident strata.
+//
+// This is the compatibility form of [EstimateStrata]: the returned bool reports
+// whether an estimate is available. Budget exhaustion is reported as
+// (0, false, nil); other errors are returned unchanged. Callers that need the
+// low-confidence signal should use [EstimateStrata].
+func EstimateDelta(
+	local *[StrataCount][StratumCapacity]uint64,
+	remote *[StrataCount][StratumCapacity]uint64,
+) (uint64, bool, error) {
+	estimate, err := EstimateStrata(local, remote)
+	// coverage:ignore
+	if err != nil {
+		if errors.Is(err, ErrBudgetExhausted) {
+			return 0, false, nil
+		}
+		return 0, false, err
+	}
+	return estimate.Delta, true, nil
 }
 
 // DecodeBucketSketches decodes concatenated bucket sketches.
 func DecodeBucketSketches(encoded []byte, requests []BucketRequest) (BucketDecodeBatch, error) {
-	if err := ValidateBucketRequests(requests); err != nil {
-		return BucketDecodeBatch{}, err
+	return decodeBucketSketches(encoded, requests, false)
+}
+
+// DecodeOverflowBucketSketches decodes requests that may opt into overflow capacity.
+func DecodeOverflowBucketSketches(encoded []byte, requests []BucketRequest) (BucketDecodeBatch, error) {
+	return decodeBucketSketches(encoded, requests, true)
+}
+
+func decodeBucketSketches(encoded []byte, requests []BucketRequest, allowOverflow bool) (BucketDecodeBatch, error) {
+	var validationErr error
+	if allowOverflow {
+		validationErr = ValidateOverflowBucketRequests(requests)
+	} else {
+		validationErr = ValidateBucketRequests(requests)
+	}
+	if validationErr != nil {
+		return BucketDecodeBatch{}, validationErr
 	}
 
 	offset := 0
@@ -149,7 +259,7 @@ func DecodeBucketSketches(encoded []byte, requests []BucketRequest) (BucketDecod
 		if err != nil {
 			return BucketDecodeBatch{}, err
 		}
-		roots, err := decodeAndVerifySketch(sketch, request.Capacity, &work)
+		roots, err := decodeAndVerifySketchWithLimit(sketch, request.Capacity, &work, MaxOverflowBucketCapacity)
 		if err != nil {
 			// coverage:ignore
 			if errors.Is(err, ErrDecodeFailure) || errors.Is(err, ErrBudgetExhausted) {

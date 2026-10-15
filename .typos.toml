@@ -5,6 +5,14 @@ OTKs = "OTKs"
 NAX = "NAX"
 fo = "fo"
 
+# base64url golden vectors in lthash/ (e.g. "0MOPtd797los_...") are opaque
+# wire bytes, not prose. typos splits them on '_'/'-' and camel-case
+# boundaries, so a few fragments look like misspellings; scope those to Go
+# sources instead of widening the global word dictionary.
+[type.go.extend-words]
+Ba = "Ba"
+Ptd = "Ptd"
+
 [default.extend-identifiers]
 BA = "BA"
 

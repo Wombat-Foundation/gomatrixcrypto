@@ -1,5 +1,7 @@
 package merkle
 
+import "reflect"
+
 // RedactionRule describes which content keys a redaction algorithm preserves
 // for one event type.
 type RedactionRule struct {
@@ -81,20 +83,22 @@ func redactContent(content map[string]any, rule RedactionRule) map[string]any {
 }
 
 // SplitRedactionContent splits content into MSC4511's redacted_content (the
-// fields RedactionPreservedKeys(eventType) preserves) and ephemeral_content
-// (everything redaction strips). redacted and ephemeral partition content
-// without overlap or loss: recombining their keys recovers content's key set.
-func SplitRedactionContent(content map[string]any, eventType string) (redacted, ephemeral map[string]any) {
+// fields RedactionPreservedKeys(eventType) preserves) and redactable_content
+// (the remainder). A partially preserved nested object can appear in both maps.
+// Within such an object, nil values absent from the preserved object are omitted
+// from the remainder. The input is not modified, but copied values may share nested data.
+func SplitRedactionContent(content map[string]any, eventType string) (redacted, redactable map[string]any) {
 	rule := RedactionPreservedKeys(eventType)
 	redacted = redactContent(content, rule)
-	ephemeral = ephemeralRemainder(content, redacted)
-	return redacted, ephemeral
+	redactable = redactableRemainder(content, redacted)
+	return redacted, redactable
 }
 
-// ephemeralRemainder returns the content present in content but not
+// redactableRemainder returns the content present in content but not
 // preserved in redacted, recursing one level for the
 // third_party_invite-shaped nested-path case.
-func ephemeralRemainder(content, redacted map[string]any) map[string]any {
+// Missing nested keys compare as nil, so corresponding nil values are omitted.
+func redactableRemainder(content, redacted map[string]any) map[string]any {
 	out := map[string]any{}
 	for key, value := range content {
 		preserved, ok := redacted[key]
@@ -155,5 +159,5 @@ func deepEqual(a, b any) bool {
 		}
 		return true
 	}
-	return a == b
+	return reflect.DeepEqual(a, b)
 }

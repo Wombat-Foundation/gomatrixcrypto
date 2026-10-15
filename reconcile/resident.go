@@ -1,6 +1,8 @@
 package reconcile
 
-import "math/bits"
+import (
+	"math/bits"
+)
 
 // StrataCount is the number of estimator strata.
 const StrataCount = 32
@@ -37,7 +39,7 @@ func (r *ResidentKernel) Insert(hash ElementHash) error {
 	if err := r.accumulator.Insert(hash); err != nil {
 		return err
 	}
-	toggleStratum(&r.strata, hash.H64)
+	toggleStratum(&r.strata, strataIdentifier(hash))
 	return nil
 }
 
@@ -49,8 +51,20 @@ func (r *ResidentKernel) Remove(hash ElementHash) error {
 	if err := r.accumulator.Remove(hash); err != nil {
 		return err
 	}
-	toggleStratum(&r.strata, hash.H64)
+	toggleStratum(&r.strata, strataIdentifier(hash))
 	return nil
+}
+
+func strataIdentifier(hash ElementHash) uint64 {
+	if hash.Q3 != 0 {
+		return hash.Q3
+	}
+	// Preserve manually assembled legacy values that omit Q3; canonical hashes
+	// from FromDigest32 always carry the explicit zero-to-one Q3 mapping.
+	if hash.H64 != 0 {
+		return hash.H64
+	}
+	return 1
 }
 
 func toggleStratum(strata *[StrataCount][StratumCapacity]uint64, value uint64) {
