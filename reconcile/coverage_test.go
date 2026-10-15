@@ -656,8 +656,8 @@ func TestClientAndTriageFlow(t *testing.T) {
 	if next.Type != ActionBucketSketches {
 		t.Fatalf("expected bucket sketches retry, got %v", next.Type)
 	}
-	if got := c.TransitionBucketBatch(failed, []BucketRequest{{Depth: 0, Prefix: 0, Capacity: MaxBucketSketchCapacity}}, nil, nil, c.MaxRounds(), 4096); got.Type != ActionExtremityDiff {
-		t.Fatalf("expected round-limit fallback, got %v", got.Type)
+	if got := c.TransitionBucketBatch(failed, []BucketRequest{{Depth: 0, Prefix: 0, Capacity: MaxBucketSketchCapacity}}, nil, nil, c.MaxRounds(), 4096); got.Type != ActionPrefixFallback {
+		t.Fatalf("expected prefix fallback on round limit, got %v", got.Type)
 	}
 	if len(next.Requests) == 0 {
 		t.Fatal("expected retry requests")
@@ -1191,8 +1191,11 @@ func TestClientTransitionAndDecodeFailures(t *testing.T) {
 		0,
 		8,
 	)
-	if overflow.Type != ActionExtremityDiff {
-		t.Fatalf("expected extremity diff on aggregate overflow, got %#v", overflow)
+	if overflow.Type != ActionPrefixFallback {
+		t.Fatalf("expected prefix fallback on aggregate overflow, got %#v", overflow)
+	}
+	if len(overflow.Prefixes) != 2 {
+		t.Fatalf("expected both failed prefixes in fallback, got %#v", overflow.Prefixes)
 	}
 	if got := client.TransitionBucketBatch(
 		BucketDecodeBatch{FailedBuckets: []FailedBucket{{Depth: 4, Prefix: 3}}},
@@ -1217,8 +1220,8 @@ func TestClientTransitionAndDecodeFailures(t *testing.T) {
 		}(),
 		0,
 		5000,
-	); got.Type != ActionExtremityDiff {
-		t.Fatalf("expected overflow fallback from huge estimate, got %#v", got)
+	); got.Type != ActionPrefixFallback {
+		t.Fatalf("expected prefix fallback from huge estimate, got %#v", got)
 	}
 	if got := client.TransitionBucketBatch(
 		BucketDecodeBatch{FailedBuckets: []FailedBucket{{Depth: 4, Prefix: 3}}},
@@ -1230,8 +1233,8 @@ func TestClientTransitionAndDecodeFailures(t *testing.T) {
 		}(),
 		0,
 		4096,
-	); got.Type != ActionExtremityDiff {
-		t.Fatalf("expected split overflow fallback, got %#v", got)
+	); got.Type != ActionPrefixFallback {
+		t.Fatalf("expected prefix fallback on split overflow, got %#v", got)
 	}
 	if got := client.TransitionBucketBatch(
 		BucketDecodeBatch{FailedBuckets: []FailedBucket{{Depth: 4, Prefix: 3}}},
@@ -1243,8 +1246,8 @@ func TestClientTransitionAndDecodeFailures(t *testing.T) {
 		}(),
 		0,
 		4,
-	); got.Type != ActionExtremityDiff {
-		t.Fatalf("expected aggregate-cap split overflow, got %#v", got)
+	); got.Type != ActionPrefixFallback {
+		t.Fatalf("expected prefix fallback on aggregate-cap split overflow, got %#v", got)
 	}
 	if got := client.TransitionBucketBatch(
 		BucketDecodeBatch{FailedBuckets: []FailedBucket{{Depth: 1, Prefix: 0}}},

@@ -8,6 +8,9 @@ const MaxBucketedSketchCapacity = 4096
 // MaxBucketSketchCapacity is the maximum extraction capacity assigned to one bucket.
 const MaxBucketSketchCapacity = 32
 
+// MaxOverflowBucketCapacity is the optional per-bucket extraction capacity.
+const MaxOverflowBucketCapacity = 256
+
 // BucketRequest describes one localized sketch request.
 type BucketRequest struct {
 	// Depth is the binary-tree depth of the request.
@@ -16,6 +19,14 @@ type BucketRequest struct {
 	Prefix uint32
 	// Capacity is the extraction capacity requested for this bucket.
 	Capacity int
+	// Overflow opts this bucket into the larger negotiated overflow ceiling.
+	Overflow bool
+}
+
+// WithOverflow opts this request into the overflow capacity range.
+func (r BucketRequest) WithOverflow() BucketRequest {
+	r.Overflow = true
+	return r
 }
 
 // BucketDecodeSuccess captures one independently decoded bucket.
@@ -46,11 +57,24 @@ type BucketDecodeBatch struct {
 
 // ValidateBucketRequests checks capacity limits and antichain ordering.
 func ValidateBucketRequests(requests []BucketRequest) error {
+	return validateBucketRequests(requests, MaxBucketSketchCapacity)
+}
+
+// ValidateOverflowBucketRequests accepts requests using the overflow ceiling.
+func ValidateOverflowBucketRequests(requests []BucketRequest) error {
+	return validateBucketRequests(requests, MaxOverflowBucketCapacity)
+}
+
+func validateBucketRequests(requests []BucketRequest, maxCapacity int) error {
 	totalCapacity := 0
 	var previousEnd uint64
 
 	for _, req := range requests {
-		if req.Capacity <= 0 || req.Capacity > MaxBucketSketchCapacity {
+		limit := MaxBucketSketchCapacity
+		if req.Overflow {
+			limit = maxCapacity
+		}
+		if req.Capacity <= 0 || req.Capacity > limit {
 			return ErrInvalidSketchCapacity
 		}
 		if req.Depth > 32 {
@@ -194,8 +218,23 @@ func EstimateDelta(
 
 // DecodeBucketSketches decodes concatenated bucket sketches.
 func DecodeBucketSketches(encoded []byte, requests []BucketRequest) (BucketDecodeBatch, error) {
-	if err := ValidateBucketRequests(requests); err != nil {
-		return BucketDecodeBatch{}, err
+	return decodeBucketSketches(encoded, requests, false)
+}
+
+// DecodeOverflowBucketSketches decodes requests that may opt into overflow capacity.
+func DecodeOverflowBucketSketches(encoded []byte, requests []BucketRequest) (BucketDecodeBatch, error) {
+	return decodeBucketSketches(encoded, requests, true)
+}
+
+func decodeBucketSketches(encoded []byte, requests []BucketRequest, allowOverflow bool) (BucketDecodeBatch, error) {
+	var validationErr error
+	if allowOverflow {
+		validationErr = ValidateOverflowBucketRequests(requests)
+	} else {
+		validationErr = ValidateBucketRequests(requests)
+	}
+	if validationErr != nil {
+		return BucketDecodeBatch{}, validationErr
 	}
 
 	offset := 0
@@ -220,7 +259,7 @@ func DecodeBucketSketches(encoded []byte, requests []BucketRequest) (BucketDecod
 		if err != nil {
 			return BucketDecodeBatch{}, err
 		}
-		roots, err := decodeAndVerifySketch(sketch, request.Capacity, &work)
+		roots, err := decodeAndVerifySketchWithLimit(sketch, request.Capacity, &work, MaxOverflowBucketCapacity)
 		if err != nil {
 			// coverage:ignore
 			if errors.Is(err, ErrDecodeFailure) || errors.Is(err, ErrBudgetExhausted) {
