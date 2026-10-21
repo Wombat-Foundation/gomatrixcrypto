@@ -2,6 +2,10 @@ package reconcile
 
 import "errors"
 
+// maxStrataFactorWork is the shared estimator-pass ceiling from MSC4521; keep
+// it separate from maxFactorWork, which bounds extraction decoding.
+const maxStrataFactorWork = 1_458_176
+
 // MaxBucketedSketchCapacity is the maximum sum of capacities in one bucketed sketch request.
 const MaxBucketedSketchCapacity = 4096
 
@@ -135,7 +139,7 @@ func EstimateStrata(
 	local *[StrataCount][StratumCapacity]uint64,
 	remote *[StrataCount][StratumCapacity]uint64,
 ) (StrataEstimate, error) {
-	work := maxFactorWork
+	work := maxStrataFactorWork
 	var decodedTail uint64
 	lowestDecoded := -1
 
