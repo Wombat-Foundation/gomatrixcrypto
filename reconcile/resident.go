@@ -56,15 +56,15 @@ func (r *ResidentKernel) Remove(hash ElementHash) error {
 }
 
 func strataIdentifier(hash ElementHash) uint64 {
-	if hash.Q3 != 0 {
-		return hash.Q3
+	// PinSketch requires nonzero identifiers. This makes the sole alias in
+	// the strata estimator (Q3=0 and Q3=1); a resulting estimate miss is
+	// recovered by the independent h64 bucket tree. Canonical hashes from
+	// FromDigest32 never carry Q3=0; this branch only guards manually
+	// assembled values, matching rezzy's strata_identifier.
+	if hash.Q3 == 0 {
+		return 1
 	}
-	// Preserve manually assembled legacy values that omit Q3; canonical hashes
-	// from FromDigest32 always carry the explicit zero-to-one Q3 mapping.
-	if hash.H64 != 0 {
-		return hash.H64
-	}
-	return 1
+	return hash.Q3
 }
 
 func toggleStratum(strata *[StrataCount][StratumCapacity]uint64, value uint64) {

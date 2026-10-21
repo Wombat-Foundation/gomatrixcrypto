@@ -36,7 +36,7 @@ func makeOddSyndromes(values []uint64, capacity int) []uint64 {
 func strataFromValues(values ...uint64) [StrataCount][StratumCapacity]uint64 {
 	var kernel ResidentKernel
 	for _, value := range values {
-		_ = kernel.Insert(ElementHash{H64: value, H128: [16]byte{byte(value)}})
+		_ = kernel.Insert(ElementHash{H64: value, Q3: value, H128: [16]byte{byte(value)}})
 	}
 	return *kernel.Strata()
 }
@@ -64,10 +64,16 @@ func TestElementHashAndEventIDs(t *testing.T) {
 	if got, want := hash.H64, uint64(0x0001020304050607); got != want {
 		t.Fatalf("H64 = %#x, want %#x", got, want)
 	}
+	if got, want := hash.Q3, uint64(0x08090a0b0c0d0e0f); got != want {
+		t.Fatalf("Q3 = %#x, want %#x", got, want)
+	}
 
 	var zeroDigest [32]byte
 	if got := FromDigest32(zeroDigest); got.H64 != 1 {
 		t.Fatalf("zero digest H64 = %d, want 1", got.H64)
+	}
+	if got := FromDigest32(zeroDigest); got.Q3 != 1 {
+		t.Fatalf("zero digest Q3 = %d, want 1", got.Q3)
 	}
 
 	for _, format := range []EventIDFormat{V3, V4Plus} {
@@ -404,7 +410,7 @@ func TestSyndromeSketchOperations(t *testing.T) {
 
 func TestResidentKernelAndBucketValidation(t *testing.T) {
 	rk := NewResidentKernel()
-	first := ElementHash{H128: [16]byte{1}, H64: 8}
+	first := ElementHash{H128: [16]byte{1}, H64: 8, Q3: 8}
 	if err := rk.Insert(first); err != nil {
 		t.Fatal(err)
 	}
@@ -1032,7 +1038,7 @@ func toggleTestStratum(strata *[StrataCount][StratumCapacity]uint64, value uint6
 		panic("test stratum values must be non-zero")
 	}
 	var kernel ResidentKernel
-	if err := kernel.Insert(ElementHash{H64: value, H128: [16]byte{byte(value)}}); err != nil {
+	if err := kernel.Insert(ElementHash{H64: value, Q3: value, H128: [16]byte{byte(value)}}); err != nil {
 		panic(err)
 	}
 	source := kernel.Strata()
@@ -1169,7 +1175,7 @@ func TestClientTransitionAndDecodeFailures(t *testing.T) {
 		t.Fatalf("unexpected depth-32 split requests: %#v", split31.Requests)
 	}
 
-	// Missing prior request falls back to extremity diff.
+	// Missing prior request falls back to a localized prefix fallback.
 	missing := client.TransitionBucketBatch(
 		BucketDecodeBatch{FailedBuckets: []FailedBucket{{Depth: 2, Prefix: 1}}},
 		[]BucketRequest{{Depth: 2, Prefix: 0, Capacity: 8}},
@@ -1178,8 +1184,8 @@ func TestClientTransitionAndDecodeFailures(t *testing.T) {
 		0,
 		4096,
 	)
-	if missing.Type != ActionExtremityDiff {
-		t.Fatalf("expected extremity diff, got %#v", missing)
+	if missing.Type != ActionPrefixFallback {
+		t.Fatalf("expected prefix fallback, got %#v", missing)
 	}
 
 	// Aggregate cap enforcement falls back as well.
@@ -1256,8 +1262,8 @@ func TestClientTransitionAndDecodeFailures(t *testing.T) {
 		nil,
 		0,
 		4096,
-	); got.Type != ActionExtremityDiff {
-		t.Fatalf("expected extremity diff with missing request set, got %#v", got)
+	); got.Type != ActionPrefixFallback {
+		t.Fatalf("expected prefix fallback with missing request set, got %#v", got)
 	}
 
 	// Corrupt a valid sketch so DecodeElements reaches the validation failure path.
@@ -1283,4 +1289,141 @@ func TestClientTransitionAndDecodeFailures(t *testing.T) {
 func trimAndCheck(poly *polynomial, want polynomial) bool {
 	trim(poly)
 	return reflect.DeepEqual(*poly, want)
+}
+
+func TestStrataIdentifierUsesQ3(t *testing.T) {
+	if got := strataIdentifier(ElementHash{H64: 0x10, Q3: 0x20}); got != 0x20 {
+		t.Fatalf("strataIdentifier = %#x, want Q3", got)
+	}
+	// Q3=0 aliases to 1, matching rezzy's strata_identifier; PinSketch
+	// identifiers must be nonzero and the h64 tree recovers any miss.
+	if got := strataIdentifier(ElementHash{H64: 0x10, Q3: 0}); got != 1 {
+		t.Fatalf("strataIdentifier for zero Q3 = %d, want 1", got)
+	}
+}
+
+func TestInsertPlacesStrataByQ3(t *testing.T) {
+	var kernel ResidentKernel
+	hash := testElement{h64: 0x1000, q3: 0x8, h128: [16]byte{1}} // Q3 trailing zeros: 3
+	if err := kernel.Insert(ElementHash{H64: hash.h64, Q3: hash.q3, H128: hash.h128}); err != nil {
+		t.Fatal(err)
+	}
+	strata := kernel.Strata()
+	for i := range strata {
+		if i == 3 {
+			continue
+		}
+		for j := range strata[i] {
+			if strata[i][j] != 0 {
+				t.Fatalf("strata[%d][%d] = %#x, want untouched stratum", i, j, strata[i][j])
+			}
+		}
+	}
+	if strata[3][0] != hash.q3 {
+		t.Fatalf("strata[3][0] = %#x, want Q3 syndrome", strata[3][0])
+	}
+	if err := kernel.Remove(ElementHash{H64: hash.h64, Q3: hash.q3, H128: hash.h128}); err != nil {
+		t.Fatal(err)
+	}
+	for i := range strata {
+		for j := range strata[i] {
+			if strata[i][j] != 0 {
+				t.Fatalf("strata[%d][%d] not cleared after remove", i, j)
+			}
+		}
+	}
+}
+
+func TestBucketExchangeNoProgressCircuitBreaker(t *testing.T) {
+	client, err := NewReconciliationClient(MaxBucketSketchCapacity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	x := client.NewBucketExchange()
+	previous := []BucketRequest{
+		{Depth: 0, Prefix: 0, Capacity: 8},
+		{Depth: 0, Prefix: 1, Capacity: 8},
+	}
+	batch := BucketDecodeBatch{
+		FailedBuckets: []FailedBucket{{Depth: 0, Prefix: 0}, {Depth: 0, Prefix: 1}},
+	}
+	round := 0
+	for ; round < MaxNoProgressRounds-1; round++ {
+		action := x.Advance(batch, previous, nil, nil, round, 4096)
+		if action.Type != ActionBucketSketches {
+			t.Fatalf("round %d: expected bucket-sketch retry, got %#v", round, action)
+		}
+	}
+	action := x.Advance(batch, previous, []uint64{7}, nil, round, 4096)
+	if action.Type != ActionPrefixFallback {
+		t.Fatalf("expected prefix fallback after %d stalled rounds, got %#v", round, action)
+	}
+	if len(action.Prefixes) != 2 {
+		t.Fatalf("expected both stalled prefixes, got %#v", action.Prefixes)
+	}
+	if len(action.AccumulatedRoots) != 1 || action.AccumulatedRoots[0] != 7 {
+		t.Fatalf("accumulated roots = %v, want [7]", action.AccumulatedRoots)
+	}
+}
+
+func TestBucketExchangeProgressResetsAndPreservesRoots(t *testing.T) {
+	client, err := NewReconciliationClient(MaxBucketSketchCapacity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	x := client.NewBucketExchange()
+	previous := []BucketRequest{
+		{Depth: 0, Prefix: 0, Capacity: 8},
+		{Depth: 0, Prefix: 1, Capacity: 8},
+	}
+	stalled := BucketDecodeBatch{
+		FailedBuckets: []FailedBucket{{Depth: 0, Prefix: 0}, {Depth: 0, Prefix: 1}},
+	}
+	for i := 0; i < MaxNoProgressRounds; i++ {
+		x.Advance(stalled, previous, nil, nil, i, 4096)
+	}
+	// A split child resolving a nonzero root resets the breaker.
+	progress := BucketDecodeBatch{
+		SuccessfulBuckets: []BucketDecodeSuccess{{Depth: 0, Prefix: 1, Roots: []uint64{9}}},
+		FailedBuckets:     []FailedBucket{{Depth: 0, Prefix: 0}},
+	}
+	action := x.Advance(progress, previous, nil, nil, MaxNoProgressRounds, 4096)
+	if action.Type != ActionBucketSketches {
+		t.Fatalf("progressing round should keep exchanging, got %#v", action)
+	}
+	// Solo retries (no requested sibling) never count toward the breaker.
+	soloClient, err := NewReconciliationClient(MaxBucketSketchCapacity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	solo := soloClient.NewBucketExchange()
+	soloPrev := []BucketRequest{{Depth: 0, Prefix: 0, Capacity: 8}}
+	soloBatch := BucketDecodeBatch{FailedBuckets: []FailedBucket{{Depth: 0, Prefix: 0}}}
+	for i := 0; i < MaxNoProgressRounds*2; i++ {
+		if action := solo.Advance(soloBatch, soloPrev, nil, nil, i, 4096); action.Type != ActionBucketSketches {
+			t.Fatalf("solo retry round %d should never trip the breaker, got %#v", i, action)
+		}
+	}
+}
+
+func TestSelectActionSaturatedEstimateStartsRootExtraction(t *testing.T) {
+	client, err := NewReconciliationClient(MaxBucketSketchCapacity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	local := NewResidentKernel()
+	var sparseSaturated [StrataCount][StratumCapacity]uint64
+	populateTestStratum(&sparseSaturated, StrataCount-1, 1, 3, 5, 7, 9, 11, 13, 15, 17)
+	action := client.SelectAction(&local, RemoteDigest{
+		Digest:          [16]byte{1},
+		KnownEventCount: 0,
+		Strata:          sparseSaturated,
+		FrameMatches:    true,
+	}, 0)
+	if action.Type != ActionBucketSketches {
+		t.Fatalf("saturated estimate should start root extraction, got %#v", action)
+	}
+	if len(action.Requests) != 1 || action.Requests[0] != (BucketRequest{Depth: 0, Prefix: 0, Capacity: MaxBucketSketchCapacity}) {
+		t.Fatalf("unexpected root request: %#v", action.Requests)
+	}
 }
