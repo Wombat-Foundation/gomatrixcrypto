@@ -1,7 +1,6 @@
 package reconcile
 
 import (
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
 	"math/bits"
@@ -37,7 +36,7 @@ func makeOddSyndromes(values []uint64, capacity int) []uint64 {
 func strataFromValues(values ...uint64) [StrataCount][StratumCapacity]uint64 {
 	var kernel ResidentKernel
 	for _, value := range values {
-		_ = kernel.Insert(ElementHash{H64: value, H128: [16]byte{byte(value)}})
+		_ = kernel.Insert(ElementHash{H64: value, Q3: value, H128: [16]byte{byte(value)}})
 	}
 	return *kernel.Strata()
 }
@@ -59,16 +58,22 @@ func TestElementHashAndEventIDs(t *testing.T) {
 	}
 
 	hash := FromDigest32(digest)
-	if got, want := hash.H128, ([16]byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}); got != want {
+	if got, want := hash.H128, ([16]byte{16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31}); got != want {
 		t.Fatalf("H128 = %x, want %x", got, want)
 	}
 	if got, want := hash.H64, uint64(0x0001020304050607); got != want {
 		t.Fatalf("H64 = %#x, want %#x", got, want)
 	}
+	if got, want := hash.Q3, uint64(0x08090a0b0c0d0e0f); got != want {
+		t.Fatalf("Q3 = %#x, want %#x", got, want)
+	}
 
 	var zeroDigest [32]byte
 	if got := FromDigest32(zeroDigest); got.H64 != 1 {
 		t.Fatalf("zero digest H64 = %d, want 1", got.H64)
+	}
+	if got := FromDigest32(zeroDigest); got.Q3 != 1 {
+		t.Fatalf("zero digest Q3 = %d, want 1", got.Q3)
 	}
 
 	for _, format := range []EventIDFormat{V3, V4Plus} {
@@ -92,14 +97,8 @@ func TestElementHashAndEventIDs(t *testing.T) {
 		}
 	}
 
-	legacyID := "$opaque:example.org"
-	legacyDigest := sha256.Sum256([]byte(legacyID))
-	got, err := MatrixEventDigest32(legacyID, Legacy)
-	if err != nil {
-		t.Fatalf("legacy digest failed: %v", err)
-	}
-	if got != legacyDigest {
-		t.Fatalf("legacy digest mismatch")
+	if _, err := MatrixEventDigest32("$opaque:example.org", Legacy); err != ErrUnsupportedRoomVersion {
+		t.Fatalf("expected ErrUnsupportedRoomVersion for legacy event IDs, got %v", err)
 	}
 
 	if _, err := MatrixEventDigest32("not-an-event-id", V4Plus); err != ErrInvalidEventID {
@@ -126,6 +125,66 @@ func TestElementHashAndEventIDs(t *testing.T) {
 	}
 	if _, ok := trimSigil("abc"); ok {
 		t.Fatal("trimSigil accepted invalid sigil")
+	}
+}
+
+func TestMSC4521ElementHashVectors(t *testing.T) {
+	fbv3 := [32]byte{}
+	for i := range fbv3 {
+		fbv3[i] = 0xfb
+	}
+	v4 := [32]byte{}
+	v4[7] = 0x2a
+	zero := [32]byte{}
+
+	vectors := []struct {
+		name   string
+		digest [32]byte
+		format EventIDFormat
+		h128   [16]byte
+		h64    uint64
+	}{
+		{
+			name:   "V3 [0xfb;32]",
+			digest: fbv3,
+			format: V3,
+			h128:   [16]byte{0xfb, 0xfb, 0xfb, 0xfb, 0xfb, 0xfb, 0xfb, 0xfb, 0xfb, 0xfb, 0xfb, 0xfb, 0xfb, 0xfb, 0xfb, 0xfb},
+			h64:    0xfbfbfbfbfbfbfbfb,
+		},
+		{
+			name:   "V4+ [0x00;7] ++ [0x2a] ++ [0x00;24]",
+			digest: v4,
+			format: V4Plus,
+			h128:   [16]byte{},
+			h64:    0x2a,
+		},
+		{
+			name:   "V4+ all-zero",
+			digest: zero,
+			format: V4Plus,
+			h128:   [16]byte{},
+			h64:    1,
+		},
+	}
+
+	for _, vector := range vectors {
+		t.Run(vector.name, func(t *testing.T) {
+			hash := FromDigest32(vector.digest)
+			if hash.H128 != vector.h128 {
+				t.Fatalf("H128 = %x, want %x", hash.H128, vector.h128)
+			}
+			if hash.H64 != vector.h64 {
+				t.Fatalf("H64 = %#x, want %#x", hash.H64, vector.h64)
+			}
+			id := eventIDFromDigest32(vector.digest, vector.format)
+			fromID, err := FromMatrixEventID(id, vector.format)
+			if err != nil {
+				t.Fatalf("FromMatrixEventID(%q, %v): %v", id, vector.format, err)
+			}
+			if fromID != hash {
+				t.Fatalf("event-ID derivation = %+v, want %+v", fromID, hash)
+			}
+		})
 	}
 }
 
@@ -351,7 +410,7 @@ func TestSyndromeSketchOperations(t *testing.T) {
 
 func TestResidentKernelAndBucketValidation(t *testing.T) {
 	rk := NewResidentKernel()
-	first := ElementHash{H128: [16]byte{1}, H64: 8}
+	first := ElementHash{H128: [16]byte{1}, H64: 8, Q3: 8}
 	if err := rk.Insert(first); err != nil {
 		t.Fatal(err)
 	}
@@ -603,8 +662,8 @@ func TestClientAndTriageFlow(t *testing.T) {
 	if next.Type != ActionBucketSketches {
 		t.Fatalf("expected bucket sketches retry, got %v", next.Type)
 	}
-	if got := c.TransitionBucketBatch(failed, []BucketRequest{{Depth: 0, Prefix: 0, Capacity: MaxBucketSketchCapacity}}, nil, nil, c.MaxRounds(), 4096); got.Type != ActionExtremityDiff {
-		t.Fatalf("expected round-limit fallback, got %v", got.Type)
+	if got := c.TransitionBucketBatch(failed, []BucketRequest{{Depth: 0, Prefix: 0, Capacity: MaxBucketSketchCapacity}}, nil, nil, c.MaxRounds(), 4096); got.Type != ActionPrefixFallback {
+		t.Fatalf("expected prefix fallback on round limit, got %v", got.Type)
 	}
 	if len(next.Requests) == 0 {
 		t.Fatal("expected retry requests")
@@ -974,6 +1033,34 @@ func TestMatrixAndPinSketchHelperBranches(t *testing.T) {
 	}
 }
 
+func toggleTestStratum(strata *[StrataCount][StratumCapacity]uint64, value uint64) {
+	if value == 0 {
+		panic("test stratum values must be non-zero")
+	}
+	var kernel ResidentKernel
+	if err := kernel.Insert(ElementHash{H64: value, Q3: value, H128: [16]byte{byte(value)}}); err != nil {
+		panic(err)
+	}
+	source := kernel.Strata()
+	for i := range strata {
+		for j := range strata[i] {
+			strata[i][j] ^= source[i][j]
+		}
+	}
+}
+
+func populateTestStratum(strata *[StrataCount][StratumCapacity]uint64, stratum int, values ...uint64) {
+	if stratum < 0 || stratum >= StrataCount {
+		panic("test stratum index out of range")
+	}
+	for _, value := range values {
+		if value == 0 || value&1 == 0 {
+			panic("test stratum values must be non-zero and odd")
+		}
+		toggleTestStratum(strata, value<<uint(stratum))
+	}
+}
+
 func TestEstimateDeltaRustCases(t *testing.T) {
 	local := strataFromValues()
 	remote := local
@@ -985,34 +1072,54 @@ func TestEstimateDeltaRustCases(t *testing.T) {
 		t.Fatalf("EstimateDelta empty remote = %d %v %v", got, ok, err)
 	}
 
+	// Exact tail: every stratum decodes, so the estimate is the exact cardinality.
 	remote = strataFromValues(1, 2, 4, 8, 3, 5)
-	if got, ok, err := EstimateDelta(&local, &remote); err != nil || !ok || got != 16 {
-		t.Fatalf("EstimateDelta sparse tail = %d %v %v", got, ok, err)
+	if got, ok, err := EstimateDelta(&local, &remote); err != nil || !ok || got != 6 {
+		t.Fatalf("EstimateDelta exact tail = %d %v %v", got, ok, err)
+	}
+
+	// Low-confidence tail: stratum 0 overflows and the estimate extrapolates
+	// from the empty decoded tail, flooring at StratumCapacity+1.
+	remote = strataFromValues(1, 3, 5, 7, 9, 11, 13, 15, 17)
+	if got, ok, err := EstimateDelta(&local, &remote); err != nil || !ok || got != 18 {
+		t.Fatalf("EstimateDelta low-confidence tail = %d %v %v", got, ok, err)
+	}
+}
+
+func TestEstimateStrataReferenceCases(t *testing.T) {
+	var local [StrataCount][StratumCapacity]uint64
+	remote := local
+
+	if got, err := EstimateStrata(&local, &remote); err != nil || got != (StrataEstimate{}) {
+		t.Fatalf("EstimateStrata identical = %+v %v", got, err)
+	}
+
+	remote = strataFromValues(1, 2, 4, 8, 3, 5)
+	if got, err := EstimateStrata(&local, &remote); err != nil || got != (StrataEstimate{Delta: 6}) {
+		t.Fatalf("EstimateStrata exact tail = %+v %v", got, err)
 	}
 
 	remote = strataFromValues(1, 3, 5, 7, 9, 11, 13, 15, 17)
-	if got, ok, err := EstimateDelta(&local, &remote); err != nil || !ok || got != (uint64(8)<<31) {
-		t.Fatalf("EstimateDelta sparse failure = %d %v %v", got, ok, err)
+	if got, err := EstimateStrata(&local, &remote); err != nil || got != (StrataEstimate{Delta: 18, LowConfidence: true}) {
+		t.Fatalf("EstimateStrata stratum-0 overflow = %+v %v", got, err)
 	}
 
-	var undecodableLocal, undecodableRemote [StrataCount][StratumCapacity]uint64
-	foundUndecodable := false
-	seed := uint64(0x9e3779b97f4a7c15)
-	for attempt := 0; attempt < 256; attempt++ {
-		seed ^= seed << 7
-		seed ^= seed >> 9
-		seed ^= seed << 8
-		for i := 0; i < StratumCapacity; i++ {
-			seed = nextFactorParameter(seed)
-			undecodableRemote[StrataCount-1][i] = seed
-		}
-		if got, ok, err := EstimateDelta(&undecodableLocal, &undecodableRemote); err == nil && ok && got == (uint64(8)<<31) {
-			foundUndecodable = true
-			break
-		}
+	// Overflow of the sparsest stratum is unmeasurable and saturates.
+	var sparseSaturated [StrataCount][StratumCapacity]uint64
+	populateTestStratum(&sparseSaturated, StrataCount-1, 1, 3, 5, 7, 9, 11, 13, 15, 17)
+	if got, err := EstimateStrata(&local, &sparseSaturated); err != nil || got != (StrataEstimate{Delta: SaturatedDeltaEstimate, LowConfidence: true}) {
+		t.Fatalf("EstimateStrata highest-stratum overflow = %+v %v", got, err)
 	}
-	if !foundUndecodable {
-		t.Fatal("failed to provoke undecodable EstimateDelta fallback")
+
+	// A non-empty decoded tail below the failed stratum scales by 2^r.
+	var lowestDecoded [StrataCount][StratumCapacity]uint64
+	populateTestStratum(&lowestDecoded, 7, 1, 3, 5, 7, 9)
+	populateTestStratum(&lowestDecoded, 6, 1, 3, 5, 7, 9)
+	populateTestStratum(&lowestDecoded, 5, 1, 3, 5, 7, 9)
+	populateTestStratum(&lowestDecoded, 4, 1, 3, 5, 7, 9)
+	populateTestStratum(&lowestDecoded, 3, 1, 3, 5, 7, 9, 11, 13, 15, 17)
+	if got, err := EstimateStrata(&local, &lowestDecoded); err != nil || got != (StrataEstimate{Delta: 320, LowConfidence: true}) {
+		t.Fatalf("EstimateStrata lowest-decoded stratum = %+v %v", got, err)
 	}
 }
 
@@ -1068,7 +1175,7 @@ func TestClientTransitionAndDecodeFailures(t *testing.T) {
 		t.Fatalf("unexpected depth-32 split requests: %#v", split31.Requests)
 	}
 
-	// Missing prior request falls back to extremity diff.
+	// Missing prior request falls back to a localized prefix fallback.
 	missing := client.TransitionBucketBatch(
 		BucketDecodeBatch{FailedBuckets: []FailedBucket{{Depth: 2, Prefix: 1}}},
 		[]BucketRequest{{Depth: 2, Prefix: 0, Capacity: 8}},
@@ -1077,8 +1184,8 @@ func TestClientTransitionAndDecodeFailures(t *testing.T) {
 		0,
 		4096,
 	)
-	if missing.Type != ActionExtremityDiff {
-		t.Fatalf("expected extremity diff, got %#v", missing)
+	if missing.Type != ActionPrefixFallback {
+		t.Fatalf("expected prefix fallback, got %#v", missing)
 	}
 
 	// Aggregate cap enforcement falls back as well.
@@ -1090,8 +1197,11 @@ func TestClientTransitionAndDecodeFailures(t *testing.T) {
 		0,
 		8,
 	)
-	if overflow.Type != ActionExtremityDiff {
-		t.Fatalf("expected extremity diff on aggregate overflow, got %#v", overflow)
+	if overflow.Type != ActionPrefixFallback {
+		t.Fatalf("expected prefix fallback on aggregate overflow, got %#v", overflow)
+	}
+	if len(overflow.Prefixes) != 2 {
+		t.Fatalf("expected both failed prefixes in fallback, got %#v", overflow.Prefixes)
 	}
 	if got := client.TransitionBucketBatch(
 		BucketDecodeBatch{FailedBuckets: []FailedBucket{{Depth: 4, Prefix: 3}}},
@@ -1116,8 +1226,8 @@ func TestClientTransitionAndDecodeFailures(t *testing.T) {
 		}(),
 		0,
 		5000,
-	); got.Type != ActionExtremityDiff {
-		t.Fatalf("expected overflow fallback from huge estimate, got %#v", got)
+	); got.Type != ActionPrefixFallback {
+		t.Fatalf("expected prefix fallback from huge estimate, got %#v", got)
 	}
 	if got := client.TransitionBucketBatch(
 		BucketDecodeBatch{FailedBuckets: []FailedBucket{{Depth: 4, Prefix: 3}}},
@@ -1129,8 +1239,8 @@ func TestClientTransitionAndDecodeFailures(t *testing.T) {
 		}(),
 		0,
 		4096,
-	); got.Type != ActionExtremityDiff {
-		t.Fatalf("expected split overflow fallback, got %#v", got)
+	); got.Type != ActionPrefixFallback {
+		t.Fatalf("expected prefix fallback on split overflow, got %#v", got)
 	}
 	if got := client.TransitionBucketBatch(
 		BucketDecodeBatch{FailedBuckets: []FailedBucket{{Depth: 4, Prefix: 3}}},
@@ -1142,8 +1252,8 @@ func TestClientTransitionAndDecodeFailures(t *testing.T) {
 		}(),
 		0,
 		4,
-	); got.Type != ActionExtremityDiff {
-		t.Fatalf("expected aggregate-cap split overflow, got %#v", got)
+	); got.Type != ActionPrefixFallback {
+		t.Fatalf("expected prefix fallback on aggregate-cap split overflow, got %#v", got)
 	}
 	if got := client.TransitionBucketBatch(
 		BucketDecodeBatch{FailedBuckets: []FailedBucket{{Depth: 1, Prefix: 0}}},
@@ -1152,8 +1262,8 @@ func TestClientTransitionAndDecodeFailures(t *testing.T) {
 		nil,
 		0,
 		4096,
-	); got.Type != ActionExtremityDiff {
-		t.Fatalf("expected extremity diff with missing request set, got %#v", got)
+	); got.Type != ActionPrefixFallback {
+		t.Fatalf("expected prefix fallback with missing request set, got %#v", got)
 	}
 
 	// Corrupt a valid sketch so DecodeElements reaches the validation failure path.
@@ -1179,4 +1289,141 @@ func TestClientTransitionAndDecodeFailures(t *testing.T) {
 func trimAndCheck(poly *polynomial, want polynomial) bool {
 	trim(poly)
 	return reflect.DeepEqual(*poly, want)
+}
+
+func TestStrataIdentifierUsesQ3(t *testing.T) {
+	if got := strataIdentifier(ElementHash{H64: 0x10, Q3: 0x20}); got != 0x20 {
+		t.Fatalf("strataIdentifier = %#x, want Q3", got)
+	}
+	// Q3=0 aliases to 1, matching rezzy's strata_identifier; PinSketch
+	// identifiers must be nonzero and the h64 tree recovers any miss.
+	if got := strataIdentifier(ElementHash{H64: 0x10, Q3: 0}); got != 1 {
+		t.Fatalf("strataIdentifier for zero Q3 = %d, want 1", got)
+	}
+}
+
+func TestInsertPlacesStrataByQ3(t *testing.T) {
+	var kernel ResidentKernel
+	hash := testElement{h64: 0x1000, q3: 0x8, h128: [16]byte{1}} // Q3 trailing zeros: 3
+	if err := kernel.Insert(ElementHash{H64: hash.h64, Q3: hash.q3, H128: hash.h128}); err != nil {
+		t.Fatal(err)
+	}
+	strata := kernel.Strata()
+	for i := range strata {
+		if i == 3 {
+			continue
+		}
+		for j := range strata[i] {
+			if strata[i][j] != 0 {
+				t.Fatalf("strata[%d][%d] = %#x, want untouched stratum", i, j, strata[i][j])
+			}
+		}
+	}
+	if strata[3][0] != hash.q3 {
+		t.Fatalf("strata[3][0] = %#x, want Q3 syndrome", strata[3][0])
+	}
+	if err := kernel.Remove(ElementHash{H64: hash.h64, Q3: hash.q3, H128: hash.h128}); err != nil {
+		t.Fatal(err)
+	}
+	for i := range strata {
+		for j := range strata[i] {
+			if strata[i][j] != 0 {
+				t.Fatalf("strata[%d][%d] not cleared after remove", i, j)
+			}
+		}
+	}
+}
+
+func TestBucketExchangeNoProgressCircuitBreaker(t *testing.T) {
+	client, err := NewReconciliationClient(MaxBucketSketchCapacity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	x := client.NewBucketExchange()
+	previous := []BucketRequest{
+		{Depth: 0, Prefix: 0, Capacity: 8},
+		{Depth: 0, Prefix: 1, Capacity: 8},
+	}
+	batch := BucketDecodeBatch{
+		FailedBuckets: []FailedBucket{{Depth: 0, Prefix: 0}, {Depth: 0, Prefix: 1}},
+	}
+	round := 0
+	for ; round < MaxNoProgressRounds-1; round++ {
+		action := x.Advance(batch, previous, nil, nil, round, 4096)
+		if action.Type != ActionBucketSketches {
+			t.Fatalf("round %d: expected bucket-sketch retry, got %#v", round, action)
+		}
+	}
+	action := x.Advance(batch, previous, []uint64{7}, nil, round, 4096)
+	if action.Type != ActionPrefixFallback {
+		t.Fatalf("expected prefix fallback after %d stalled rounds, got %#v", round, action)
+	}
+	if len(action.Prefixes) != 2 {
+		t.Fatalf("expected both stalled prefixes, got %#v", action.Prefixes)
+	}
+	if len(action.AccumulatedRoots) != 1 || action.AccumulatedRoots[0] != 7 {
+		t.Fatalf("accumulated roots = %v, want [7]", action.AccumulatedRoots)
+	}
+}
+
+func TestBucketExchangeProgressResetsAndPreservesRoots(t *testing.T) {
+	client, err := NewReconciliationClient(MaxBucketSketchCapacity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	x := client.NewBucketExchange()
+	previous := []BucketRequest{
+		{Depth: 0, Prefix: 0, Capacity: 8},
+		{Depth: 0, Prefix: 1, Capacity: 8},
+	}
+	stalled := BucketDecodeBatch{
+		FailedBuckets: []FailedBucket{{Depth: 0, Prefix: 0}, {Depth: 0, Prefix: 1}},
+	}
+	for i := 0; i < MaxNoProgressRounds; i++ {
+		x.Advance(stalled, previous, nil, nil, i, 4096)
+	}
+	// A split child resolving a nonzero root resets the breaker.
+	progress := BucketDecodeBatch{
+		SuccessfulBuckets: []BucketDecodeSuccess{{Depth: 0, Prefix: 1, Roots: []uint64{9}}},
+		FailedBuckets:     []FailedBucket{{Depth: 0, Prefix: 0}},
+	}
+	action := x.Advance(progress, previous, nil, nil, MaxNoProgressRounds, 4096)
+	if action.Type != ActionBucketSketches {
+		t.Fatalf("progressing round should keep exchanging, got %#v", action)
+	}
+	// Solo retries (no requested sibling) never count toward the breaker.
+	soloClient, err := NewReconciliationClient(MaxBucketSketchCapacity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	solo := soloClient.NewBucketExchange()
+	soloPrev := []BucketRequest{{Depth: 0, Prefix: 0, Capacity: 8}}
+	soloBatch := BucketDecodeBatch{FailedBuckets: []FailedBucket{{Depth: 0, Prefix: 0}}}
+	for i := 0; i < MaxNoProgressRounds*2; i++ {
+		if action := solo.Advance(soloBatch, soloPrev, nil, nil, i, 4096); action.Type != ActionBucketSketches {
+			t.Fatalf("solo retry round %d should never trip the breaker, got %#v", i, action)
+		}
+	}
+}
+
+func TestSelectActionSaturatedEstimateStartsRootExtraction(t *testing.T) {
+	client, err := NewReconciliationClient(MaxBucketSketchCapacity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	local := NewResidentKernel()
+	var sparseSaturated [StrataCount][StratumCapacity]uint64
+	populateTestStratum(&sparseSaturated, StrataCount-1, 1, 3, 5, 7, 9, 11, 13, 15, 17)
+	action := client.SelectAction(&local, RemoteDigest{
+		Digest:          [16]byte{1},
+		KnownEventCount: 0,
+		Strata:          sparseSaturated,
+		FrameMatches:    true,
+	}, 0)
+	if action.Type != ActionBucketSketches {
+		t.Fatalf("saturated estimate should start root extraction, got %#v", action)
+	}
+	if len(action.Requests) != 1 || action.Requests[0] != (BucketRequest{Depth: 0, Prefix: 0, Capacity: MaxBucketSketchCapacity}) {
+		t.Fatalf("unexpected root request: %#v", action.Requests)
+	}
 }

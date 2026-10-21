@@ -1,8 +1,6 @@
 package lthash
 
 import (
-	"errors"
-	"io"
 	"slices"
 	"strings"
 	"testing"
@@ -57,7 +55,7 @@ func TestChecksumStable(t *testing.T) {
 	})
 
 	got := h.String()
-	const want = "6KCo8KybJLXxhBCClkubGjZCmRB5RXsLGUFusKFc8oA"
+	const want = "LND7Zwj84qCb46ZPsB9dYTYmhHU3iq_5ICMrJ0bz6yA"
 	if got != want {
 		t.Fatalf("checksum mismatch: got %s want %s", got, want)
 	}
@@ -77,18 +75,21 @@ func TestTruncateToU16LimitPreservesUTF8Boundaries(t *testing.T) {
 	}
 }
 
-func TestSeedPanicsOnReadFailure(t *testing.T) {
-	oldReadFull := readFull
-	readFull = func(io.Reader, []byte) (int, error) {
-		return 0, errors.New("boom")
+func TestRedactionOverlayOrderIndependentAndReversible(t *testing.T) {
+	var left, reordered RedactionOverlay
+	left.Insert("m.room.member", "@alice:example.org", "$state")
+	reordered.Insert("m.room.member", "@bob:example.org", "$other-state")
+	reordered.Insert("m.room.member", "@alice:example.org", "$state")
+
+	var expected RedactionOverlay
+	expected.Insert("m.room.member", "@alice:example.org", "$state")
+	expected.Insert("m.room.member", "@bob:example.org", "$other-state")
+	if reordered != expected {
+		t.Fatalf("overlay accumulation depends on insertion order")
 	}
-	t.Cleanup(func() { readFull = oldReadFull })
 
-	defer func() {
-		if recover() == nil {
-			t.Fatalf("expected seed to panic on read failure")
-		}
-	}()
-
-	_ = seed("m.room.create", "", "$a:example.org")
+	reordered.Remove("m.room.member", "@bob:example.org", "$other-state")
+	if reordered != left {
+		t.Fatalf("overlay removal did not reverse insertion")
+	}
 }

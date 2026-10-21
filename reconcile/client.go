@@ -10,6 +10,89 @@ type ReconciliationClient struct {
 	gateThreshold     *uint64
 }
 
+// MaxNoProgressRounds bounds repeated stalled split rounds in which every
+// split child fails while its sibling also fails, and no bucket resolves a
+// nonzero root. It limits grinding attacks without a wire protocol change.
+// A round only counts toward the bound when it contains at least one failed
+// bucket whose split sibling was also requested; solo capacity retries and
+// first-round requests neither confirm nor deny a stall, matching rezzy's
+// BucketExchange::advance.
+const MaxNoProgressRounds = 3
+
+// BucketExchange carries retry progress across bucket batches. Callers should
+// use it instead of repeatedly invoking TransitionBucketBatch directly.
+type BucketExchange struct {
+	client     ReconciliationClient
+	noProgress int
+}
+
+// NewBucketExchange starts a bounded retry planner for a reconciliation client.
+func (c ReconciliationClient) NewBucketExchange() *BucketExchange {
+	return &BucketExchange{client: c}
+}
+
+// Advance applies one decoded batch and enforces the no-progress circuit breaker.
+// On the breaker it returns ActionPrefixFallback carrying the failed prefixes
+// plus the accumulated roots, including this round's successful roots, so
+// partial progress is preserved.
+func (x *BucketExchange) Advance(batch BucketDecodeBatch, previousRequests []BucketRequest, accumulatedRoots []uint64, globalEstimate *uint64, exchangeRound int, aggregateCap int) ClientAction {
+	if stalledSplitRound(batch, previousRequests) {
+		x.noProgress++
+	} else {
+		x.noProgress = 0
+	}
+	if x.noProgress >= MaxNoProgressRounds {
+		merged := append([]uint64(nil), accumulatedRoots...)
+		for _, success := range batch.SuccessfulBuckets {
+			merged = append(merged, success.Roots...)
+		}
+		return ClientAction{
+			Type:             ActionPrefixFallback,
+			Prefixes:         append([]FailedBucket(nil), batch.FailedBuckets...),
+			AccumulatedRoots: merged,
+		}
+	}
+	return x.client.TransitionBucketBatch(batch, previousRequests, accumulatedRoots, globalEstimate, exchangeRound, aggregateCap)
+}
+
+// stalledSplitRound reports whether a round is a pure stall: every failed
+// bucket whose split sibling was also requested has that sibling failing too,
+// no such sibling succeeded, and no successful bucket resolved a nonzero root.
+// Failed buckets without a requested sibling (solo capacity retries or
+// first-round requests) neither confirm nor deny a stall; if the round has no
+// split-child failure at all, it is not a stall.
+func stalledSplitRound(batch BucketDecodeBatch, previousRequests []BucketRequest) bool {
+	anyNonemptySuccess := false
+	for _, success := range batch.SuccessfulBuckets {
+		if len(success.Roots) > 0 {
+			anyNonemptySuccess = true
+			break
+		}
+	}
+	sawSplitFailure := false
+	allSplitFailuresStalled := true
+	for _, failed := range batch.FailedBuckets {
+		sibling := failed.Prefix ^ 1
+		siblingRequested := false
+		for _, request := range previousRequests {
+			if request.Depth == failed.Depth && request.Prefix == sibling {
+				siblingRequested = true
+				break
+			}
+		}
+		if !siblingRequested {
+			continue
+		}
+		sawSplitFailure = true
+		for _, success := range batch.SuccessfulBuckets {
+			if success.Depth == failed.Depth && success.Prefix == sibling {
+				allSplitFailuresStalled = false
+			}
+		}
+	}
+	return sawSplitFailure && allSplitFailuresStalled && !anyNonemptySuccess
+}
+
 func gateThresholdForRounds(maxRounds int) uint64 {
 	if maxRounds <= 0 {
 		return 0
@@ -96,6 +179,8 @@ const (
 	ActionBucketSketches
 	// ActionResolveRoots returns decoded roots to the caller.
 	ActionResolveRoots
+	// ActionPrefixFallback asks the caller to reconcile only the listed failed prefixes.
+	ActionPrefixFallback
 )
 
 // ClientAction is the next request selected by the reconciliation client.
@@ -108,9 +193,22 @@ type ClientAction struct {
 	AccumulatedRoots []uint64
 	// Roots carries the final resolved roots when Type is ActionResolveRoots.
 	Roots []uint64
+	// Prefixes identifies failed regions for ActionPrefixFallback.
+	Prefixes []FailedBucket
 }
 
 // SelectAction decides the next protocol step from local and remote state.
+// It selects extremity diff for a frame mismatch or unknown remote extremity,
+// then checks for matching digests and counts to report synchronization.
+// A saturated estimate or an estimator that exhausts its bounded work budget
+// selects one depth-0 bucket sketch at the protocol capacity: the h64 tree
+// splits any oversized bucket without trusting the estimate, so estimator
+// failure alone does not force an extremity transfer. A delta above the
+// configured gate still selects extremity diff; remaining cases request
+// bucket sketches sized from the estimate. The delta is at least the absolute
+// count difference. Low-confidence estimates remain usable. Positive
+// concurrencyHeadroom adds event capacity before bucket limits are applied;
+// nonpositive values are ignored.
 func (c ReconciliationClient) SelectAction(local *ResidentKernel, remote RemoteDigest, concurrencyHeadroom int) ClientAction {
 	if !remote.FrameMatches || remote.HasUnknownExtremity {
 		return ClientAction{Type: ActionExtremityDiff}
@@ -120,12 +218,19 @@ func (c ReconciliationClient) SelectAction(local *ResidentKernel, remote RemoteD
 	}
 
 	countDelta := absDiffU64(local.accumulator.Count, remote.KnownEventCount)
-	estimatedDelta := countDelta
-	// coverage:ignore
-	if value, ok, err := EstimateDelta(local.Strata(), &remote.Strata); err == nil {
-		if ok && value > estimatedDelta {
-			estimatedDelta = value
-		}
+	estimate, err := EstimateStrata(local.Strata(), &remote.Strata)
+	if err != nil {
+		// The estimator exhausted its work budget, so it cannot size a
+		// first-round sketch safely. Start with bounded root extraction and
+		// let bucket decoding localize any over-capacity region.
+		return ClientAction{Type: ActionBucketSketches, Requests: []BucketRequest{{Depth: 0, Prefix: 0, Capacity: MaxBucketSketchCapacity}}}
+	}
+	estimatedDelta := maxU64(estimate.Delta, countDelta)
+	if estimatedDelta >= SaturatedDeltaEstimate {
+		// A saturated estimate says only that the difference is too large for
+		// the strata sketch. Start at the root with the largest normal bucket
+		// sketch and let the ordinary split/retry path localize any overflow.
+		return ClientAction{Type: ActionBucketSketches, Requests: []BucketRequest{{Depth: 0, Prefix: 0, Capacity: MaxBucketSketchCapacity}}}
 	}
 
 	if c.gateThreshold != nil && estimatedDelta > *c.gateThreshold {
@@ -202,7 +307,7 @@ func (c ReconciliationClient) TransitionBucketBatch(
 		return ClientAction{Type: ActionResolveRoots, Roots: accumulatedRoots}
 	}
 	if exchangeRound >= c.maxRounds {
-		return ClientAction{Type: ActionExtremityDiff}
+		return prefixFallback(batch.FailedBuckets, accumulatedRoots)
 	}
 
 	resolvedCount := uint64(len(accumulatedRoots))
@@ -228,46 +333,55 @@ func (c ReconciliationClient) TransitionBucketBatch(
 			}
 		}
 		if previous == nil {
-			return ClientAction{Type: ActionExtremityDiff}
+			// A failed bucket without a prior request cannot be retried or
+			// split; hand the caller the failed region instead of bailing the
+			// whole exchange, matching rezzy's ladder-failed localization.
+			return prefixFallback(batch.FailedBuckets, accumulatedRoots)
 		}
 
-		if previous.Capacity < MaxBucketSketchCapacity {
+		bucketLimit := MaxBucketSketchCapacity
+		if previous.Overflow {
+			bucketLimit = MaxOverflowBucketCapacity
+		}
+		if previous.Capacity < bucketLimit {
 			floor := previous.Capacity + 1
 			target := maxU64(share, uint64(floor))
-			capacity, ok := provisionBucketCapacity(target, floor)
+			capacity, ok := provisionBucketCapacityLimit(target, floor, bucketLimit)
 			if !ok {
-				return ClientAction{Type: ActionExtremityDiff}
+				return prefixFallback(batch.FailedBuckets, accumulatedRoots)
 			}
 			total += capacity
 			if total > aggregateLimit {
-				return ClientAction{Type: ActionExtremityDiff}
+				return prefixFallback(batch.FailedBuckets, accumulatedRoots)
 			}
 			requests = append(requests, BucketRequest{
 				Depth:    previous.Depth,
 				Prefix:   failed.Prefix,
 				Capacity: capacity,
+				Overflow: previous.Overflow,
 			})
 			continue
 		}
 
 		if previous.Depth >= 32 {
-			return ClientAction{Type: ActionExtremityDiff}
+			return prefixFallback(batch.FailedBuckets, accumulatedRoots)
 		}
 		target := maxU64(share/2, 4)
-		capacity, ok := provisionBucketCapacity(target, 4)
+		capacity, ok := provisionBucketCapacityLimit(target, 4, MaxBucketSketchCapacity)
 		if !ok {
-			return ClientAction{Type: ActionExtremityDiff}
+			return prefixFallback(batch.FailedBuckets, accumulatedRoots)
 		}
 		nextDepth := previous.Depth + 1
 		for sub := 0; sub < 2; sub++ {
 			total += capacity
 			if total > aggregateLimit {
-				return ClientAction{Type: ActionExtremityDiff}
+				return prefixFallback(batch.FailedBuckets, accumulatedRoots)
 			}
 			requests = append(requests, BucketRequest{
 				Depth:    nextDepth,
 				Prefix:   (previous.Prefix << 1) | uint32(sub),
 				Capacity: capacity,
+				Overflow: previous.Overflow,
 			})
 		}
 	}
@@ -277,6 +391,69 @@ func (c ReconciliationClient) TransitionBucketBatch(
 		Requests:         requests,
 		AccumulatedRoots: accumulatedRoots,
 	}
+}
+
+func prefixFallback(prefixes []FailedBucket, roots []uint64) ClientAction {
+	return ClientAction{
+		Type:             ActionPrefixFallback,
+		Prefixes:         append([]FailedBucket(nil), prefixes...),
+		AccumulatedRoots: append([]uint64(nil), roots...),
+	}
+}
+
+// NodeSummary is the exact count and h128 XOR for one tree node.
+type NodeSummary struct {
+	Count  uint64
+	Digest [16]byte
+}
+
+// VerifySplitConsistency confirms that two child summaries reconstruct their
+// parent. A count overflow is treated as inconsistency.
+func VerifySplitConsistency(parent, left, right NodeSummary) bool {
+	if left.Count > ^uint64(0)-right.Count || parent.Count != left.Count+right.Count {
+		return false
+	}
+	for i := range parent.Digest {
+		if parent.Digest[i] != left.Digest[i]^right.Digest[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// VerifyDecodedNode performs the exact-summary phase of bucket verification.
+// Every record whose H64 is in candidates contributes, so H64 collisions are
+// handled as a multi-valued mapping. expectedLocal and expectedRemote should
+// be the responder/requester summaries advertised for this node.
+func VerifyDecodedNode(expectedLocal, expectedRemote NodeSummary, candidates []uint64, local, remote []ElementHash) bool {
+	selected := make(map[uint64]struct{}, len(candidates))
+	for _, candidate := range candidates {
+		if candidate == 0 {
+			return false
+		}
+		if _, duplicate := selected[candidate]; duplicate {
+			return false
+		}
+		selected[candidate] = struct{}{}
+	}
+	return summarizeCandidates(selected, local) == expectedLocal && summarizeCandidates(selected, remote) == expectedRemote
+}
+
+func summarizeCandidates(candidates map[uint64]struct{}, population []ElementHash) NodeSummary {
+	var summary NodeSummary
+	for _, hash := range population {
+		if _, ok := candidates[hash.H64]; !ok {
+			continue
+		}
+		if summary.Count == ^uint64(0) {
+			return NodeSummary{Count: ^uint64(0)}
+		}
+		summary.Count++
+		for i := range summary.Digest {
+			summary.Digest[i] ^= hash.H128[i]
+		}
+	}
+	return summary
 }
 
 // VerifyGlobalResidual checks that the supplied roots reproduce the residual.
@@ -356,6 +533,10 @@ func maxU64(a, b uint64) uint64 {
 }
 
 func provisionBucketCapacity(target uint64, floor int) (int, bool) {
+	return provisionBucketCapacityLimit(target, floor, MaxBucketSketchCapacity)
+}
+
+func provisionBucketCapacityLimit(target uint64, floor, capacityLimit int) (int, bool) {
 	value := target
 	half := target / 2
 	if value > ^uint64(0)-half {
@@ -378,8 +559,8 @@ func provisionBucketCapacity(target uint64, floor int) (int, bool) {
 	if capacity < floor {
 		capacity = floor
 	}
-	if capacity > MaxBucketSketchCapacity {
-		capacity = MaxBucketSketchCapacity
+	if capacity > capacityLimit {
+		capacity = capacityLimit
 	}
 	return capacity, true
 }

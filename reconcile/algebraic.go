@@ -17,24 +17,29 @@ const MaxLocalSketchDecodeCapacity = MaxSketchCapacity
 const eventHashEncodedLen = 43
 
 var (
-	ErrInvalidEventID        = errors.New("InvalidEventID")
-	ErrInvalidBase64         = errors.New("InvalidBase64")
-	ErrInvalidDigestLength   = errors.New("InvalidDigestLength")
-	ErrInvalidSketchCapacity = errors.New("InvalidSketchCapacity")
-	ErrInvalidSketchLength   = errors.New("InvalidSketchLength")
-	ErrDecodeFailure         = errors.New("DecodeFailure")
-	ErrBudgetExhausted       = errors.New("BudgetExhausted")
-	ErrZeroShortIdentifier   = errors.New("ZeroShortIdentifier")
-	ErrInvalidBucketIndex    = errors.New("InvalidBucketIndex")
-	ErrCountOverflow         = errors.New("CountOverflow")
-	ErrCountUnderflow        = errors.New("CountUnderflow")
+	ErrInvalidEventID         = errors.New("InvalidEventID")
+	ErrInvalidBase64          = errors.New("InvalidBase64")
+	ErrInvalidDigestLength    = errors.New("InvalidDigestLength")
+	ErrInvalidSketchCapacity  = errors.New("InvalidSketchCapacity")
+	ErrInvalidSketchLength    = errors.New("InvalidSketchLength")
+	ErrDecodeFailure          = errors.New("DecodeFailure")
+	ErrBudgetExhausted        = errors.New("BudgetExhausted")
+	ErrZeroShortIdentifier    = errors.New("ZeroShortIdentifier")
+	ErrInvalidBucketIndex     = errors.New("InvalidBucketIndex")
+	ErrCountOverflow          = errors.New("CountOverflow")
+	ErrCountUnderflow         = errors.New("CountUnderflow")
+	ErrUnsupportedRoomVersion = errors.New("UnsupportedRoomVersion")
 )
 
 // EventIDFormat selects the Matrix event-ID binding.
 type EventIDFormat int
 
 const (
-	// Legacy uses the room versions 1 and 2 event-ID binding.
+	// Legacy is the room versions 1 and 2 event-ID binding. This
+	// implementation does not support it: MatrixEventDigest32 and
+	// FromMatrixEventID return ErrUnsupportedRoomVersion for a well-formed
+	// legacy event ID, after the same sigil validation as the other formats
+	// (an ID without a leading "$" yields ErrInvalidEventID first).
 	Legacy EventIDFormat = iota
 	// V3 uses the room version 3 event-ID binding.
 	V3
@@ -42,18 +47,22 @@ const (
 	V4Plus
 )
 
-// ElementHash is the pair of MSC0500 digest truncations.
+// ElementHash carries the digest truncations used by accumulator, tree, and strata.
 type ElementHash struct {
-	// H128 is the first 128 bits of the canonical digest, in network byte order.
+	// H128 is the last 128 bits of the canonical digest, in network byte order.
 	H128 [16]byte
 	// H64 is the first non-zero 64-bit chunk of the canonical digest.
 	H64 uint64
+	// Q3 is the second big-endian 64-bit digest chunk, reserved for strata.
+	Q3 uint64
 }
 
-// FromDigest32 derives the profile truncations from a canonical 32-byte digest.
+// FromDigest32 derives the profile values from a canonical 32-byte digest.
+// H128 contains the final 16 bytes. H64 is the first nonzero big-endian 64-bit
+// chunk, or 1 if every chunk is zero. Q3 is digest bytes 8..16, or 1 if zero.
 func FromDigest32(digest [32]byte) ElementHash {
 	var wide [16]byte
-	copy(wide[:], digest[:16])
+	copy(wide[:], digest[16:])
 
 	h64 := uint64(1)
 	for i := 0; i < 4; i++ {
@@ -64,7 +73,11 @@ func FromDigest32(digest [32]byte) ElementHash {
 		}
 	}
 
-	return ElementHash{H128: wide, H64: h64}
+	q3 := binary.BigEndian.Uint64(digest[8:16])
+	if q3 == 0 {
+		q3 = 1
+	}
+	return ElementHash{H128: wide, H64: h64, Q3: q3}
 }
 
 // FromMatrixEventID derives an element hash from a Matrix event ID.
@@ -77,21 +90,28 @@ func FromMatrixEventID(eventID string, format EventIDFormat) (ElementHash, error
 }
 
 // MatrixEventDigest32 derives the canonical 32-byte digest for an event ID.
+// V3 uses unpadded standard base64; V4Plus uses unpadded base64url.
+// A missing "$" prefix returns ErrInvalidEventID before checking the format.
+// Legacy then returns ErrUnsupportedRoomVersion. For other formats, a payload
+// longer than 43 bytes returns ErrInvalidBase64; an unknown format otherwise
+// returns ErrInvalidEventID. Decoding failures return ErrInvalidBase64, and a
+// decoded length other than 32 bytes returns ErrInvalidEventID.
+// All errors are accompanied by a zero digest.
 func MatrixEventDigest32(eventID string, format EventIDFormat) ([32]byte, error) {
 	var out [32]byte
 	encoded, ok := trimSigil(eventID)
 	if !ok {
 		return out, ErrInvalidEventID
 	}
-	if format != Legacy && len(encoded) > eventHashEncodedLen {
+	if format == Legacy {
+		return out, ErrUnsupportedRoomVersion
+	}
+	if len(encoded) > eventHashEncodedLen {
 		return out, ErrInvalidBase64
 	}
 
 	var digest []byte
 	switch format {
-	case Legacy:
-		sum := sha256.Sum256([]byte(eventID))
-		digest = sum[:]
 	case V3:
 		var err error
 		digest, err = base64.RawStdEncoding.DecodeString(encoded)
@@ -227,6 +247,14 @@ func NewSyndromeSketch(capacity int) (*SyndromeSketch, error) {
 	return &SyndromeSketch{Coordinates: make([]uint64, capacity)}, nil
 }
 
+// NewOverflowSyndromeSketch creates a sketch using the optional overflow ceiling.
+func NewOverflowSyndromeSketch(capacity int) (*SyndromeSketch, error) {
+	if capacity <= 0 || capacity > MaxOverflowBucketCapacity {
+		return nil, ErrInvalidSketchCapacity
+	}
+	return &SyndromeSketch{Coordinates: make([]uint64, capacity)}, nil
+}
+
 // NewSyndromeSketchFromCoordinates builds a sketch from exact coordinates.
 func NewSyndromeSketchFromCoordinates(coordinates []uint64) (*SyndromeSketch, error) {
 	if len(coordinates) == 0 || len(coordinates) > MaxSketchCapacity {
@@ -287,6 +315,13 @@ func (s *SyndromeSketch) DecodeElements(maxElements int) ([]uint64, error) {
 	return decodeAndVerifySketch(s, maxElements, nil)
 }
 
+// DecodeOverflowElements decodes using the larger negotiated overflow ceiling
+// and the shared CPU work budget.
+func (s *SyndromeSketch) DecodeOverflowElements(maxElements int) ([]uint64, error) {
+	work := maxFactorWork
+	return decodeAndVerifySketchWithLimit(s, maxElements, &work, MaxOverflowBucketCapacity)
+}
+
 // Encode serializes a sketch using unpadded URL-safe Base64.
 func (s *SyndromeSketch) Encode() string {
 	bytes := make([]byte, 0, len(s.Coordinates)*8)
@@ -315,6 +350,22 @@ func DecodeSyndromeSketch(capacity int, encoded string) (*SyndromeSketch, error)
 	return newSketchFromEncodedBytes(capacity, bytes)
 }
 
+// DecodeOverflowSyndromeSketch parses an encoded sketch with overflow capacity.
+func DecodeOverflowSyndromeSketch(capacity int, encoded string) (*SyndromeSketch, error) {
+	if capacity <= 0 || capacity > MaxOverflowBucketCapacity {
+		return nil, ErrInvalidSketchCapacity
+	}
+	expectedLen := capacity * 8
+	if len(encoded) != base64.RawURLEncoding.EncodedLen(expectedLen) {
+		return nil, ErrInvalidSketchLength
+	}
+	bytes, err := base64.RawURLEncoding.DecodeString(encoded)
+	if err != nil {
+		return nil, ErrInvalidBase64
+	}
+	return newSketchFromEncodedBytes(capacity, bytes)
+}
+
 func newSketchFromEncodedBytes(capacity int, bytes []byte) (*SyndromeSketch, error) {
 	expectedLen := capacity * 8
 	if len(bytes) != expectedLen {
@@ -328,6 +379,13 @@ func newSketchFromEncodedBytes(capacity int, bytes []byte) (*SyndromeSketch, err
 }
 
 func decodeAndVerifySketch(s *SyndromeSketch, maxElements int, work *int) ([]uint64, error) {
+	return decodeAndVerifySketchWithLimit(s, maxElements, work, MaxSketchCapacity)
+}
+
+func decodeAndVerifySketchWithLimit(s *SyndromeSketch, maxElements int, work *int, capacityLimit int) ([]uint64, error) {
+	if maxElements <= 0 || maxElements > s.Capacity() || s.Capacity() > capacityLimit {
+		return nil, ErrInvalidSketchCapacity
+	}
 	decoded, err := decodePinSketch(s.Coordinates[:maxElements], maxElements, work)
 	if err != nil {
 		return nil, err
@@ -336,11 +394,7 @@ func decodeAndVerifySketch(s *SyndromeSketch, maxElements int, work *int) ([]uin
 	if containsZero(decoded) {
 		return nil, ErrDecodeFailure
 	}
-	check, err := NewSyndromeSketch(s.Capacity())
-	// coverage:ignore
-	if err != nil {
-		return nil, err
-	}
+	check := &SyndromeSketch{Coordinates: make([]uint64, s.Capacity())}
 	for _, element := range decoded {
 		// coverage:ignore
 		if err := check.Toggle(element); err != nil {

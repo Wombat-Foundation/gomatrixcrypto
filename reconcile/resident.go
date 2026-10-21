@@ -1,6 +1,8 @@
 package reconcile
 
-import "math/bits"
+import (
+	"math/bits"
+)
 
 // StrataCount is the number of estimator strata.
 const StrataCount = 32
@@ -37,7 +39,7 @@ func (r *ResidentKernel) Insert(hash ElementHash) error {
 	if err := r.accumulator.Insert(hash); err != nil {
 		return err
 	}
-	toggleStratum(&r.strata, hash.H64)
+	toggleStratum(&r.strata, strataIdentifier(hash))
 	return nil
 }
 
@@ -49,8 +51,20 @@ func (r *ResidentKernel) Remove(hash ElementHash) error {
 	if err := r.accumulator.Remove(hash); err != nil {
 		return err
 	}
-	toggleStratum(&r.strata, hash.H64)
+	toggleStratum(&r.strata, strataIdentifier(hash))
 	return nil
+}
+
+func strataIdentifier(hash ElementHash) uint64 {
+	// PinSketch requires nonzero identifiers. This makes the sole alias in
+	// the strata estimator (Q3=0 and Q3=1); a resulting estimate miss is
+	// recovered by the independent h64 bucket tree. Canonical hashes from
+	// FromDigest32 never carry Q3=0; this branch only guards manually
+	// assembled values, matching rezzy's strata_identifier.
+	if hash.Q3 == 0 {
+		return 1
+	}
+	return hash.Q3
 }
 
 func toggleStratum(strata *[StrataCount][StratumCapacity]uint64, value uint64) {
